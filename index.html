@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Portería — Vehículos</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  /* ── Reset & base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --blue-50: #E6F1FB; --blue-100: #B5D4F4; --blue-600: #185FA5; --blue-800: #0C447C;
+    --green-50: #EAF3DE; --green-600: #3B6D11; --green-800: #27500A;
+    --amber-50: #FAEEDA; --amber-600: #854F0B; --amber-800: #633806;
+    --red-50: #FCEBEB; --red-600: #A32D2D;
+    --gray-50: #F1EFE8; --gray-100: #D3D1C7; --gray-200: #B4B2A9;
+    --gray-400: #888780; --gray-600: #5F5E5A; --gray-800: #444441;
+    --teal-50: #E1F5EE; --teal-600: #0F6E56; --teal-800: #085041;
+    --surface: #ffffff;
+    --surface-2: #F7F7F5;
+    --surface-3: #F1EFE8;
+    --text-1: #1a1a18;
+    --text-2: #5F5E5A;
+    --text-3: #888780;
+    --border: rgba(0,0,0,0.10);
+    --border-md: rgba(0,0,0,0.18);
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --sidebar-w: 240px;
+    --header-h: 60px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.07);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.10);
+  }
+  html { font-size: 15px; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--surface-2);
+    color: var(--text-1);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Layout ── */
+  .layout { display: flex; min-height: 100vh; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: var(--sidebar-w);
+    background: var(--surface);
+    border-right: 0.5px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 50;
+  }
+  .sidebar-brand {
+    padding: 18px 20px 14px;
+    border-bottom: 0.5px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .brand-icon {
+    width: 36px; height: 36px; border-radius: var(--radius-md);
+    background: var(--blue-600); display: flex; align-items: center; justify-content: center;
+  }
+  .brand-icon i { font-size: 20px; color: #fff; }
+  .brand-text { line-height: 1.2; }
+  .brand-text strong { font-size: 14px; font-weight: 600; display: block; color: var(--text-1); }
+  .brand-text span { font-size: 11px; color: var(--text-3); }
+  .nav { padding: 12px 10px; flex: 1; }
+  .nav-label { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-3); font-weight: 600; padding: 0 10px; margin: 12px 0 4px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px; border-radius: var(--radius-md);
+    font-size: 13.5px; color: var(--text-2);
+    cursor: pointer; transition: all .15s; margin-bottom: 2px;
+    border: none; background: none; width: 100%; text-align: left;
+  }
+  .nav-item i { font-size: 17px; }
+  .nav-item:hover { background: var(--surface-2); color: var(--text-1); }
+  .nav-item.active { background: var(--blue-50); color: var(--blue-600); font-weight: 500; }
+  .nav-item.active i { color: var(--blue-600); }
+  .sidebar-footer {
+    padding: 14px 20px;
+    border-top: 0.5px solid var(--border);
+    font-size: 11px; color: var(--text-3);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .sidebar-footer i { font-size: 13px; }
+
+  /* ── Main ── */
+  .main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; }
+  .topbar {
+    height: var(--header-h);
+    background: var(--surface);
+    border-bottom: 0.5px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px;
+    position: sticky; top: 0; z-index: 40;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 10px; }
+  .topbar-title { font-size: 15px; font-weight: 500; color: var(--text-1); }
+  .topbar-sub { font-size: 12px; color: var(--text-3); margin-top: 1px; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #3B6D11;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .live-label { font-size: 12px; color: var(--green-600); font-weight: 500; }
+  .content { padding: 24px 28px; }
+
+  /* ── Views ── */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ── Stats row ── */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .stat-card {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg); padding: 16px 18px;
+    display: flex; align-items: flex-start; gap: 12px;
+  }
+  .stat-ico {
+    width: 36px; height: 36px; border-radius: var(--radius-md);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .stat-ico i { font-size: 18px; }
+  .stat-ico.blue { background: var(--blue-50); } .stat-ico.blue i { color: var(--blue-600); }
+  .stat-ico.green { background: var(--green-50); } .stat-ico.green i { color: var(--green-600); }
+  .stat-ico.amber { background: var(--amber-50); } .stat-ico.amber i { color: var(--amber-600); }
+  .stat-ico.teal { background: var(--teal-50); } .stat-ico.teal i { color: var(--teal-600); }
+  .stat-body {}
+  .stat-val { font-size: 26px; font-weight: 600; line-height: 1; color: var(--text-1); }
+  .stat-lbl { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+
+  /* ── Section headers ── */
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .section-title { font-size: 14px; font-weight: 500; color: var(--text-1); }
+
+  /* ── Toolbar ── */
+  .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .search-box {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 0.5px solid var(--border-md);
+    border-radius: var(--radius-md); padding: 7px 12px; flex: 1; min-width: 200px;
+  }
+  .search-box i { font-size: 16px; color: var(--text-3); }
+  .search-box input {
+    border: none; outline: none; background: transparent;
+    font-size: 13.5px; color: var(--text-1); width: 100%;
+  }
+  .search-box input::placeholder { color: var(--text-3); }
+  .filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill {
+    padding: 6px 14px; border-radius: 20px; font-size: 12.5px;
+    border: 0.5px solid var(--border-md); background: var(--surface);
+    color: var(--text-2); cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
+  .pill:hover { border-color: var(--blue-600); color: var(--blue-600); }
+  .pill.active { background: var(--blue-600); color: #fff; border-color: var(--blue-600); }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: var(--radius-md);
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    border: 0.5px solid var(--border-md); background: var(--surface);
+    color: var(--text-2); transition: all .15s; white-space: nowrap;
+  }
+  .btn i { font-size: 15px; }
+  .btn:hover { background: var(--surface-2); }
+  .btn-primary { background: var(--blue-600); color: #fff; border-color: var(--blue-600); }
+  .btn-primary:hover { background: var(--blue-800); border-color: var(--blue-800); }
+  .btn-success { background: var(--green-600); color: #fff; border-color: var(--green-600); }
+  .btn-success:hover { background: var(--green-800); }
+  .btn-danger { background: var(--red-600); color: #fff; border-color: var(--red-600); }
+  .btn-danger:hover { background: #7a2020; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .btn-sm i { font-size: 13px; }
+  .btn-icon { padding: 7px; }
+  .btn-icon i { margin: 0; }
+
+  /* ── Table ── */
+  .table-wrap {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg); overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead { background: var(--surface-2); }
+  th {
+    padding: 10px 14px; text-align: left;
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .6px; color: var(--text-3);
+    border-bottom: 0.5px solid var(--border);
+  }
+  td {
+    padding: 12px 14px; border-bottom: 0.5px solid var(--border);
+    color: var(--text-1); vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface-2); }
+  .td-placa { font-weight: 600; font-size: 13.5px; letter-spacing: .5px; }
+  .td-actions { display: flex; gap: 6px; }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; white-space: nowrap;
+  }
+  .badge i { font-size: 10px; }
+  .badge-en-patio { background: var(--green-50); color: var(--green-600); }
+  .badge-salio { background: var(--gray-50); color: var(--gray-600); }
+  .badge-cargue { background: var(--blue-50); color: var(--blue-600); }
+  .badge-descargue { background: var(--amber-50); color: var(--amber-600); }
+
+  /* ── Form layout ── */
+  .form-card {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg); padding: 24px;
+  }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-group.third { grid-column: span 1; }
+  label {
+    font-size: 12px; font-weight: 500; color: var(--text-2);
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+  input[type=text], input[type=datetime-local], select, textarea {
+    width: 100%; padding: 9px 12px;
+    border: 0.5px solid var(--border-md);
+    border-radius: var(--radius-md);
+    font-size: 14px; color: var(--text-1);
+    background: var(--surface);
+    transition: border-color .15s, box-shadow .15s;
+    font-family: inherit;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--blue-600);
+    box-shadow: 0 0 0 3px rgba(24,95,165,.10);
+  }
+  input::placeholder, textarea::placeholder { color: var(--text-3); }
+  textarea { resize: vertical; min-height: 64px; }
+
+  /* ── Radio cards ── */
+  .radio-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .radio-card {
+    flex: 1; min-width: 140px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; border-radius: var(--radius-md);
+    border: 1.5px solid var(--border-md);
+    cursor: pointer; transition: all .15s; user-select: none;
+    font-size: 14px; color: var(--text-2);
+  }
+  .radio-card i { font-size: 18px; }
+  .radio-card input { display: none; }
+  .radio-card.selected-cargue { border-color: var(--blue-600); background: var(--blue-50); color: var(--blue-600); font-weight: 500; }
+  .radio-card.selected-descargue { border-color: var(--amber-600); background: var(--amber-50); color: var(--amber-600); font-weight: 500; }
+
+  /* ── Submit bar ── */
+  .form-footer {
+    display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+    margin-top: 20px; padding-top: 20px;
+    border-top: 0.5px solid var(--border);
+  }
+
+  /* ── Modal ── */
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.36); z-index: 200;
+    align-items: center; justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--surface); border-radius: var(--radius-xl);
+    padding: 28px; width: min(520px, 94vw);
+    border: 0.5px solid var(--border);
+    box-shadow: var(--shadow-md);
+    animation: slideUp .18s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .modal-title { font-size: 16px; font-weight: 500; color: var(--text-1); display: flex; align-items: center; gap: 8px; }
+  .modal-title i { font-size: 18px; color: var(--blue-600); }
+  .modal-close { background: none; border: none; cursor: pointer; color: var(--text-3); font-size: 20px; padding: 2px; }
+  .modal-close:hover { color: var(--text-1); }
+  .modal-info-box {
+    background: var(--surface-2); border-radius: var(--radius-md);
+    padding: 14px 16px; margin-bottom: 18px;
+    font-size: 13px; color: var(--text-2); line-height: 1.7;
+  }
+  .modal-info-box strong { color: var(--text-1); font-size: 15px; }
+  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+  /* ── Detail modal ── */
+  .detail-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 0; border-bottom: 0.5px solid var(--border);
+    font-size: 13.5px;
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-row i { font-size: 16px; color: var(--text-3); width: 20px; flex-shrink: 0; }
+  .detail-lbl { color: var(--text-3); font-size: 12px; min-width: 100px; }
+  .detail-val { color: var(--text-1); font-weight: 500; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed; bottom: 28px; right: 28px; z-index: 999;
+    padding: 12px 20px; border-radius: var(--radius-lg);
+    font-size: 13.5px; font-weight: 500; color: #fff;
+    box-shadow: var(--shadow-md);
+    opacity: 0; transform: translateY(10px);
+    transition: all .22s; pointer-events: none;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .toast i { font-size: 16px; }
+  .toast.show { opacity: 1; transform: none; }
+  .toast.green { background: var(--green-600); }
+  .toast.blue { background: var(--blue-600); }
+  .toast.red { background: var(--red-600); }
+  .toast.amber { background: var(--amber-600); }
+
+  /* ── Empty state ── */
+  .empty-state {
+    text-align: center; padding: 52px 24px;
+    color: var(--text-3);
+  }
+  .empty-state i { font-size: 48px; display: block; margin-bottom: 12px; opacity: .35; }
+  .empty-state p { font-size: 14px; }
+
+  /* ── Export section ── */
+  .export-card {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg); padding: 20px 24px; margin-bottom: 16px;
+  }
+  .export-card h3 { font-size: 13.5px; font-weight: 500; color: var(--text-1); margin-bottom: 4px; }
+  .export-card p { font-size: 12.5px; color: var(--text-3); margin-bottom: 14px; line-height: 1.5; }
+  .export-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  /* ── Danger zone ── */
+  .danger-card {
+    background: var(--red-50); border: 0.5px solid #F09595;
+    border-radius: var(--radius-lg); padding: 20px 24px;
+  }
+  .danger-card h3 { font-size: 13.5px; font-weight: 500; color: var(--red-600); margin-bottom: 4px; }
+  .danger-card p { font-size: 12.5px; color: var(--red-600); opacity: .75; margin-bottom: 14px; line-height: 1.5; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--gray-100); border-radius: 4px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .sidebar { transform: translateX(-100%); transition: transform .2s; }
+    .sidebar.open { transform: none; }
+    .main { margin-left: 0; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .form-grid { grid-template-columns: 1fr; }
+    .form-group.full { grid-column: 1; }
+    th:nth-child(5), td:nth-child(5),
+    th:nth-child(6), td:nth-child(6) { display: none; }
+  }
+  @media (max-width: 560px) {
+    .stats-row { grid-template-columns: 1fr 1fr; }
+    .content { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon"><i class="ti ti-truck"></i></div>
+      <div class="brand-text">
+        <strong>Portería</strong>
+        <span>Control vehicular</span>
+      </div>
+    </div>
+    <nav class="nav">
+      <div class="nav-label">Principal</div>
+      <button class="nav-item active" onclick="showView('dashboard')">
+        <i class="ti ti-dashboard"></i> Dashboard
+      </button>
+      <button class="nav-item" onclick="showView('entrada')">
+        <i class="ti ti-login"></i> Registrar entrada
+      </button>
+      <button class="nav-item" onclick="showView('registros')">
+        <i class="ti ti-list-details"></i> Registros
+      </button>
+      <div class="nav-label">Herramientas</div>
+      <button class="nav-item" onclick="showView('exportar')">
+        <i class="ti ti-download"></i> Exportar datos
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <i class="ti ti-database"></i>
+      <span id="sidebar-count">0 registros guardados</span>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div>
+          <div class="topbar-title" id="topbar-title">Dashboard</div>
+          <div class="topbar-sub" id="topbar-date"></div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="live-dot"></div>
+        <span class="live-label">Guardado automático</span>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <main class="content">
+
+      <!-- ══════════════════════════════ DASHBOARD ══════════════════════════════ -->
+      <div id="view-dashboard" class="view active">
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-ico blue"><i class="ti ti-truck"></i></div>
+            <div class="stat-body">
+              <div class="stat-val" id="s-total">0</div>
+              <div class="stat-lbl">Total hoy</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-ico green"><i class="ti ti-building-warehouse"></i></div>
+            <div class="stat-body">
+              <div class="stat-val" id="s-patio">0</div>
+              <div class="stat-lbl">En patio</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-ico amber"><i class="ti ti-logout"></i></div>
+            <div class="stat-body">
+              <div class="stat-val" id="s-salidas">0</div>
+              <div class="stat-lbl">Salidas hoy</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-ico teal"><i class="ti ti-package-import"></i></div>
+            <div class="stat-body">
+              <div class="stat-val" id="s-cargue">0</div>
+              <div class="stat-lbl">Cargues hoy</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-header">
+          <div class="section-title">Vehículos en patio ahora</div>
+          <button class="btn btn-sm" onclick="showView('registros')">
+            <i class="ti ti-arrow-right"></i> Ver todos
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Placa</th>
+                <th>Conductor</th>
+                <th>Muelle</th>
+                <th>Tipo</th>
+                <th>Ingreso</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="dash-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════ ENTRADA ══════════════════════════════ -->
+      <div id="view-entrada" class="view">
+        <div class="form-card">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Conductor *</label>
+              <input type="text" id="f-conductor" placeholder="Nombre completo del conductor" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label>Placa del vehículo *</label>
+              <input type="text" id="f-placa" placeholder="Ej: ABC-123" autocomplete="off" oninput="this.value=this.value.toUpperCase()">
+            </div>
+            <div class="form-group">
+              <label>Hora de ingreso *</label>
+              <input type="datetime-local" id="f-hora">
+            </div>
+            <div class="form-group">
+              <label>Muelle *</label>
+              <input type="text" id="f-muelle" placeholder="Ej: Muelle 3 / Bahía A" autocomplete="off">
+            </div>
+            <div class="form-group full">
+              <label>Tipo de operación *</label>
+              <div class="radio-row">
+                <label class="radio-card selected-cargue" id="rc-cargue">
+                  <input type="radio" name="tipo" value="Cargue" checked>
+                  <i class="ti ti-package-import"></i> Cargue
+                </label>
+                <label class="radio-card" id="rc-descargue">
+                  <input type="radio" name="tipo" value="Descargue">
+                  <i class="ti ti-package-export"></i> Descargue
+                </label>
+              </div>
+            </div>
+            <div class="form-group full">
+              <label>Cédula / documento conductor</label>
+              <input type="text" id="f-cedula" placeholder="Número de documento" autocomplete="off">
+            </div>
+            <div class="form-group full">
+              <label>Observaciones</label>
+              <textarea id="f-obs" placeholder="Notas, referencias de carga, número de orden, etc."></textarea>
+            </div>
+          </div>
+          <div class="form-footer">
+            <button class="btn" onclick="limpiarForm()">
+              <i class="ti ti-refresh"></i> Limpiar
+            </button>
+            <button class="btn btn-primary" onclick="registrarEntrada()">
+              <i class="ti ti-login"></i> Registrar entrada
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════ REGISTROS ══════════════════════════════ -->
+      <div id="view-registros" class="view">
+        <div class="toolbar">
+          <div class="search-box">
+            <i class="ti ti-search"></i>
+            <input type="text" id="search-input" placeholder="Buscar por placa, conductor, muelle..." oninput="renderRegistros()">
+          </div>
+          <div class="filter-pills">
+            <button class="pill active" onclick="setFilter('todos',this)">Todos</button>
+            <button class="pill" onclick="setFilter('en_patio',this)">En patio</button>
+            <button class="pill" onclick="setFilter('salio',this)">Salidos</button>
+            <button class="pill" onclick="setFilter('Cargue',this)">Cargue</button>
+            <button class="pill" onclick="setFilter('Descargue',this)">Descargue</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Placa</th>
+                <th>Conductor</th>
+                <th>Muelle</th>
+                <th>Tipo</th>
+                <th>Ingreso</th>
+                <th>Salida</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="reg-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════ EXPORTAR ══════════════════════════════ -->
+      <div id="view-exportar" class="view">
+        <div class="export-card">
+          <h3><i class="ti ti-file-spreadsheet" style="font-size:15px;vertical-align:-2px;margin-right:6px;color:#3B6D11"></i>Exportar a Excel (.xlsx)</h3>
+          <p>Descarga todos los registros en un archivo Excel con formato de tabla. Incluye placa, conductor, muelle, tipo de operación, hora de entrada, hora de salida, duración y observaciones.</p>
+          <div class="export-row">
+            <button class="btn btn-success" onclick="exportExcel()">
+              <i class="ti ti-download"></i> Exportar todos los registros
+            </button>
+            <button class="btn" onclick="exportExcelHoy()">
+              <i class="ti ti-calendar-down"></i> Solo registros de hoy
+            </button>
+          </div>
+        </div>
+
+        <div class="export-card">
+          <h3><i class="ti ti-file-code" style="font-size:15px;vertical-align:-2px;margin-right:6px;color:#185FA5"></i>Exportar a JSON</h3>
+          <p>Descarga los datos en formato JSON para importarlos en otro sistema o hacer una copia de seguridad completa.</p>
+          <div class="export-row">
+            <button class="btn btn-primary" onclick="exportJSON()">
+              <i class="ti ti-download"></i> Descargar JSON
+            </button>
+          </div>
+        </div>
+
+        <div class="export-card">
+          <h3><i class="ti ti-file-upload" style="font-size:15px;vertical-align:-2px;margin-right:6px;color:#854F0B"></i>Importar desde JSON</h3>
+          <p>Carga un archivo JSON exportado previamente para restaurar o combinar registros. Los registros con el mismo ID no se duplicarán.</p>
+          <div class="export-row">
+            <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(event)">
+            <button class="btn" onclick="document.getElementById('import-file').click()">
+              <i class="ti ti-upload"></i> Seleccionar archivo JSON
+            </button>
+          </div>
+        </div>
+
+        <div class="danger-card">
+          <h3><i class="ti ti-alert-triangle" style="font-size:15px;vertical-align:-2px;margin-right:6px"></i>Zona de peligro</h3>
+          <p>Esta acción eliminará permanentemente todos los registros del almacenamiento local. Esta operación no se puede deshacer.</p>
+          <button class="btn btn-danger" onclick="borrarTodo()">
+            <i class="ti ti-trash"></i> Borrar todos los registros
+          </button>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- ══ MODAL SALIDA ══ -->
+<div class="modal-backdrop" id="modal-salida">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="ti ti-logout"></i> Registrar salida</div>
+      <button class="modal-close" onclick="closeModal('modal-salida')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-info-box" id="modal-salida-info"></div>
+    <div class="form-group">
+      <label>Hora de salida</label>
+      <input type="datetime-local" id="m-hora-salida">
+    </div>
+    <div class="form-group" style="margin-top:12px">
+      <label>Observaciones de salida</label>
+      <textarea id="m-obs-salida" placeholder="Notas al momento de la salida (opcional)..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-salida')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarSalida()">
+        <i class="ti ti-check"></i> Confirmar salida
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL DETALLE ══ -->
+<div class="modal-backdrop" id="modal-detalle">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="ti ti-info-circle"></i> Detalle del vehículo</div>
+      <button class="modal-close" onclick="closeModal('modal-detalle')"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="modal-detalle-body"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-detalle')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TOAST ══ -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   STORAGE
+═══════════════════════════════════════════════ */
+const KEY = 'porteria_registros_v2';
+let records = [];
+let currentFilter = 'todos';
+let selectedId = null;
+
+function load() {
+  try { const d = localStorage.getItem(KEY); if (d) records = JSON.parse(d); } catch(e) { records = []; }
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(records)); } catch(e) {}
+  document.getElementById('sidebar-count').textContent = records.length + ' registro' + (records.length !== 1 ? 's' : '') + ' guardado' + (records.length !== 1 ? 's' : '');
+}
+
+/* ═══════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════ */
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function nowLocal() { return new Date().toISOString().slice(0, 16); }
+function today() { return new Date().toISOString().slice(0, 10); }
+function fmtDt(s) {
+  if (!s) return '—';
+  const d = new Date(s);
+  return d.toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function duracion(entrada, salida) {
+  if (!entrada || !salida) return '—';
+  const diff = (new Date(salida) - new Date(entrada)) / 60000;
+  if (diff < 0) return '—';
+  const h = Math.floor(diff / 60);
+  const m = Math.round(diff % 60);
+  if (h === 0) return m + ' min';
+  return h + 'h ' + m + 'min';
+}
+
+/* ═══════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════ */
+function toast(msg, type = 'blue', icon = 'ti-check') {
+  const t = document.getElementById('toast');
+  t.innerHTML = `<i class="ti ${icon}"></i>${msg}`;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 2600);
+}
+
+/* ═══════════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════════ */
+const titles = {
+  dashboard: 'Dashboard',
+  entrada: 'Registrar entrada',
+  registros: 'Registros de vehículos',
+  exportar: 'Exportar / Importar datos'
+};
+
+function showView(v) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('view-' + v).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(el => {
+    if (el.textContent.toLowerCase().includes(titles[v].split(' ')[0].toLowerCase())) el.classList.add('active');
+  });
+  // fix active nav by onclick attr
+  document.querySelectorAll('.nav-item').forEach(el => {
+    if (el.getAttribute('onclick') && el.getAttribute('onclick').includes("'" + v + "'")) el.classList.add('active');
+  });
+  document.getElementById('topbar-title').textContent = titles[v];
+  if (v === 'registros') renderRegistros();
+  if (v === 'dashboard') renderDashboard();
+}
+
+/* ═══════════════════════════════════════════════
+   FORM — RADIO CARDS
+═══════════════════════════════════════════════ */
+document.querySelectorAll('.radio-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.radio-card').forEach(c => c.className = 'radio-card');
+    const val = card.querySelector('input').value;
+    card.className = 'radio-card selected-' + val.toLowerCase();
+  });
+});
+
+/* ═══════════════════════════════════════════════
+   REGISTRAR ENTRADA
+═══════════════════════════════════════════════ */
+function registrarEntrada() {
+  const conductor = document.getElementById('f-conductor').value.trim();
+  const placa = document.getElementById('f-placa').value.trim().toUpperCase();
+  const hora = document.getElementById('f-hora').value;
+  const muelle = document.getElementById('f-muelle').value.trim();
+  const tipo = document.querySelector('input[name=tipo]:checked').value;
+  const cedula = document.getElementById('f-cedula').value.trim();
+  const obs = document.getElementById('f-obs').value.trim();
+
+  if (!conductor) { toast('Ingresa el nombre del conductor', 'red', 'ti-alert-circle'); return; }
+  if (!placa) { toast('Ingresa la placa del vehículo', 'red', 'ti-alert-circle'); return; }
+  if (!hora) { toast('Selecciona la hora de ingreso', 'red', 'ti-alert-circle'); return; }
+  if (!muelle) { toast('Ingresa el muelle o bahía', 'red', 'ti-alert-circle'); return; }
+
+  const rec = {
+    id: uid(),
+    conductor, placa, horaEntrada: hora,
+    muelle, tipo, cedula, obs,
+    horaSalida: null, obsSalida: '',
+    fecha: hora.slice(0, 10)
+  };
+
+  records.unshift(rec);
+  save();
+  toast('Entrada registrada — ' + placa, 'green', 'ti-truck');
+  limpiarForm();
+  showView('dashboard');
+}
+
+function limpiarForm() {
+  ['f-conductor','f-placa','f-muelle','f-cedula','f-obs'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-hora').value = nowLocal();
+  document.querySelectorAll('.radio-card').forEach(c => c.className = 'radio-card');
+  document.getElementById('rc-cargue').className = 'radio-card selected-cargue';
+  document.querySelector('input[value=Cargue]').checked = true;
+}
+
+/* ═══════════════════════════════════════════════
+   DASHBOARD
+═══════════════════════════════════════════════ */
+function renderDashboard() {
+  const hoy = records.filter(r => r.fecha === today());
+  document.getElementById('s-total').textContent = hoy.length;
+  document.getElementById('s-patio').textContent = hoy.filter(r => !r.horaSalida).length;
+  document.getElementById('s-salidas').textContent = hoy.filter(r => r.horaSalida).length;
+  document.getElementById('s-cargue').textContent = hoy.filter(r => r.tipo === 'Cargue').length;
+
+  const enPatio = records.filter(r => !r.horaSalida);
+  const tbody = document.getElementById('dash-table');
+  if (!enPatio.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><i class="ti ti-mood-happy"></i><p>No hay vehículos en patio actualmente</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = enPatio.map(r => `
+    <tr>
+      <td class="td-placa">${r.placa}</td>
+      <td>${r.conductor}</td>
+      <td>${r.muelle}</td>
+      <td><span class="badge ${r.tipo === 'Cargue' ? 'badge-cargue' : 'badge-descargue'}"><i class="ti ${r.tipo === 'Cargue' ? 'ti-package-import' : 'ti-package-export'}"></i>${r.tipo}</span></td>
+      <td>${fmtDt(r.horaEntrada)}</td>
+      <td class="td-actions">
+        <button class="btn btn-sm btn-primary" onclick="openModalSalida('${r.id}')"><i class="ti ti-logout"></i> Salida</button>
+        <button class="btn btn-sm" onclick="openDetalle('${r.id}')"><i class="ti ti-eye"></i></button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+/* ═══════════════════════════════════════════════
+   REGISTROS
+═══════════════════════════════════════════════ */
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.pill').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderRegistros();
+}
+
+function getFiltered() {
+  const q = (document.getElementById('search-input')?.value || '').toLowerCase();
+  return records.filter(r => {
+    const matchFilter =
+      currentFilter === 'todos' ? true :
+      currentFilter === 'en_patio' ? !r.horaSalida :
+      currentFilter === 'salio' ? !!r.horaSalida :
+      r.tipo === currentFilter;
+    const matchSearch = !q || [r.placa, r.conductor, r.muelle, r.cedula, r.obs].some(f => (f || '').toLowerCase().includes(q));
+    return matchFilter && matchSearch;
+  });
+}
+
+function renderRegistros() {
+  const filtered = getFiltered();
+  const tbody = document.getElementById('reg-table');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-file-off"></i><p>No hay registros que coincidan</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(r => `
+    <tr>
+      <td class="td-placa">${r.placa}</td>
+      <td>${r.conductor}</td>
+      <td>${r.muelle}</td>
+      <td><span class="badge ${r.tipo === 'Cargue' ? 'badge-cargue' : 'badge-descargue'}">${r.tipo}</span></td>
+      <td>${fmtDt(r.horaEntrada)}</td>
+      <td>${fmtDt(r.horaSalida)}</td>
+      <td><span class="badge ${r.horaSalida ? 'badge-salio' : 'badge-en-patio'}"><i class="ti ${r.horaSalida ? 'ti-check' : 'ti-building-warehouse'}"></i>${r.horaSalida ? 'Salió' : 'En patio'}</span></td>
+      <td class="td-actions">
+        ${!r.horaSalida ? `<button class="btn btn-sm btn-primary" onclick="openModalSalida('${r.id}')"><i class="ti ti-logout"></i></button>` : ''}
+        <button class="btn btn-sm" onclick="openDetalle('${r.id}')"><i class="ti ti-eye"></i></button>
+        <button class="btn btn-sm" style="color:var(--red-600);border-color:#F09595" onclick="eliminar('${r.id}')"><i class="ti ti-trash"></i></button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+/* ═══════════════════════════════════════════════
+   MODAL SALIDA
+═══════════════════════════════════════════════ */
+function openModalSalida(id) {
+  selectedId = id;
+  const r = records.find(x => x.id === id);
+  document.getElementById('modal-salida-info').innerHTML = `
+    <strong>${r.placa}</strong> — ${r.conductor}<br>
+    Muelle: <strong>${r.muelle}</strong> &nbsp;·&nbsp;
+    <span class="badge ${r.tipo === 'Cargue' ? 'badge-cargue' : 'badge-descargue'}" style="vertical-align:middle">${r.tipo}</span><br>
+    Ingresó: ${fmtDt(r.horaEntrada)}
+  `;
+  document.getElementById('m-hora-salida').value = nowLocal();
+  document.getElementById('m-obs-salida').value = '';
+  document.getElementById('modal-salida').classList.add('open');
+}
+
+function confirmarSalida() {
+  const hs = document.getElementById('m-hora-salida').value;
+  const obs = document.getElementById('m-obs-salida').value.trim();
+  if (!hs) { toast('Selecciona la hora de salida', 'red', 'ti-alert-circle'); return; }
+  const idx = records.findIndex(x => x.id === selectedId);
+  if (idx !== -1) { records[idx].horaSalida = hs; records[idx].obsSalida = obs; }
+  save();
+  closeModal('modal-salida');
+  toast('Salida registrada — ' + records[idx].placa, 'green', 'ti-logout');
+  renderDashboard();
+  const vr = document.getElementById('view-registros');
+  if (vr.classList.contains('active')) renderRegistros();
+}
+
+/* ═══════════════════════════════════════════════
+   MODAL DETALLE
+═══════════════════════════════════════════════ */
+function openDetalle(id) {
+  const r = records.find(x => x.id === id);
+  const rows = [
+    ['ti-truck', 'Placa', `<strong style="font-size:16px;letter-spacing:.5px">${r.placa}</strong>`],
+    ['ti-user', 'Conductor', r.conductor],
+    ['ti-id', 'Documento', r.cedula || '—'],
+    ['ti-building-warehouse', 'Muelle', r.muelle],
+    ['ti-package-import', 'Tipo', `<span class="badge ${r.tipo === 'Cargue' ? 'badge-cargue' : 'badge-descargue'}">${r.tipo}</span>`],
+    ['ti-login', 'Hora de entrada', fmtDt(r.horaEntrada)],
+    ['ti-logout', 'Hora de salida', fmtDt(r.horaSalida)],
+    ['ti-clock', 'Tiempo en patio', duracion(r.horaEntrada, r.horaSalida)],
+    ['ti-notes', 'Obs. entrada', r.obs || '—'],
+    ['ti-notes', 'Obs. salida', r.obsSalida || '—'],
+  ];
+  document.getElementById('modal-detalle-body').innerHTML = rows.map(([ico, lbl, val]) => `
+    <div class="detail-row">
+      <i class="ti ${ico}"></i>
+      <span class="detail-lbl">${lbl}</span>
+      <span class="detail-val">${val}</span>
+    </div>
+  `).join('');
+  document.getElementById('modal-detalle').classList.add('open');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  selectedId = null;
+}
+
+/* ═══════════════════════════════════════════════
+   ELIMINAR
+═══════════════════════════════════════════════ */
+function eliminar(id) {
+  if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
+  records = records.filter(x => x.id !== id);
+  save();
+  renderRegistros();
+  toast('Registro eliminado', 'amber', 'ti-trash');
+}
+
+/* ═══════════════════════════════════════════════
+   EXPORTAR EXCEL
+═══════════════════════════════════════════════ */
+function buildExcelData(data) {
+  return data.map(r => ({
+    'Placa': r.placa,
+    'Conductor': r.conductor,
+    'Cédula / Documento': r.cedula || '',
+    'Muelle': r.muelle,
+    'Tipo de operación': r.tipo,
+    'Hora de entrada': fmtDt(r.horaEntrada),
+    'Hora de salida': fmtDt(r.horaSalida),
+    'Tiempo en patio': duracion(r.horaEntrada, r.horaSalida),
+    'Estado': r.horaSalida ? 'Salió' : 'En patio',
+    'Observaciones entrada': r.obs || '',
+    'Observaciones salida': r.obsSalida || '',
+    'Fecha': r.fecha
+  }));
+}
+
+function exportExcel() {
+  if (!records.length) { toast('No hay registros para exportar', 'amber', 'ti-alert-circle'); return; }
+  const ws = XLSX.utils.json_to_sheet(buildExcelData(records));
+  // Column widths
+  ws['!cols'] = [14,22,16,12,16,20,20,14,10,28,28,12].map(w => ({ wch: w }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Registros');
+  XLSX.writeFile(wb, 'porteria_' + today() + '.xlsx');
+  toast('Archivo Excel descargado', 'green', 'ti-download');
+}
+
+function exportExcelHoy() {
+  const hoy = records.filter(r => r.fecha === today());
+  if (!hoy.length) { toast('No hay registros de hoy', 'amber', 'ti-alert-circle'); return; }
+  const ws = XLSX.utils.json_to_sheet(buildExcelData(hoy));
+  ws['!cols'] = [14,22,16,12,16,20,20,14,10,28,28,12].map(w => ({ wch: w }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Hoy');
+  XLSX.writeFile(wb, 'porteria_hoy_' + today() + '.xlsx');
+  toast('Excel de hoy descargado', 'green', 'ti-download');
+}
+
+/* ═══════════════════════════════════════════════
+   EXPORTAR / IMPORTAR JSON
+═══════════════════════════════════════════════ */
+function exportJSON() {
+  if (!records.length) { toast('No hay registros para exportar', 'amber', 'ti-alert-circle'); return; }
+  const blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'porteria_backup_' + today() + '.json';
+  a.click();
+  toast('JSON descargado', 'blue', 'ti-download');
+}
+
+function importJSON(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const imported = JSON.parse(ev.target.result);
+      if (!Array.isArray(imported)) { toast('Archivo JSON inválido', 'red', 'ti-x'); return; }
+      const existingIds = new Set(records.map(r => r.id));
+      let added = 0;
+      imported.forEach(r => { if (!existingIds.has(r.id)) { records.push(r); added++; } });
+      records.sort((a, b) => new Date(b.horaEntrada) - new Date(a.horaEntrada));
+      save();
+      toast(added + ' registro(s) importado(s)', 'green', 'ti-upload');
+      renderDashboard();
+    } catch(err) { toast('Error al leer el archivo', 'red', 'ti-x'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+/* ═══════════════════════════════════════════════
+   BORRAR TODO
+═══════════════════════════════════════════════ */
+function borrarTodo() {
+  if (!confirm('¿Seguro que deseas eliminar TODOS los registros? Esta acción no se puede deshacer.')) return;
+  if (!confirm('Confirmación final: todos los datos serán eliminados permanentemente.')) return;
+  records = [];
+  save();
+  renderDashboard();
+  toast('Todos los registros eliminados', 'red', 'ti-trash');
+}
+
+/* ═══════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════ */
+(function init() {
+  load();
+  save(); // update sidebar count
+  document.getElementById('f-hora').value = nowLocal();
+
+  // Topbar date
+  const d = new Date();
+  document.getElementById('topbar-date').textContent = d.toLocaleDateString('es-CO', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  renderDashboard();
+
+  // Close modals on backdrop click
+  document.querySelectorAll('.modal-backdrop').forEach(bd => {
+    bd.addEventListener('click', e => { if (e.target === bd) bd.classList.remove('open'); });
+  });
+
+  // Auto-refresh dashboard every 60s
+  setInterval(() => {
+    if (document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();
+  }, 60000);
+})();
+</script>
+</body>
+</html>
