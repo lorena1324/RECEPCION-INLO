@@ -275,7 +275,7 @@
     font-size: 14px; color: var(--text-2);
   }
   .radio-card i { font-size: 18px; }
-  .radio-card input[type=checkbox] { display: none; }
+  .radio-card input[type=checkbox] { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
   .radio-card.sel-cargue    { border-color: var(--blue-600);  background: var(--blue-50);  color: var(--blue-600);  font-weight: 500; }
   .radio-card.sel-descargue { border-color: var(--amber-600); background: var(--amber-50); color: var(--amber-600); font-weight: 500; }
   .tipo-hint { font-size: 12px; color: var(--text-3); margin-top: 2px; }
@@ -400,6 +400,7 @@
     .main { margin-left: 0; }
     .sidebar { transform: translateX(-100%); transition: transform .2s; }
     .sidebar.open { transform: none; }
+    .menu-toggle { display: inline-flex !important; }
     .stats-row { grid-template-columns: repeat(2, 1fr); }
     .form-grid { grid-template-columns: 1fr; }
     .form-group.full { grid-column: 1; }
@@ -408,6 +409,21 @@
     th:nth-child(5), td:nth-child(5),
     th:nth-child(6), td:nth-child(6) { display: none; }
   }
+  .menu-toggle {
+    display: none;
+    align-items: center; justify-content: center;
+    width: 34px; height: 34px;
+    border: 0.5px solid var(--border); border-radius: var(--radius-md);
+    background: var(--surface); color: var(--text-1);
+    font-size: 18px; cursor: pointer; flex-shrink: 0;
+  }
+  .sidebar-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.4);
+    z-index: 40;
+  }
+  .sidebar-overlay.open { display: block; }
   @media (max-width: 560px) {
     .content { padding: 16px; }
     .stats-row { grid-template-columns: 1fr 1fr; }
@@ -467,11 +483,15 @@
       </div>
     </div>
   </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 
   <!-- MAIN -->
   <div class="main">
     <header class="topbar">
       <div class="topbar-left">
+        <button class="menu-toggle" id="btn-menu-toggle" onclick="toggleSidebar()" aria-label="Abrir menú">
+          <i class="ti ti-menu-2"></i>
+        </button>
         <div>
           <div class="topbar-title" id="topbar-title">Dashboard</div>
           <div class="topbar-sub" id="topbar-date"></div>
@@ -571,17 +591,43 @@
               <input type="datetime-local" id="f-hora">
             </div>
             <div class="form-group">
-              <label for="f-muelle">Muelle *</label>
-              <input type="text" id="f-muelle" placeholder="Ej: Muelle 3 / Bahía A" autocomplete="off">
+              <label for="f-ubicacion">Ubicación *</label>
+              <select id="f-ubicacion" onchange="cambiarUbicacion()">
+                <option value="">Selecciona</option>
+                <option value="Muelle">Muelle</option>
+                <option value="Patio">Patio</option>
+              </select>
+                <div id="muelle-options" style="display:none">
+
+                    <label>Número de muelle</label>
+
+                    <select id="f-numeroMuelle">
+                        <option>1</option>
+                        <option>2</option>
+                        <option>3</option>
+                        <option>4</option>
+                        <option>5</option>
+                        <option>6</option>
+                        <option>7</option>
+                        <option>8</option>
+                    </select>
+
+                    <label>Bahía</label>
+
+                    <select id="f-bahia">
+                        <option>A</option>
+                    </select>
+
+                </div>
             </div>
             <div class="form-group full">
               <label>Tipo de operación * <span style="text-transform:none;font-weight:400;color:var(--text-3)">(puedes elegir ambas)</span></label>
               <div class="radio-row" id="radio-tipo">
-                <label class="radio-card sel-cargue" id="rc-cargue" onclick="toggleTipo(event,'Cargue')">
+                <label class="radio-card sel-cargue" id="rc-cargue">
                   <input type="checkbox" name="tipo" value="Cargue" checked>
                   <i class="ti ti-package-import"></i> Cargue
                 </label>
-                <label class="radio-card" id="rc-descargue" onclick="toggleTipo(event,'Descargue')">
+                <label class="radio-card" id="rc-descargue">
                   <input type="checkbox" name="tipo" value="Descargue">
                   <i class="ti ti-package-export"></i> Descargue
                 </label>
@@ -740,6 +786,45 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-salida')">Cancelar</button>
       <button class="btn btn-primary" onclick="confirmarSalida()"><i class="ti ti-check"></i> Confirmar salida</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR UBICACIÓN -->
+<div class="modal-backdrop" id="modal-editar">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="ti ti-edit"></i> Editar ubicación</div>
+      <button class="modal-close" onclick="closeModal('modal-editar')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-info-box" id="modal-editar-info"></div>
+    <div class="form-group">
+      <label for="e-ubicacion">Ubicación *</label>
+      <select id="e-ubicacion" onchange="cambiarUbicacionEdit()">
+        <option value="Muelle">Muelle</option>
+        <option value="Patio">Patio</option>
+      </select>
+      <div id="muelle-options-edit" style="display:none">
+        <label>Número de muelle</label>
+        <select id="e-numeroMuelle">
+          <option>1</option>
+          <option>2</option>
+          <option>3</option>
+          <option>4</option>    
+          <option>5</option>
+          <option>6</option>  
+          <option>7</option>
+          <option>8</option>
+        </select>
+        <label>Bahía</label>
+        <select id="e-bahia">
+          <option>A</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-editar')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarEdicionUbicacion()"><i class="ti ti-check"></i> Guardar cambios</button>
     </div>
   </div>
 </div>
@@ -917,6 +1002,10 @@ function fmtDt(s) {
   if (!s) return '—';
   return new Date(s).toLocaleString('es-CO', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
 }
+function getDestino(r) {
+  // 'destino' es el campo actual; 'muelle' se mantiene por compatibilidad con registros antiguos
+  return r.destino || r.muelle || '—';
+}
 function duracion(entrada, salida) {
   if (!entrada || !salida) return '—';
   var diff = (new Date(salida) - new Date(entrada)) / 60000;
@@ -1000,19 +1089,26 @@ function showView(v) {
   document.getElementById('topbar-title').textContent = titles[v] || v;
   if (v === 'registros') renderRegistros();
   if (v === 'dashboard')  renderDashboard();
+  closeSidebar(); // en móvil, al elegir una sección se cierra el menú
+}
+
+/* ══════════ SIDEBAR MÓVIL ══════════ */
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
 }
 
 /* ══════════ TIPO OPERACIÓN (checkbox cards, permite Cargue + Descargue) ══════════ */
-function toggleTipo(evt, tipo) {
-  // Evitar doble toggle cuando el click viene directo del checkbox
-  if (evt && evt.target && evt.target.tagName === 'INPUT') {
-    // dejar que el propio checkbox cambie su estado normalmente
-  } else if (evt) {
-    var input = document.querySelector('input[name=tipo][value=' + tipo + ']');
-    input.checked = !input.checked;
-  }
-  syncTipoUI();
-}
+// Nota: NO se hace toggle manual del checked aquí. El <label> ya envuelve el
+// <input>, así que el navegador se encarga de marcarlo/desmarcarlo al hacer
+// clic en cualquier parte de la tarjeta. Manipular "checked" a mano en un
+// onclick del label duplica el evento (una vez por JS, otra por el propio
+// navegador) y ambos cambios se cancelan, dejando el checkbox "atascado".
+// Por eso solo escuchamos "change" para refrescar los estilos.
 function syncTipoUI() {
   var chkCargue    = document.querySelector('input[name=tipo][value=Cargue]');
   var chkDescargue = document.querySelector('input[name=tipo][value=Descargue]');
@@ -1025,6 +1121,20 @@ function getTipoSeleccionado() {
   return seleccionados[0] || null;
 }
 
+function computeDestino(ubicacion, numeroMuelle, bahia) {
+  if (ubicacion === "Patio") return "Patio";
+  return "Muelle " + numeroMuelle + " - Bahía " + bahia;
+}
+function cambiarUbicacion() {
+
+    const ubicacion = document.getElementById("f-ubicacion").value;
+
+    document.getElementById("muelle-options").style.display =
+        ubicacion === "Muelle"
+            ? "block"
+            : "none";
+}
+
 /* ══════════ REGISTRAR ENTRADA ══════════ */
 function registrarEntrada() {
   if (!currentOperator) { openGate(); toast('Selecciona el operador de turno', 'amber', 'ti-id-badge-2'); return; }
@@ -1032,7 +1142,9 @@ function registrarEntrada() {
   var conductor = document.getElementById('f-conductor').value.trim();
   var placa     = document.getElementById('f-placa').value.trim().toUpperCase();
   var hora      = document.getElementById('f-hora').value;
-  var muelle    = document.getElementById('f-muelle').value.trim();
+  var ubicacion = document.getElementById('f-ubicacion').value.trim();
+  var numeroMuelle = document.getElementById('f-numeroMuelle').value;
+  var bahia = document.getElementById('f-bahia').value;
   var tipo      = getTipoSeleccionado();
   var cedula    = document.getElementById('f-cedula').value.trim();
   var obs       = document.getElementById('f-obs').value.trim();
@@ -1040,19 +1152,36 @@ function registrarEntrada() {
   if (!conductor) { toast('Ingresa el nombre del conductor', 'red', 'ti-alert-circle'); return; }
   if (!placa)     { toast('Ingresa la placa del vehículo',   'red', 'ti-alert-circle'); return; }
   if (!hora)      { toast('Selecciona la hora de ingreso',   'red', 'ti-alert-circle'); return; }
-  if (!muelle)    { toast('Ingresa el muelle o bahía',       'red', 'ti-alert-circle'); return; }
+  if (!ubicacion)    { toast('Ingresa la ubicación',       'red', 'ti-alert-circle'); return; }
   if (!tipo)      { toast('Selecciona al menos un tipo de operación (Cargue y/o Descargue)', 'red', 'ti-alert-circle'); return; }
-
+  var destinoCompleto = computeDestino(ubicacion, numeroMuelle, bahia);
   var rec = {
-    id: uid(), conductor: conductor, placa: placa,
-    horaEntrada: hora, muelle: muelle, tipo: tipo,
-    cedula: cedula, obs: obs,
-    horaSalida: null, obsSalida: '',
-    fecha: hora.slice(0,10),
-    operadorEntrada: currentOperator,
-    operadorSalida: null
-  };
+      id: uid(),
+      conductor: conductor,
+      placa: placa,
 
+      horaEntrada: hora,
+
+      ubicacion: ubicacion,
+      numeroMuelle: numeroMuelle,
+      bahia: bahia,
+
+      destino: destinoCompleto,
+
+      tipo: tipo,
+
+      cedula: cedula,
+      obs: obs,
+
+      horaSalida: null,
+      obsSalida: '',
+
+      fecha: hora.slice(0,10),
+
+      operadorEntrada: currentOperator,
+      operadorSalida: null
+  };
+  console.log('Registrar entrada:', rec);
   if (firebaseActive && _fbSave) {
     setSyncStatus('syncing');
     _fbSave(rec)
@@ -1078,7 +1207,7 @@ function registrarEntrada() {
 }
 
 function limpiarForm() {
-  ['f-conductor','f-placa','f-muelle','f-cedula','f-obs'].forEach(function(id){
+  ['f-conductor','f-placa','f-ubicacion','f-numeroMuelle','f-bahia','f-cedula','f-obs'].forEach(function(id){
     document.getElementById(id).value = '';
   });
   document.getElementById('f-hora').value = nowLocal();
@@ -1111,7 +1240,7 @@ function renderDashboard() {
     return '<tr>' +
       '<td class="td-placa">' + r.placa + '</td>' +
       '<td>' + r.conductor + '</td>' +
-      '<td>' + r.muelle + '</td>' +
+      '<td>' + getDestino(r) + '</td>' +
       '<td><span class="badge ' + tipoBadgeClass(r.tipo) + '">' +
         '<i class="ti ' + tipoIcon(r.tipo) + '"></i>' + r.tipo +
       '</span></td>' +
@@ -1119,6 +1248,7 @@ function renderDashboard() {
       '<td><span class="badge badge-operador"><i class="ti ti-user"></i>' + (r.operadorEntrada || '—') + '</span></td>' +
       '<td class="td-actions">' +
         '<button class="btn btn-sm btn-primary" onclick="openModalSalida(\'' + r.id + '\')"><i class="ti ti-logout"></i> Salida</button>' +
+        '<button class="btn btn-sm" onclick="openModalEditar(\'' + r.id + '\')" title="Editar ubicación"><i class="ti ti-edit"></i></button>' +
         '<button class="btn btn-sm" onclick="openDetalle(\'' + r.id + '\')"><i class="ti ti-eye"></i></button>' +
       '</td>' +
     '</tr>';
@@ -1143,7 +1273,7 @@ function getFiltered() {
       currentFilter === 'Descargue' ? (r.tipo === 'Descargue' || r.tipo === 'Ambos') :
       currentFilter === 'Ambos'     ? r.tipo === 'Ambos' :
       true;
-    var ms = !q || [r.placa, r.conductor, r.muelle, r.cedula, r.obs, r.operadorEntrada, r.operadorSalida]
+    var ms = !q || [r.placa, r.conductor, getDestino(r), r.cedula, r.obs, r.operadorEntrada, r.operadorSalida]
       .some(function(f){ return (f||'').toLowerCase().indexOf(q) !== -1; });
     return mf && ms;
   });
@@ -1159,7 +1289,7 @@ function renderRegistros() {
     return '<tr>' +
       '<td class="td-placa">' + r.placa + '</td>' +
       '<td>' + r.conductor + '</td>' +
-      '<td>' + r.muelle + '</td>' +
+      '<td>' + getDestino(r) + '</td>' +
       '<td><span class="badge ' + tipoBadgeClass(r.tipo) + '">' + r.tipo + '</span></td>' +
       '<td>' + fmtDt(r.horaEntrada) + '</td>' +
       '<td>' + fmtDt(r.horaSalida) + '</td>' +
@@ -1170,6 +1300,7 @@ function renderRegistros() {
       '<td><span class="badge badge-operador"><i class="ti ti-user"></i>' + (r.operadorEntrada||'—') + '</span></td>' +
       '<td class="td-actions">' +
         (!r.horaSalida ? '<button class="btn btn-sm btn-primary" onclick="openModalSalida(\'' + r.id + '\')"><i class="ti ti-logout"></i></button>' : '') +
+        (!r.horaSalida ? '<button class="btn btn-sm" onclick="openModalEditar(\'' + r.id + '\')" title="Editar ubicación"><i class="ti ti-edit"></i></button>' : '') +
         '<button class="btn btn-sm" onclick="openDetalle(\'' + r.id + '\')"><i class="ti ti-eye"></i></button>' +
         '<button class="btn btn-sm" style="color:var(--red-600);border-color:#F09595" onclick="eliminar(\'' + r.id + '\')"><i class="ti ti-trash"></i></button>' +
       '</td>' +
@@ -1184,7 +1315,7 @@ function openModalSalida(id) {
   var r = records.find(function(x){ return x.id === id; });
   document.getElementById('modal-salida-info').innerHTML =
     '<strong>' + r.placa + '</strong> — ' + r.conductor + '<br>' +
-    'Muelle: <strong>' + r.muelle + '</strong> &nbsp;·&nbsp;' +
+    'Muelle: <strong>' + getDestino(r) + '</strong> &nbsp;·&nbsp;' +
     '<span class="badge ' + tipoBadgeClass(r.tipo) + '" style="vertical-align:middle">' + r.tipo + '</span><br>' +
     'Ingresó: ' + fmtDt(r.horaEntrada) + ' &nbsp;·&nbsp; Registró: ' + (r.operadorEntrada||'—');
   document.getElementById('m-hora-salida').value = nowLocal();
@@ -1223,6 +1354,61 @@ function confirmarSalida() {
   }
 }
 
+/* ══════════ MODAL EDITAR UBICACIÓN (Patio → Muelle sin crear nuevo registro) ══════════ */
+function cambiarUbicacionEdit() {
+  var ubicacion = document.getElementById('e-ubicacion').value;
+  document.getElementById('muelle-options-edit').style.display = ubicacion === 'Muelle' ? 'block' : 'none';
+}
+function openModalEditar(id) {
+  selectedId = id;
+  var r = records.find(function(x){ return x.id === id; });
+  if (!r) return;
+  document.getElementById('modal-editar-info').innerHTML =
+    '<strong>' + r.placa + '</strong> — ' + r.conductor + '<br>' +
+    'Ubicación actual: <strong>' + getDestino(r) + '</strong>';
+  document.getElementById('e-ubicacion').value = r.ubicacion === 'Muelle' ? 'Muelle' : 'Patio';
+  document.getElementById('e-numeroMuelle').value = r.numeroMuelle || '1';
+  document.getElementById('e-bahia').value = r.bahia || 'A';
+  cambiarUbicacionEdit();
+  document.getElementById('modal-editar').classList.add('open');
+}
+function confirmarEdicionUbicacion() {
+  var ubicacion    = document.getElementById('e-ubicacion').value;
+  var numeroMuelle = document.getElementById('e-numeroMuelle').value;
+  var bahia        = document.getElementById('e-bahia').value;
+  var destinoCompleto = computeDestino(ubicacion, numeroMuelle, bahia);
+
+  var rec = records.find(function(x){ return x.id === selectedId; });
+  if (!rec) return;
+  var updated = Object.assign({}, rec, {
+    ubicacion: ubicacion,
+    numeroMuelle: numeroMuelle,
+    bahia: bahia,
+    destino: destinoCompleto
+  });
+
+  if (firebaseActive && _fbSave) {
+    setSyncStatus('syncing');
+    _fbSave(updated)
+      .then(function() {
+        setSyncStatus('ok');
+        closeModal('modal-editar');
+        toast('Ubicación actualizada — ' + updated.placa, 'green', 'ti-edit');
+      })
+      .catch(function() {
+        setSyncStatus('error');
+        toast('Error al guardar en Firebase', 'red', 'ti-x');
+      });
+  } else {
+    var idx = records.findIndex(function(x){ return x.id === selectedId; });
+    if (idx !== -1) records[idx] = updated;
+    saveLocal();
+    refreshActiveView();
+    closeModal('modal-editar');
+    toast('Ubicación actualizada — ' + updated.placa + ' (local)', 'green', 'ti-edit');
+  }
+}
+
 /* ══════════ MODAL DETALLE ══════════ */
 function openDetalle(id) {
   var r = records.find(function(x){ return x.id === id; });
@@ -1230,7 +1416,8 @@ function openDetalle(id) {
     ['ti-truck',            'Placa',           '<strong style="font-size:16px;letter-spacing:.5px">' + r.placa + '</strong>'],
     ['ti-user',             'Conductor',        r.conductor],
     ['ti-id',               'Documento',        r.cedula || '—'],
-    ['ti-building-warehouse','Muelle',          r.muelle],
+    ['ti-building-warehouse','Muelle',          getDestino(r)],
+    ['ti-map-pin',          'Ubicación',        r.ubicacion || '—'],
     ['ti-package-import',   'Tipo',            '<span class="badge ' + tipoBadgeClass(r.tipo) + '">' + r.tipo + '</span>'],
     ['ti-login',            'Hora entrada',     fmtDt(r.horaEntrada)],
     ['ti-user-check',       'Op. entrada',      r.operadorEntrada || '—'],
@@ -1278,7 +1465,9 @@ function buildExcelData(data) {
       'Placa': r.placa,
       'Conductor': r.conductor,
       'Cédula': r.cedula || '',
-      'Muelle': r.muelle,
+      'Ubicación': r.ubicacion,
+      'Muelle': r.numeroMuelle || '',
+      'Bahía': r.bahia || '',
       'Tipo': r.tipo,
       'Hora entrada': fmtDt(r.horaEntrada),
       'Operador entrada': r.operadorEntrada || '',
@@ -1432,6 +1621,12 @@ function cargarFbConfigGuardada() {
 
   // Búsqueda en tiempo real
   document.getElementById('search-input').addEventListener('input', renderRegistros);
+
+  // Tarjetas Cargue/Descargue: refrescar estilos cuando el checkbox cambia
+  document.querySelectorAll('input[name=tipo]').forEach(function(chk) {
+    chk.addEventListener('change', syncTipoUI);
+  });
+  syncTipoUI();
 })();
 </script>
 </body>
