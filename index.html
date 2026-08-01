@@ -234,9 +234,13 @@
   }
   .badge i { font-size: 10px; }
   .badge-en-patio  { background: var(--green-50); color: var(--green-600); }
+  .badge-en-muelle { background: var(--teal-50);  color: var(--teal-800); }
   .badge-salio     { background: var(--gray-50);  color: var(--gray-600);  }
   .badge-cargue    { background: var(--blue-50);  color: var(--blue-600);  }
   .badge-descargue { background: var(--amber-50); color: var(--amber-600); }
+  .badge-amber     { background: var(--amber-50); color: var(--amber-800); font-weight: 600; }
+  .badge-amber i   { animation: pulse-amber 1.6s infinite; }
+  @keyframes pulse-amber { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
   .badge-ambos     { background: #F0E7FA; color: #6B2FB3; }
   .badge-operador  { background: var(--teal-50);  color: var(--teal-600);  }
   .form-card {
@@ -307,9 +311,18 @@
   .modal {
     background: var(--surface); border-radius: var(--radius-xl);
     padding: 28px; width: min(520px, 94vw);
+    max-height: min(90vh, 720px);
     border: 0.5px solid var(--border);
     box-shadow: var(--shadow-md);
     animation: slideUp .18s ease;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #modal-detalle-body {
+    overflow-y: auto;
+    max-height: calc(90vh - 220px);
+    padding-right: 6px;
   }
   @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
   .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
@@ -333,6 +346,29 @@
   .detail-row i { font-size: 16px; color: var(--text-3); width: 20px; flex-shrink: 0; }
   .detail-lbl { color: var(--text-3); font-size: 12px; min-width: 110px; }
   .detail-val { color: var(--text-1); font-weight: 500; }
+  .detail-section-title {
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px;
+    color: var(--text-3); margin: 18px 0 8px;
+  }
+  .historial-item {
+    display: flex; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid var(--border);
+  }
+  .historial-item:last-child { border-bottom: none; }
+  .historial-ico {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--surface-3);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .historial-ico i { font-size: 13px; color: var(--blue-600); }
+  .historial-body { flex: 1; min-width: 0; }
+  .historial-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .historial-top strong { font-size: 13px; color: var(--text-1); }
+  .historial-fecha { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+  .historial-op { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+  .historial-op i { font-size: 11px; }
+  .historial-texto {
+    font-size: 12.5px; color: var(--text-2); margin-top: 4px;
+    background: var(--surface-3); border-radius: var(--radius-sm); padding: 6px 9px;
+  }
   .toast {
     position: fixed; bottom: 28px; right: 28px; z-index: 999;
     padding: 12px 20px; border-radius: var(--radius-lg);
@@ -520,12 +556,19 @@
             Los datos se guardan en este navegador. Para sincronizar entre dispositivos, configura Firebase en <button onclick="showView('configurar')" style="background:none;border:none;color:var(--blue-600);cursor:pointer;font-weight:600;text-decoration:underline;padding:0">Configurar Firebase</button>.
           </div>
         </div>
+        <div id="alerta-patio-banner" class="local-banner" style="display:none; background:#FFF4E5; border-color:#F6C27A; color:#7A5118;">
+          <i class="ti ti-alert-triangle"></i>
+          <div>
+            <strong id="alerta-patio-titulo">Vehículos con más de 4 horas en patio</strong>
+            <span id="alerta-patio-detalle"></span>
+          </div>
+        </div>
         <div class="stats-row">
           <div class="stat-card">
             <div class="stat-ico blue"><i class="ti ti-truck"></i></div>
             <div class="stat-body">
               <div class="stat-val" id="s-total">0</div>
-              <div class="stat-lbl">Total hoy</div>
+              <div class="stat-lbl">Total turno</div>
             </div>
           </div>
           <div class="stat-card">
@@ -546,14 +589,14 @@
             <div class="stat-ico amber"><i class="ti ti-logout"></i></div>
             <div class="stat-body">
               <div class="stat-val" id="s-salidas">0</div>
-              <div class="stat-lbl">Salidas hoy</div>
+              <div class="stat-lbl">Salidas turno</div>
             </div>
           </div>
           <div class="stat-card">
             <div class="stat-ico teal"><i class="ti ti-package-import"></i></div>
             <div class="stat-body">
               <div class="stat-val" id="s-cargue">0</div>
-              <div class="stat-lbl">Cargues hoy</div>
+              <div class="stat-lbl">Cargues turno</div>
             </div>
           </div>
         </div>
@@ -573,6 +616,7 @@
           <table>
             <thead>
               <tr>
+                <th>Prioridad</th>
                 <th>Placa</th>
                 <th>Conductor</th>
                 <th>Muelle</th>
@@ -683,6 +727,7 @@
           <table>
             <thead>
               <tr>
+                <th>Prioridad</th>
                 <th>Placa</th>
                 <th>Conductor</th>
                 <th>Muelle</th>
@@ -690,6 +735,7 @@
                 <th>Ingreso</th>
                 <th>Salida</th>
                 <th>Estado</th>
+                <th>Motivo en patio</th>
                 <th>Operador</th>
                 <th>Acciones</th>
               </tr>
@@ -835,6 +881,10 @@
         </select>
       </div>
     </div>
+    <div class="form-group full">
+      <label for="e-obs-ubicacion">Observaciones de ubicación</label>
+      <textarea id="e-obs-ubicacion" placeholder="Descripción o motivo del cambio de ubicación"></textarea>
+    </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-editar')">Cancelar</button>
       <button class="btn btn-primary" onclick="confirmarEdicionUbicacion()"><i class="ti ti-check"></i> Guardar cambios</button>
@@ -863,6 +913,10 @@
     <h2>¿Quién está en turno?</h2>
     <p>Selecciona tu nombre para identificar quién registra los movimientos de hoy.</p>
     <div class="operator-row" id="operator-list"></div>
+    <label style="display:flex; align-items:flex-start; gap:8px; margin-top:14px; font-size:12.5px; color:var(--text-2); text-align:left; cursor:pointer;">
+      <input type="checkbox" id="gate-nuevo-turno" checked style="margin-top:2px;">
+      <span>Es un cambio de turno: reinicia los contadores del día. Los vehículos que sigan en patio o muelle (sin salida registrada) continúan igual en el turno nuevo.</span>
+    </label>
     <div class="gate-footer">
       <button class="btn btn-primary" id="gate-continue-btn" onclick="confirmarOperador()" disabled>
         <i class="ti ti-check"></i> Continuar
@@ -891,11 +945,15 @@ var _fbSave, _fbDelete, _fbDeleteAll; // funciones Firebase inyectadas dinámica
 var OP_KEY       = 'porteria_op_v1';
 var RECORDS_KEY  = 'porteria_records_v1';
 var FB_CFG_KEY   = 'porteria_fb_cfg_v1';
+var TURNO_KEY    = 'porteria_turno_v1';
+
+var turnoActual  = null; // { operador, inicio }
 
 var OPERADORES = [
   'Luis Milanes',
   'Gerardo García',
-  'Tatiana Marentes'
+  'Tatiana Marentes',
+  'Seguridad',
 ];
 
 /* ══════════ STORAGE LOCAL ══════════ */
@@ -913,6 +971,37 @@ function loadLocal() {
 }
 function saveLocal() {
   try { localStorage.setItem(RECORDS_KEY, JSON.stringify(records)); } catch(e) {}
+}
+
+/* ══════════ TURNOS ══════════ */
+function loadTurno() {
+  try {
+    var raw = localStorage.getItem(TURNO_KEY);
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && parsed.inicio) { turnoActual = parsed; return; }
+    }
+  } catch(e) {}
+  // Sin turno guardado: se crea uno que "abarca" todo lo histórico,
+  // para no perder de vista contadores de datos ya existentes.
+  turnoActual = { operador: currentOperator, inicio: '1970-01-01T00:00' };
+  saveTurno();
+}
+function saveTurno() {
+  try { localStorage.setItem(TURNO_KEY, JSON.stringify(turnoActual)); } catch(e) {}
+}
+// Inicia un turno nuevo: reinicia los contadores del turno (entradas, salidas, cargues),
+// pero NO afecta a los vehículos que sigan en patio/muelle (sin salida registrada):
+// esos se siguen mostrando y contando igual, porque pasan al turno siguiente hasta que salgan.
+function nuevoTurno(operador) {
+  turnoActual = { operador: operador || currentOperator, inicio: nowLocal() };
+  saveTurno();
+  refreshActiveView();
+  var enCurso = records.filter(function(r){ return !r.horaSalida; }).length;
+  toast(
+    'Turno iniciado' + (enCurso ? ' — ' + enCurso + ' vehículo(s) en patio/muelle continúan en este turno' : ''),
+    'green', 'ti-id-badge-2'
+  );
 }
 
 /* ══════════ FIREBASE (cargado dinámicamente) ══════════ */
@@ -1020,6 +1109,111 @@ function getDestino(r) {
   // 'destino' es el campo actual; 'muelle' se mantiene por compatibilidad con registros antiguos
   return r.destino || r.muelle || '—';
 }
+function minutosEnPatio(r) {
+  if (!r || !r.horaEntrada || r.horaSalida) return 0;
+  var diff = (new Date() - new Date(r.horaEntrada)) / 60000;
+  return diff < 0 ? 0 : Math.round(diff);
+}
+function requiereObservacionLargaEstadia(r) {
+  return r && !r.horaSalida && r.ubicacion === 'Patio' && minutosEnPatio(r) >= 240;
+}
+
+/* ══════════ PRIORIDAD POR TIEMPO DE ESPERA ══════════ */
+// Mientras más tiempo lleve un vehículo activo (sin salida), mayor su prioridad.
+function minutosEsperando(r) {
+  if (!r || !r.horaEntrada || r.horaSalida) return 0;
+  var diff = (new Date() - new Date(r.horaEntrada)) / 60000;
+  return diff < 0 ? 0 : diff;
+}
+// Ordena una lista de registros: primero los activos (sin salida), de mayor a menor
+// tiempo de espera; luego los que ya salieron, del más reciente al más antiguo.
+function ordenarPorPrioridad(list) {
+  return list.slice().sort(function(a, b) {
+    var aActivo = !a.horaSalida, bActivo = !b.horaSalida;
+    if (aActivo && !bActivo) return -1;
+    if (!aActivo && bActivo) return 1;
+    if (aActivo && bActivo) return minutosEsperando(b) - minutosEsperando(a);
+    return new Date(b.horaSalida || 0) - new Date(a.horaSalida || 0);
+  });
+}
+// Nivel de urgencia según el tiempo de espera, usado para colorear el badge de prioridad.
+function nivelPrioridad(minutos) {
+  if (minutos >= 240) return 'alta';
+  if (minutos >= 120) return 'media';
+  return 'normal';
+}
+// Motivo por el cual un vehículo activo permanece en patio (aún no pasa a muelle).
+// Se muestra directamente en la tabla de Registros para tener control visible sin abrir el detalle.
+function celdaMotivoPatio(r) {
+  if (r.horaSalida || r.ubicacion !== 'Patio') return '<span style="color:var(--text-3); font-size:12px;">—</span>';
+  if (!r.obsUbicacion) {
+    return '<span style="color:var(--amber-600); font-size:12px; cursor:pointer; text-decoration:underline;" title="Clic para registrar el motivo" onclick="openModalEditar(\'' + r.id + '\')">Sin registrar</span>';
+  }
+  var texto = r.obsUbicacion;
+  var corto = texto.length > 55 ? texto.slice(0, 55) + '…' : texto;
+  var tip   = texto.replace(/"/g, '&quot;');
+  return '<span title="' + tip + '" style="font-size:12px; color:var(--text-2);">' + corto + '</span>';
+}
+function badgePrioridad(r, rank) {
+  if (r.horaSalida) return '<span class="badge badge-salio">—</span>';
+  var min = minutosEsperando(r);
+  var nivel = nivelPrioridad(min);
+  var clase = nivel === 'alta' ? 'badge-amber' : (nivel === 'media' ? 'badge-descargue' : 'badge-en-patio');
+  var horas = Math.floor(min / 60), mins = Math.round(min % 60);
+  var tiempoTxt = horas > 0 ? horas + 'h ' + mins + 'min' : mins + 'min';
+  return '<span class="badge ' + clase + '" title="Esperando hace ' + tiempoTxt + '">' +
+    '<i class="ti ti-flag-3"></i> #' + rank + ' · ' + tiempoTxt +
+  '</span>';
+}
+/* ══════════ HISTORIAL DE OBSERVACIONES Y ACTUALIZACIONES ══════════ */
+// Agrega una entrada nueva al historial de un registro sin perder las anteriores.
+function agregarHistorial(rec, entrada) {
+  var hist = Array.isArray(rec.historial) ? rec.historial.slice() : [];
+  hist.push(entrada);
+  return hist;
+}
+// Devuelve el historial de un registro. Si es un registro antiguo (creado antes de
+// esta función) que no tiene historial guardado, lo reconstruye con los campos sueltos
+// que ya existían (obs, obsUbicacion, obsSalida) para no perder esa información.
+function getHistorial(r) {
+  if (Array.isArray(r.historial) && r.historial.length) return r.historial;
+  var h = [];
+  if (r.horaEntrada) h.push({ fecha: r.horaEntrada, tipo: 'entrada', operador: r.operadorEntrada, ubicacion: getDestino(r), texto: r.obs || '' });
+  if (r.obsUbicacion) h.push({ fecha: r.horaEntrada, tipo: 'ubicacion', operador: r.operadorEntrada, ubicacion: getDestino(r), texto: r.obsUbicacion });
+  if (r.horaSalida) h.push({ fecha: r.horaSalida, tipo: 'salida', operador: r.operadorSalida, texto: r.obsSalida || '' });
+  return h;
+}
+function iconoHistorial(tipo) {
+  return tipo === 'entrada' ? 'ti-login' : tipo === 'salida' ? 'ti-logout' : 'ti-edit';
+}
+function tituloHistorial(item) {
+  if (item.tipo === 'entrada') return 'Entrada registrada' + (item.ubicacion ? ' — ' + item.ubicacion : '');
+  if (item.tipo === 'salida')  return 'Salida registrada';
+  if (item.tipo === 'ubicacion') {
+    return item.ubicacionAnterior && item.ubicacionAnterior !== item.ubicacion
+      ? 'Ubicación actualizada: ' + item.ubicacionAnterior + ' → ' + item.ubicacion
+      : 'Ubicación confirmada' + (item.ubicacion ? ' — ' + item.ubicacion : '');
+  }
+  return 'Actualización';
+}
+// Arma el HTML del bloque de historial para el modal de detalle, del más reciente al más antiguo.
+function renderHistorialHtml(r) {
+  var hist = getHistorial(r).slice().sort(function(a, b) { return new Date(b.fecha || 0) - new Date(a.fecha || 0); });
+  if (!hist.length) return '<p style="color:var(--text-3); font-size:12.5px;">Sin observaciones ni actualizaciones registradas.</p>';
+  return hist.map(function(item) {
+    return '<div class="historial-item">' +
+      '<div class="historial-ico"><i class="ti ' + iconoHistorial(item.tipo) + '"></i></div>' +
+      '<div class="historial-body">' +
+        '<div class="historial-top">' +
+          '<strong>' + tituloHistorial(item) + '</strong>' +
+          '<span class="historial-fecha">' + fmtDt(item.fecha) + '</span>' +
+        '</div>' +
+        '<div class="historial-op"><i class="ti ti-user"></i> ' + (item.operador || '—') + '</div>' +
+        (item.texto ? '<div class="historial-texto">' + item.texto + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
 function duracion(entrada, salida) {
   if (!entrada || !salida) return '—';
   var diff = (new Date(salida) - new Date(entrada)) / 60000;
@@ -1066,14 +1260,21 @@ function selectOperator(name) {
 }
 function confirmarOperador() {
   if (!currentOperator) return;
+  var esNuevoTurno = document.getElementById('gate-nuevo-turno').checked;
   try { localStorage.setItem(OP_KEY, currentOperator); } catch(e) {}
   updateOperatorUI();
   document.getElementById('gate-operador').classList.remove('open');
-  toast('Turno iniciado — ' + currentOperator, 'green', 'ti-id-badge-2');
+  if (esNuevoTurno) {
+    nuevoTurno(currentOperator); // reinicia contadores del turno; muestra su propio toast
+  } else {
+    toast('Operador actualizado — ' + currentOperator, 'green', 'ti-id-badge-2');
+  }
 }
 function openGate() {
   renderOperatorList(currentOperator);
   document.getElementById('gate-continue-btn').disabled = !currentOperator;
+  var chk = document.getElementById('gate-nuevo-turno');
+  if (chk) chk.checked = true; // por defecto se asume cambio de turno
   document.getElementById('gate-operador').classList.add('open');
 }
 function updateOperatorUI() {
@@ -1193,7 +1394,15 @@ function registrarEntrada() {
       fecha: hora.slice(0,10),
 
       operadorEntrada: currentOperator,
-      operadorSalida: null
+      operadorSalida: null,
+
+      historial: [{
+        fecha: hora,
+        tipo: 'entrada',
+        operador: currentOperator,
+        ubicacion: destinoCompleto,
+        texto: obs || ''
+      }]
   };
   console.log('Registrar entrada:', rec);
   if (firebaseActive && _fbSave) {
@@ -1237,6 +1446,19 @@ function tipoBadgeClass(tipo) {
 function tipoIcon(tipo) {
   return tipo === 'Cargue' ? 'ti-package-import' : tipo === 'Descargue' ? 'ti-package-export' : 'ti-transfer-in';
 }
+function getStateLabel(r) {
+  if (r.horaSalida) return 'Salió';
+  if (r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0) return 'En muelle';
+  return 'En patio';
+}
+function getStateBadgeClass(r) {
+  if (r.horaSalida) return 'badge-salio';
+  return getStateLabel(r) === 'En muelle' ? 'badge-en-muelle' : 'badge-en-patio';
+}
+function getStateIcon(r) {
+  if (r.horaSalida) return 'ti-check';
+  return getStateLabel(r) === 'En muelle' ? 'ti-anchor' : 'ti-building-warehouse';
+}
 function puedeDespachar(r) {
   if (!r) return false;
   return r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0 || (r.destino || '').indexOf('Muelle') !== -1;
@@ -1251,19 +1473,40 @@ function setDashboardView(view, btn) {
 function getDashboardRecords() {
   var enPatio = records.filter(function(r){ return !r.horaSalida; });
   if (currentDashboardView === 'muelle') {
-    return enPatio.filter(function(r){
+    return ordenarPorPrioridad(enPatio.filter(function(r){
       return r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0;
-    });
+    }));
   }
-  return enPatio;
+  return ordenarPorPrioridad(enPatio);
 }
 function renderDashboard() {
-  var hoy = records.filter(function(r){ return r.fecha === today(); });
-  document.getElementById('s-total').textContent   = hoy.length;
-  document.getElementById('s-patio').textContent   = hoy.filter(function(r){ return !r.horaSalida && r.ubicacion !== 'Muelle'; }).length;
-  document.getElementById('s-muelle').textContent  = hoy.filter(function(r){ return !r.horaSalida && (r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0); }).length;
-  document.getElementById('s-salidas').textContent = hoy.filter(function(r){ return !!r.horaSalida; }).length;
-  document.getElementById('s-cargue').textContent  = hoy.filter(function(r){ return r.tipo === 'Cargue' || r.tipo === 'Ambos'; }).length;
+  if (!turnoActual) loadTurno();
+  var inicioTurno = new Date(turnoActual.inicio);
+
+  // Contadores que SÍ se reinician con el cambio de turno (entradas/salidas/cargues del turno actual)
+  var entradasTurno = records.filter(function(r){ return r.horaEntrada && new Date(r.horaEntrada) >= inicioTurno; });
+  var salidasTurno  = records.filter(function(r){ return r.horaSalida  && new Date(r.horaSalida)  >= inicioTurno; });
+
+  document.getElementById('s-total').textContent   = entradasTurno.length;
+  document.getElementById('s-salidas').textContent = salidasTurno.length;
+  document.getElementById('s-cargue').textContent  = entradasTurno.filter(function(r){ return r.tipo === 'Cargue' || r.tipo === 'Ambos'; }).length;
+
+  // Patio/muelle NO se reinician: cualquier vehículo sin salida sigue contando aunque cambie el turno
+  document.getElementById('s-patio').textContent   = records.filter(function(r){ return !r.horaSalida && r.ubicacion !== 'Muelle'; }).length;
+  document.getElementById('s-muelle').textContent  = records.filter(function(r){ return !r.horaSalida && (r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0); }).length;
+
+  // Alerta de vehículos con más de 4 horas en patio (sobre todos los activos, sin importar el filtro de la tabla)
+  var vehiculosLargaEstadia = records.filter(function(r){ return requiereObservacionLargaEstadia(r); });
+  var bannerAlerta = document.getElementById('alerta-patio-banner');
+  if (vehiculosLargaEstadia.length) {
+    document.getElementById('alerta-patio-titulo').textContent =
+      (vehiculosLargaEstadia.length === 1 ? '1 vehículo lleva' : vehiculosLargaEstadia.length + ' vehículos llevan') + ' más de 4 horas en patio';
+    document.getElementById('alerta-patio-detalle').textContent =
+      vehiculosLargaEstadia.map(function(r){ return r.placa; }).join(', ') + ' — registra el motivo desde "Editar ubicación".';
+    bannerAlerta.style.display = 'flex';
+  } else {
+    bannerAlerta.style.display = 'none';
+  }
 
   var dashboardRecords = getDashboardRecords();
   var tbody   = document.getElementById('dash-table');
@@ -1275,11 +1518,12 @@ function renderDashboard() {
   }
   if (!dashboardRecords.length) {
     var emptyMsg = currentDashboardView === 'muelle' ? 'No hay vehículos en muelle en este momento' : 'No hay vehículos en patio actualmente';
-    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-mood-happy"></i><p>' + emptyMsg + '</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-mood-happy"></i><p>' + emptyMsg + '</p></div></td></tr>';
     return;
   }
-  tbody.innerHTML = dashboardRecords.map(function(r) {
+  tbody.innerHTML = dashboardRecords.map(function(r, idx) {
     return '<tr>' +
+      '<td>' + badgePrioridad(r, idx + 1) + '</td>' +
       '<td class="td-placa">' + r.placa + '</td>' +
       '<td>' + r.conductor + '</td>' +
       '<td>' + getDestino(r) + '</td>' +
@@ -1307,7 +1551,7 @@ function setFilter(f, btn) {
 }
 function getFiltered() {
   var q = (document.getElementById('search-input') ? document.getElementById('search-input').value : '').toLowerCase();
-  return records.filter(function(r) {
+  var filtrados = records.filter(function(r) {
     var mf =
       currentFilter === 'todos'    ? true :
       currentFilter === 'en_patio' ? !r.horaSalida :
@@ -1316,30 +1560,42 @@ function getFiltered() {
       currentFilter === 'Descargue' ? (r.tipo === 'Descargue' || r.tipo === 'Ambos') :
       currentFilter === 'Ambos'     ? r.tipo === 'Ambos' :
       true;
-    var ms = !q || [r.placa, r.conductor, getDestino(r), r.cedula, r.obs, r.operadorEntrada, r.operadorSalida]
+    var ms = !q || [r.placa, r.conductor, getDestino(r), r.cedula, r.obs, r.obsUbicacion, r.operadorEntrada, r.operadorSalida]
+      .concat(getHistorial(r).map(function(h){ return h.texto; }))
       .some(function(f){ return (f||'').toLowerCase().indexOf(q) !== -1; });
     return mf && ms;
   });
+  return ordenarPorPrioridad(filtrados);
 }
 function renderRegistros() {
   var filtered = getFiltered();
   var tbody    = document.getElementById('reg-table');
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="ti ti-file-off"></i><p>No hay registros que coincidan</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state"><i class="ti ti-file-off"></i><p>No hay registros que coincidan</p></div></td></tr>';
     return;
   }
+  var rankActivo = 0;
   tbody.innerHTML = filtered.map(function(r) {
+    var alertaLarga = requiereObservacionLargaEstadia(r);
+    var numObs = getHistorial(r).filter(function(h){ return h.texto; }).length;
+    if (!r.horaSalida) rankActivo++;
     return '<tr>' +
-      '<td class="td-placa">' + r.placa + '</td>' +
+      '<td>' + badgePrioridad(r, rankActivo) + '</td>' +
+      '<td class="td-placa">' + r.placa +
+        (numObs ? ' <span class="badge badge-operador" style="cursor:pointer;" title="Ver observaciones e historial" onclick="openDetalle(\'' + r.id + '\')"><i class="ti ti-notes"></i> ' + numObs + '</span>' : '') +
+      '</td>' +
       '<td>' + r.conductor + '</td>' +
       '<td>' + getDestino(r) + '</td>' +
       '<td><span class="badge ' + tipoBadgeClass(r.tipo) + '">' + r.tipo + '</span></td>' +
       '<td>' + fmtDt(r.horaEntrada) + '</td>' +
       '<td>' + fmtDt(r.horaSalida) + '</td>' +
-      '<td><span class="badge ' + (r.horaSalida ? 'badge-salio' : 'badge-en-patio') + '">' +
-        '<i class="ti ' + (r.horaSalida ? 'ti-check' : 'ti-building-warehouse') + '"></i>' +
-        (r.horaSalida ? 'Salió' : 'En patio') +
-      '</span></td>' +
+      '<td><span class="badge ' + getStateBadgeClass(r) + '">' +
+        '<i class="ti ' + getStateIcon(r) + '"></i>' +
+        getStateLabel(r) +
+      '</span>' +
+      (alertaLarga ? ' <span class="badge badge-amber" style="margin-left:6px;"><i class="ti ti-alert-circle"></i> >4h patio</span>' : '') +
+      '</td>' +
+      '<td>' + celdaMotivoPatio(r) + '</td>' +
       '<td><span class="badge badge-operador"><i class="ti ti-user"></i>' + (r.operadorEntrada||'—') + '</span></td>' +
       '<td class="td-actions">' +
         (!r.horaSalida && puedeDespachar(r) ? '<button class="btn btn-sm btn-primary" onclick="openModalSalida(\'' + r.id + '\')"><i class="ti ti-logout"></i></button>' : '') +
@@ -1382,7 +1638,10 @@ function confirmarSalida() {
     return;
   }
   if (!rec) return;
-  var updated = Object.assign({}, rec, { horaSalida: hs, obsSalida: obs, operadorSalida: currentOperator });
+  var updated = Object.assign({}, rec, {
+    horaSalida: hs, obsSalida: obs, operadorSalida: currentOperator,
+    historial: agregarHistorial(rec, { fecha: hs, tipo: 'salida', operador: currentOperator, texto: obs || '' })
+  });
 
   if (firebaseActive && _fbSave) {
     setSyncStatus('syncing');
@@ -1410,17 +1669,33 @@ function confirmarSalida() {
 function cambiarUbicacionEdit() {
   var ubicacion = document.getElementById('e-ubicacion').value;
   document.getElementById('muelle-options-edit').style.display = ubicacion === 'Muelle' ? 'block' : 'none';
+  var lbl = document.querySelector('label[for="e-obs-ubicacion"]');
+  var txt = document.getElementById('e-obs-ubicacion');
+  if (ubicacion === 'Patio') {
+    if (lbl) lbl.textContent = '¿Por qué continúa en patio?' + (lbl.textContent.indexOf('*') !== -1 ? ' *' : '');
+    if (txt) txt.placeholder = 'Ej: sin bahía disponible, esperando documentación, pendiente de descargue en otro vehículo...';
+  } else {
+    if (lbl) lbl.textContent = 'Observaciones de ubicación';
+    if (txt) txt.placeholder = 'Descripción o motivo del cambio de ubicación';
+  }
 }
 function openModalEditar(id) {
   selectedId = id;
   var r = records.find(function(x){ return x.id === id; });
   if (!r) return;
+  var longParked = requiereObservacionLargaEstadia(r);
   document.getElementById('modal-editar-info').innerHTML =
+    (longParked ? '<div class="modal-info-box" style="background:#FFF4E5;color:#7A5118;border-color:#F6C27A; margin-bottom:12px;">' +
+      '<strong>Atención:</strong> Este vehículo lleva más de 4 horas en patio. Ingresa el motivo en las observaciones de ubicación.' +
+    '</div>' : '') +
     '<strong>' + r.placa + '</strong> — ' + r.conductor + '<br>' +
     'Ubicación actual: <strong>' + getDestino(r) + '</strong>';
   document.getElementById('e-ubicacion').value = r.ubicacion === 'Muelle' ? 'Muelle' : 'Patio';
   document.getElementById('e-numeroMuelle').value = r.numeroMuelle || '1';
   document.getElementById('e-bahia').value = r.bahia || 'A';
+  document.getElementById('e-obs-ubicacion').value = r.obsUbicacion || '';
+  var lblObsUbic = document.querySelector('label[for="e-obs-ubicacion"]');
+  if (lblObsUbic) lblObsUbic.textContent = 'Observaciones de ubicación' + (longParked ? ' *' : '');
   cambiarUbicacionEdit();
   document.getElementById('modal-editar').classList.add('open');
 }
@@ -1432,11 +1707,25 @@ function confirmarEdicionUbicacion() {
 
   var rec = records.find(function(x){ return x.id === selectedId; });
   if (!rec) return;
+  var obsUbicacion = document.getElementById('e-obs-ubicacion').value.trim();
+  if (requiereObservacionLargaEstadia(rec) && !obsUbicacion) {
+    toast('Describe por qué el vehículo lleva más de 4 horas en patio', 'red', 'ti-alert-circle');
+    return;
+  }
   var updated = Object.assign({}, rec, {
     ubicacion: ubicacion,
     numeroMuelle: numeroMuelle,
     bahia: bahia,
-    destino: destinoCompleto
+    destino: destinoCompleto,
+    obsUbicacion: obsUbicacion || rec.obsUbicacion || '',
+    historial: agregarHistorial(rec, {
+      fecha: nowLocal(),
+      tipo: 'ubicacion',
+      operador: currentOperator,
+      ubicacionAnterior: getDestino(rec),
+      ubicacion: destinoCompleto,
+      texto: obsUbicacion || ''
+    })
   });
 
   if (firebaseActive && _fbSave) {
@@ -1470,6 +1759,7 @@ function openDetalle(id) {
     ['ti-id',               'Documento',        r.cedula || '—'],
     ['ti-building-warehouse','Muelle',          getDestino(r)],
     ['ti-map-pin',          'Ubicación',        r.ubicacion || '—'],
+    ['ti-notes',            'Obs. ubicación',   r.obsUbicacion || '—'],
     ['ti-package-import',   'Tipo',            '<span class="badge ' + tipoBadgeClass(r.tipo) + '">' + r.tipo + '</span>'],
     ['ti-login',            'Hora entrada',     fmtDt(r.horaEntrada)],
     ['ti-user-check',       'Op. entrada',      r.operadorEntrada || '—'],
@@ -1485,7 +1775,9 @@ function openDetalle(id) {
       '<span class="detail-lbl">' + row[1] + '</span>' +
       '<span class="detail-val">' + row[2] + '</span>' +
     '</div>';
-  }).join('');
+  }).join('') +
+  '<div class="detail-section-title">Historial de observaciones y actualizaciones</div>' +
+  renderHistorialHtml(r);
   document.getElementById('modal-detalle').classList.add('open');
 }
 function closeModal(id) {
@@ -1528,7 +1820,11 @@ function buildExcelData(data) {
       'Tiempo en patio': duracion(r.horaEntrada, r.horaSalida),
       'Estado': r.horaSalida ? 'Salió' : 'En patio',
       'Obs. entrada': r.obs || '',
+      'Obs. ubicación': r.obsUbicacion || '',
       'Obs. salida': r.obsSalida || '',
+      'Historial completo': getHistorial(r).map(function(h){
+        return fmtDt(h.fecha) + ' (' + (h.operador || '—') + '): ' + tituloHistorial(h) + (h.texto ? ' — ' + h.texto : '');
+      }).join(' | '),
       'Fecha': r.fecha
     };
   });
@@ -1652,7 +1948,8 @@ function cargarFbConfigGuardada() {
   updateOperatorUI();
   if (!currentOperator) openGate();
 
-  // Cargar registros locales
+  // Cargar turno actual (contadores del día) y registros locales
+  loadTurno();
   loadLocal();
   updateSidebarCount();
   renderDashboard();
@@ -1679,6 +1976,10 @@ function cargarFbConfigGuardada() {
     chk.addEventListener('change', syncTipoUI);
   });
   syncTipoUI();
+
+  // Revisar cada minuto si algún vehículo superó las 4 horas en patio,
+  // para que la alerta aparezca sola sin esperar a otra acción del usuario.
+  setInterval(refreshActiveView, 60000);
 })();
 </script>
 </body>
