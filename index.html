@@ -210,9 +210,9 @@
   .btn-icon { padding: 7px; }
   .table-wrap {
     background: var(--surface); border: 0.5px solid var(--border);
-    border-radius: var(--radius-lg); overflow: hidden;
+    border-radius: var(--radius-lg); overflow-x: auto;
   }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table { min-width: 1100px; width: 100%; border-collapse: collapse; font-size: 13px; }
   thead { background: var(--surface-2); }
   th {
     padding: 10px 14px; text-align: left;
@@ -579,7 +579,7 @@
             </div>
           </div>
           <div class="stat-card">
-            <div class="stat-ico teal"><i class="ti ti-anchor"></i></div>
+            <div class="stat-ico teal"><i class="ti ti-Door"></i></div>
             <div class="stat-body">
               <div class="stat-val" id="s-muelle">0</div>
               <div class="stat-lbl">En muelle</div>
@@ -692,6 +692,13 @@
               <div class="tipo-hint">Selecciona Cargue, Descargue, o ambos si el vehículo hará las dos operaciones.</div>
             </div>
             <div class="form-group full">
+              <label for="f-canal">Canal *</label>
+              <select id="f-canal">
+                <option value="MQ">MQ</option>
+                <option value="3PD">3PD</option>
+              </select>
+            </div>
+            <div class="form-group full">
               <label for="f-cedula">Cédula / documento conductor</label>
               <input type="text" id="f-cedula" placeholder="Número de documento" autocomplete="off">
             </div>
@@ -732,6 +739,7 @@
                 <th>Conductor</th>
                 <th>Muelle</th>
                 <th>Tipo</th>
+                <th>Canal</th>
                 <th>Ingreso</th>
                 <th>Salida</th>
                 <th>Estado</th>
@@ -1360,14 +1368,12 @@ function registrarEntrada() {
   var ubicacion = document.getElementById('f-ubicacion').value.trim();
   var numeroMuelle = document.getElementById('f-numeroMuelle').value;
   var bahia = document.getElementById('f-bahia').value;
+  var canal     = document.getElementById('f-canal').value;
   var tipo      = getTipoSeleccionado();
   var cedula    = document.getElementById('f-cedula').value.trim();
   var obs       = document.getElementById('f-obs').value.trim();
-
-  if (!conductor) { toast('Ingresa el nombre del conductor', 'red', 'ti-alert-circle'); return; }
-  if (!placa)     { toast('Ingresa la placa del vehículo',   'red', 'ti-alert-circle'); return; }
-  if (!hora)      { toast('Selecciona la hora de ingreso',   'red', 'ti-alert-circle'); return; }
   if (!ubicacion)    { toast('Ingresa la ubicación',       'red', 'ti-alert-circle'); return; }
+  if (!canal)       { toast('Selecciona el canal',        'red', 'ti-alert-circle'); return; }
   if (!tipo)      { toast('Selecciona al menos un tipo de operación (Cargue y/o Descargue)', 'red', 'ti-alert-circle'); return; }
   var destinoCompleto = computeDestino(ubicacion, numeroMuelle, bahia);
   var rec = {
@@ -1380,6 +1386,7 @@ function registrarEntrada() {
       ubicacion: ubicacion,
       numeroMuelle: numeroMuelle,
       bahia: bahia,
+      canal: canal,
 
       destino: destinoCompleto,
 
@@ -1430,9 +1437,10 @@ function registrarEntrada() {
 }
 
 function limpiarForm() {
-  ['f-conductor','f-placa','f-ubicacion','f-numeroMuelle','f-bahia','f-cedula','f-obs'].forEach(function(id){
+  ['f-conductor','f-placa','f-ubicacion','f-numeroMuelle','f-bahia','f-canal','f-cedula','f-obs'].forEach(function(id){
     document.getElementById(id).value = '';
   });
+  document.getElementById('f-canal').value = 'MQ';
   document.getElementById('f-hora').value = nowLocal();
   document.querySelector('input[name=tipo][value=Cargue]').checked = true;
   document.querySelector('input[name=tipo][value=Descargue]').checked = false;
@@ -1457,7 +1465,7 @@ function getStateBadgeClass(r) {
 }
 function getStateIcon(r) {
   if (r.horaSalida) return 'ti-check';
-  return getStateLabel(r) === 'En muelle' ? 'ti-anchor' : 'ti-building-warehouse';
+  return getStateLabel(r) === 'En muelle' ? 'ti-door' : 'ti-building-warehouse';
 }
 function puedeDespachar(r) {
   if (!r) return false;
@@ -1560,7 +1568,7 @@ function getFiltered() {
       currentFilter === 'Descargue' ? (r.tipo === 'Descargue' || r.tipo === 'Ambos') :
       currentFilter === 'Ambos'     ? r.tipo === 'Ambos' :
       true;
-    var ms = !q || [r.placa, r.conductor, getDestino(r), r.cedula, r.obs, r.obsUbicacion, r.operadorEntrada, r.operadorSalida]
+    var ms = !q || [r.placa, r.conductor, getDestino(r), r.canal, r.cedula, r.obs, r.obsUbicacion, r.operadorEntrada, r.operadorSalida]
       .concat(getHistorial(r).map(function(h){ return h.texto; }))
       .some(function(f){ return (f||'').toLowerCase().indexOf(q) !== -1; });
     return mf && ms;
@@ -1571,7 +1579,7 @@ function renderRegistros() {
   var filtered = getFiltered();
   var tbody    = document.getElementById('reg-table');
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state"><i class="ti ti-file-off"></i><p>No hay registros que coincidan</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12"><div class="empty-state"><i class="ti ti-file-off"></i><p>No hay registros que coincidan</p></div></td></tr>';
     return;
   }
   var rankActivo = 0;
@@ -1587,6 +1595,7 @@ function renderRegistros() {
       '<td>' + r.conductor + '</td>' +
       '<td>' + getDestino(r) + '</td>' +
       '<td><span class="badge ' + tipoBadgeClass(r.tipo) + '">' + r.tipo + '</span></td>' +
+      '<td>' + (r.canal || '—') + '</td>' +
       '<td>' + fmtDt(r.horaEntrada) + '</td>' +
       '<td>' + fmtDt(r.horaSalida) + '</td>' +
       '<td><span class="badge ' + getStateBadgeClass(r) + '">' +
@@ -1759,6 +1768,7 @@ function openDetalle(id) {
     ['ti-id',               'Documento',        r.cedula || '—'],
     ['ti-building-warehouse','Muelle',          getDestino(r)],
     ['ti-map-pin',          'Ubicación',        r.ubicacion || '—'],
+    ['ti-notes',            'Canal',            r.canal || '—'],
     ['ti-notes',            'Obs. ubicación',   r.obsUbicacion || '—'],
     ['ti-package-import',   'Tipo',            '<span class="badge ' + tipoBadgeClass(r.tipo) + '">' + r.tipo + '</span>'],
     ['ti-login',            'Hora entrada',     fmtDt(r.horaEntrada)],
@@ -1813,12 +1823,13 @@ function buildExcelData(data) {
       'Muelle': r.numeroMuelle || '',
       'Bahía': r.bahia || '',
       'Tipo': r.tipo,
+      'Canal': r.canal || '',
       'Hora entrada': fmtDt(r.horaEntrada),
       'Operador entrada': r.operadorEntrada || '',
       'Hora salida': fmtDt(r.horaSalida),
       'Operador salida': r.operadorSalida || '',
       'Tiempo en patio': duracion(r.horaEntrada, r.horaSalida),
-      'Estado': r.horaSalida ? 'Salió' : 'En patio',
+      'Estado': getStateLabel(r),
       'Obs. entrada': r.obs || '',
       'Obs. ubicación': r.obsUbicacion || '',
       'Obs. salida': r.obsSalida || '',
@@ -1832,7 +1843,7 @@ function buildExcelData(data) {
 function exportExcel() {
   if (!records.length) { toast('No hay registros para exportar', 'amber', 'ti-alert-circle'); return; }
   var ws = XLSX.utils.json_to_sheet(buildExcelData(records));
-  ws['!cols'] = [14,22,16,12,10,20,18,20,18,14,10,28,28,12].map(function(w){ return {wch:w}; });
+  ws['!cols'] = [14,22,16,12,10,10,10,10,18,18,18,18,16,12,18,18,18,38,12].map(function(w){ return {wch:w}; });
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Registros');
   XLSX.writeFile(wb, 'porteria_' + today() + '.xlsx');
@@ -1842,7 +1853,7 @@ function exportExcelHoy() {
   var hoy = records.filter(function(r){ return r.fecha === today(); });
   if (!hoy.length) { toast('No hay registros de hoy', 'amber', 'ti-alert-circle'); return; }
   var ws = XLSX.utils.json_to_sheet(buildExcelData(hoy));
-  ws['!cols'] = [14,22,16,12,10,20,18,20,18,14,10,28,28,12].map(function(w){ return {wch:w}; });
+  ws['!cols'] = [14,22,16,12,10,10,10,10,18,18,18,18,16,12,18,18,18,38,12].map(function(w){ return {wch:w}; });
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Hoy');
   XLSX.writeFile(wb, 'porteria_hoy_' + today() + '.xlsx');
