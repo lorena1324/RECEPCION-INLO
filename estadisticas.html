@@ -3,37 +3,36 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Control de Portería — Vehículos</title>
+<title>Portería — Panel Supervisor</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" onload="window._chartJsReady=true; if (typeof refreshActiveView === 'function') refreshActiveView();" onerror="window._chartJsFailed=true;"></script>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --blue-50: #E6F1FB; --blue-100: #B5D4F4; --blue-600: #185FA5; --blue-800: #0C447C;
-    --green-50: #EAF3DE; --green-600: #3B6D11; --green-800: #27500A;
-    --amber-50: #FAEEDA; --amber-600: #854F0B; --amber-800: #633806;
-    --red-50: #FCEBEB; --red-600: #A32D2D;
-    --gray-50: #F1EFE8; --gray-100: #D3D1C7; --gray-200: #B4B2A9;
-    --gray-400: #888780; --gray-600: #5F5E5A; --gray-800: #444441;
-    --teal-50: #E1F5EE; --teal-600: #0F6E56; --teal-800: #085041;
-    --surface: #ffffff;
-    --surface-2: #F7F7F5;
-    --surface-3: #F1EFE8;
-    --text-1: #1a1a18;
-    --text-2: #5F5E5A;
-    --text-3: #888780;
-    --border: rgba(0,0,0,0.10);
-    --border-md: rgba(0,0,0,0.18);
-    --radius-sm: 6px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
-    --radius-xl: 16px;
-    --sidebar-w: 240px;
-    --header-h: 60px;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.07);
-    --shadow-md: 0 4px 16px rgba(0,0,0,0.10);
-  }
+:root {
+  --blue-50: #E6F1FB; --blue-100: #B5D4F4; --blue-600: #185FA5; --blue-800: #0C447C;
+  --green-50: #EAF3DE; --green-600: #3B6D11; --green-800: #27500A;
+  --amber-50: #FAEEDA; --amber-600: #854F0B; --amber-800: #633806;
+  --red-50: #FCEBEB; --red-600: #A32D2D;
+  --gray-50: #F1EFE8; --gray-100: #D3D1C7; --gray-200: #B4B2A9;
+  --gray-400: #888780; --gray-600: #5F5E5A; --gray-800: #444441;
+  --teal-50: #E1F5EE; --teal-600: #0F6E56; --teal-800: #085041;
+  --surface: #ffffff;
+  --surface-2: #F7F7F5;
+  --surface-3: #F1EFE8;
+  --text-1: #1a1a18;
+  --text-2: #5F5E5A;
+  --text-3: #888780;
+  --border: rgba(0,0,0,0.10);
+  --border-md: rgba(0,0,0,0.18);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --sidebar-w: 240px;
+  --header-h: 60px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.07);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.10);
+}
   html { font-size: 15px; }
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -159,6 +158,7 @@
   .view { display: none; }
   .view.active { display: block; }
   .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+  #view-estadisticas .stats-row { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
   .stat-card {
     background: var(--surface); border: 0.5px solid var(--border);
     border-radius: var(--radius-lg); padding: 14px 16px;
@@ -170,6 +170,7 @@
   .stat-ico.green { background: var(--green-50); } .stat-ico.green i { color: var(--green-600); }
   .stat-ico.amber { background: var(--amber-50); } .stat-ico.amber i { color: var(--amber-600); }
   .stat-ico.teal  { background: var(--teal-50);  } .stat-ico.teal  i { color: var(--teal-600);  }
+  .stat-ico.gray  { background: var(--gray-50);  } .stat-ico.gray  i { color: var(--gray-600);  }
   .stat-val { font-size: 26px; font-weight: 600; line-height: 1; color: var(--text-1); }
   .stat-lbl { font-size: 12px; color: var(--text-3); margin-top: 4px; }
   .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-wrap: nowrap; }
@@ -485,6 +486,10 @@
     .stats-row { grid-template-columns: 1fr 1fr; }
     .topbar-operator .full-label { display: none; }
   }
+  /* Overrides to keep stats view responsive and prevent horizontal scroll */
+  .chart-card .table-wrap table, .chart-card table { min-width: 0 !important; }
+  .table-wrap { max-width: 100%; }
+  .topbar { z-index: 120; }
 </style>
 </head>
 <body>
@@ -494,10 +499,10 @@
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
-      <div class="brand-icon"><i class="ti ti-truck"></i></div>
+      <div class="brand-icon"><i class="ti ti-chart-histogram"></i></div>
       <div class="brand-text">
         <strong>Portería</strong>
-        <span>Control vehicular</span>
+        <span>Panel Supervisor</span>
       </div>
     </div>
     <nav class="nav">
@@ -505,8 +510,8 @@
       <button class="nav-item active" onclick="showView('dashboard')">
         <i class="ti ti-dashboard"></i> Dashboard
       </button>
-      <button class="nav-item" onclick="showView('entrada')">
-        <i class="ti ti-login"></i> Registrar entrada
+      <button class="nav-item" onclick="showView('hoy')">
+        <i class="ti ti-calendar-check"></i> Entradas de hoy
       </button>
       <button class="nav-item" onclick="showView('registros')">
         <i class="ti ti-list-details"></i> Registros
@@ -523,13 +528,9 @@
       </button>
     </nav>
     <div class="sidebar-footer">
-      <div class="operator-chip" onclick="openGate()">
-        <div class="operator-avatar" id="op-avatar-sb">--</div>
-        <div class="operator-info">
-          <strong id="op-name-sb">Sin operador</strong>
-          <span>Cambiar operador</span>
-        </div>
-        <i class="ti ti-chevron-right"></i>
+      <div class="sidebar-footer-row">
+        <i class="ti ti-eye"></i>
+        <span>Solo lectura — datos en vivo</span>
       </div>
       <div class="sidebar-footer-row">
         <i class="ti ti-database"></i>
@@ -552,14 +553,13 @@
           <i class="ti ti-menu-2"></i>
         </button>
         <div>
-          <div class="topbar-title" id="topbar-title">Dashboard</div>
           <div class="topbar-sub" id="topbar-date"></div>
         </div>
       </div>
       <div class="topbar-right">
-        <div class="topbar-operator" onclick="openGate()">
-          <i class="ti ti-user-circle"></i>
-          <span class="full-label">Turno: <strong id="op-name-top">Sin operador</strong></span>
+        <div class="topbar-operator" style="cursor:default;">
+          <i class="ti ti-eye"></i>
+          <span class="full-label">Panel de solo lectura</span>
         </div>
         <div id="sync-top" class="sync-badge">
           <i class="ti ti-device-floppy"></i>
@@ -576,7 +576,7 @@
           <i class="ti ti-info-circle"></i>
           <div>
             <strong>Modo local activo</strong>
-            Los datos se guardan en este navegador. Para sincronizar entre dispositivos, configura Firebase en <button onclick="showView('configurar')" style="background:none;border:none;color:var(--blue-600);cursor:pointer;font-weight:600;text-decoration:underline;padding:0">Configurar Firebase</button>.
+            Este panel aún no está conectado a la base de datos en tiempo real. Ingresa la misma configuración de Firebase que usa el equipo de portería en <button onclick="showView('configurar')" style="background:none;border:none;color:var(--blue-600);cursor:pointer;font-weight:600;text-decoration:underline;padding:0">Configurar Firebase</button>.
           </div>
         </div>
         <div id="alerta-patio-banner" class="local-banner" style="display:none; background:#FFF4E5; border-color:#F6C27A; color:#7A5118;">
@@ -591,7 +591,7 @@
             <div class="stat-ico blue"><i class="ti ti-truck"></i></div>
             <div class="stat-body">
               <div class="stat-val" id="s-total">0</div>
-              <div class="stat-lbl">Total turno</div>
+              <div class="stat-lbl">Total del día</div>
             </div>
           </div>
           <div class="stat-card">
@@ -609,58 +609,51 @@
             </div>
           </div>
           <div class="stat-card">
-            <div class="stat-ico teal"><i class="ti ti-clock"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="s-tiempo-patio">0 min</div>
-              <div class="stat-lbl">Tiempo promedio en patio</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico teal"><i class="ti ti-clock"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="s-tiempo-muelle">0 min</div>
-              <div class="stat-lbl">Tiempo promedio en muelle</div>
-            </div>
-          </div>
-          <div class="stat-card">
             <div class="stat-ico amber"><i class="ti ti-logout"></i></div>
             <div class="stat-body">
               <div class="stat-val" id="s-salidas">0</div>
-              <div class="stat-lbl">Salidas turno</div>
+              <div class="stat-lbl">Salidas hoy</div>
             </div>
           </div>
           <div class="stat-card">
-            <div class="stat-ico teal"><i class="ti ti-package-import"></i></div>
+            <div class="stat-ico teal"><i class="ti ti-clock-hour-4"></i></div>
             <div class="stat-body">
-              <div class="stat-val" id="s-cargue">0</div>
-              <div class="stat-lbl">Cargues turno</div>
+              <div class="stat-val" id="s-promedio">0 min</div>
+              <div class="stat-lbl">Tiempo promedio hoy</div>
             </div>
           </div>
         </div>
-        <div class="section-header">
-          <div class="section-title" id="dashboard-section-title">Vehículos en patio ahora</div>
-          <div class="toolbar" style="margin-bottom:0; gap:8px;">
-            <div class="filter-pills">
-              <button class="pill active" onclick="setDashboardView('todos', this)">Todos</button>
-              <button class="pill" onclick="setDashboardView('muelle', this)">En muelle</button>
-            </div>
-            <button class="btn btn-sm" onclick="showView('registros')">
-              <i class="ti ti-arrow-right"></i> Ver todos
-            </button>
+
+        <div class="chart-grid">
+          <div class="chart-card">
+            <div class="chart-card-title">Diferencia entre turnos — hoy</div>
+            <div class="chart-card-sub" id="s-turno-diff-sub">Vehículos atendidos por cada operador en el día</div>
+            <div class="chart-canvas-wrap short"><canvas id="chart-turnos-hoy"></canvas></div>
           </div>
+          <div class="chart-card">
+            <div class="chart-card-title">Entradas por hora — hoy</div>
+            <div class="chart-card-sub">Distribución horaria del movimiento de hoy</div>
+            <div class="chart-canvas-wrap short"><canvas id="chart-horas-hoy"></canvas></div>
+          </div>
+        </div>
+
+        <div class="section-header" style="margin-top:16px;">
+          <div class="section-title">Últimas entradas registradas</div>
+          <button class="btn btn-sm" onclick="showView('hoy')">
+            <i class="ti ti-arrow-right"></i> Ver entradas de hoy
+          </button>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Prioridad</th>
                 <th>Placa</th>
                 <th>Conductor</th>
                 <th>Muelle</th>
                 <th>Tipo</th>
                 <th>Ingreso</th>
+                <th>Estado</th>
                 <th>Operador</th>
-                <th>Acción</th>
               </tr>
             </thead>
             <tbody id="dash-table"></tbody>
@@ -668,119 +661,39 @@
         </div>
       </div>
 
-      <!-- ENTRADA -->
-      <div id="view-entrada" class="view">
-        <div class="form-card">
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="f-conductor">Conductor *</label>
-              <input type="text" id="f-conductor" placeholder="Nombre completo del conductor" autocomplete="off">
-            </div>
-            <div class="form-group">
-              <label for="f-placa">Placa del vehículo *</label>
-              <input type="text" id="f-placa" placeholder="Ej: ABC-123" autocomplete="off">
-            </div>
-            <div class="form-group">
-              <label for="f-hora">Hora de ingreso *</label>
-              <input type="datetime-local" id="f-hora">
-            </div>
-            <div class="form-group">
-              <label for="f-ubicacion">Ubicación *</label>
-              <select id="f-ubicacion" onchange="cambiarUbicacion()">
-                <option value="">Selecciona</option>
-                <option value="Muelle">Muelle</option>
-                <option value="Patio">Patio</option>
-              </select>
-                <div id="muelle-options" style="display:none">
-
-                    <label>Número de muelle</label>
-
-                    <select id="f-numeroMuelle">
-                        <option>1</option>
-                        <option>2</option>
-                        <option>3</option>
-                        <option>4</option>
-                        <option>5</option>
-                        <option>6</option>
-                        <option>7</option>
-                        <option>8</option>
-                    </select>
-
-                    <label>Bahía</label>
-
-                    <select id="f-bahia">
-                        <option>A</option>
-                    </select>
-
-                </div>
-            </div>
-            <div class="form-group full">
-              <label>Tipo de operación * <span style="text-transform:none;font-weight:400;color:var(--text-3)">(puedes elegir ambas)</span></label>
-              <div class="radio-row" id="radio-tipo">
-                <label class="radio-card sel-cargue" id="rc-cargue">
-                  <input type="checkbox" name="tipo" value="Cargue" checked>
-                  <i class="ti ti-package-import"></i> Cargue
-                </label>
-                <label class="radio-card" id="rc-descargue">
-                  <input type="checkbox" name="tipo" value="Descargue">
-                  <i class="ti ti-package-export"></i> Descargue
-                </label>
-              </div>
-              <div class="tipo-hint">Selecciona Cargue, Descargue, o ambos si el vehículo hará las dos operaciones.</div>
-            </div>
-            <div class="form-group full">
-              <label for="f-programado">Vehículo programado *</label>
-              <select id="f-programado" onchange="cambiarProgramado()">
-                <option value="">Selecciona</option>
-                <option value="No programado">No programado</option>
-                <option value="Programado">Programado</option>
-              </select>
-            </div>
-            <div class="form-group" id="programacion-wrapper" style="display:none;">
-              <label for="f-hora-programacion">Hora de programación</label>
-              <input type="datetime-local" id="f-hora-programacion">
-            </div>
-            <div class="form-group full">
-              <label for="f-servicio-tipo">Tipo de servicio</label>
-              <select id="f-servicio-tipo" onchange="cambiarServicioTipo()">
-                <option value="">Selecciona</option>
-                <option value="Normal">Normal</option>
-                <option value="Reciclaje">Reciclaje</option>
-                <option value="Insumos">Insumos</option>
-              </select>
-            </div>
-            <div class="form-group" id="servicio-empresa-wrapper" style="display:none;">
-              <label for="f-servicio-empresa">Empresa / destino</label>
-              <select id="f-servicio-empresa" style="display:none;">
-                <option value="">Selecciona empresa</option>
-                <option value="Ática">Ática</option>
-                <option value="Co-Recicladora">Co-Recicladora</option>
-              </select>
-              <input type="text" id="f-servicio-empresa-text" style="display:none;" readonly value="Pepsico">
-            </div>
-            <div class="form-group full">
-              <label for="f-canal">Canal *</label>
-              <select id="f-canal">
-                <option value="MQ">MQ</option>
-                <option value="3PD">3PD</option>
-              </select>
-            </div>
-            <div class="form-group full">
-              <label for="f-cedula">Cédula / documento conductor</label>
-              <input type="text" id="f-cedula" placeholder="Número de documento" autocomplete="off">
-            </div>
-            <div class="form-group full">
-              <label for="f-obs">Observaciones</label>
-              <textarea id="f-obs" placeholder="Notas, referencias de carga, número de orden, etc."></textarea>
-            </div>
+      <!-- ENTRADAS DE HOY -->
+      <div id="view-hoy" class="view">
+        <div class="toolbar">
+          <div class="search-box">
+            <i class="ti ti-search"></i>
+            <input type="text" id="search-input-hoy" placeholder="Buscar por placa, conductor, muelle...">
           </div>
-          <div class="form-footer">
-            <button class="btn" onclick="limpiarForm()"><i class="ti ti-refresh"></i> Limpiar</button>
-            <button class="btn btn-primary" onclick="registrarEntrada()"><i class="ti ti-login"></i> Registrar entrada</button>
-          </div>
+          <button class="btn btn-sm" onclick="exportExcelHoy()">
+            <i class="ti ti-download"></i> Exportar hoy
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Placa</th>
+                <th>Conductor</th>
+                <th>Muelle</th>
+                <th>Tipo</th>
+                <th>Canal</th>
+                <th>Ingreso</th>
+                <th>Salida</th>
+                <th>Estado</th>
+                <th>Operador</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="hoy-table"></tbody>
+          </table>
         </div>
       </div>
 
+      <!-- (antigua vista de registro de entrada, retirada de este panel) -->
       <!-- REGISTROS -->
       <div id="view-registros" class="view">
         <div class="toolbar">
@@ -810,14 +723,9 @@
                 <th>Ingreso</th>
                 <th>Salida</th>
                 <th>Estado</th>
-                <th>Programado</th>
-                <th>Hora prog.</th>
-                <th>Servicio</th>
-                <th>Tiempo patio</th>
-                <th>Tiempo muelle</th>
                 <th>Motivo en patio</th>
                 <th>Operador</th>
-                <th>Acciones</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="reg-table"></tbody>
@@ -827,7 +735,7 @@
 
       <!-- ESTADÍSTICAS -->
       <div id="view-estadisticas" class="view">
-        <div class="toolbar" style="justify-content: space-between; gap: 12px;">
+        <div class="toolbar" style="justify-content: space-between; align-items: center;">
           <div class="filter-pills">
             <button class="pill active" onclick="setPeriodoEstadisticas('hoy', this)">Hoy</button>
             <button class="pill" onclick="setPeriodoEstadisticas('3dias', this)">Últimos 3 días</button>
@@ -836,7 +744,7 @@
             <button class="pill" onclick="setPeriodoEstadisticas('todo', this)">Todo</button>
             <button class="pill" onclick="setPeriodoEstadisticas('personalizado', this)">Personalizado</button>
           </div>
-          <a class="btn btn-primary" href="estadisticas.html"><i class="ti ti-chart-histogram"></i> Ver documento de estadísticas</a>
+          <a class="btn btn-sm" href="index.html"><i class="ti ti-arrow-left"></i> Volver</a>
         </div>
         <div id="estad-rango-custom" class="estad-rango-custom">
           <label style="font-size:12.5px; color:var(--text-2);">Desde
@@ -884,6 +792,13 @@
               <div class="stat-lbl">Día con más movimiento</div>
             </div>
           </div>
+          <div class="stat-card">
+            <div class="stat-ico gray"><i class="ti ti-database"></i></div>
+            <div class="stat-body">
+              <div class="stat-val" id="es-total-general">0</div>
+              <div class="stat-lbl">Vehículos registrados (general)</div>
+            </div>
+          </div>
         </div>
 
         <div class="chart-grid" id="estad-chart-grid">
@@ -912,6 +827,44 @@
             <div class="chart-card-sub">Distribución por canal (MQ / 3PD)</div>
             <div class="chart-canvas-wrap short"><canvas id="chart-canal"></canvas></div>
           </div>
+          <div class="chart-card full">
+            <div class="chart-card-title">Franja horaria</div>
+            <div class="chart-card-sub">Entradas de vehículos por hora del día, dentro del periodo seleccionado</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-franja-horaria"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-title">Muelles más usados — general</div>
+            <div class="chart-card-sub">Cantidad de veces que se usó cada muelle</div>
+            <div class="chart-canvas-wrap short"><canvas id="chart-muelles-general"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-title">Tiempo promedio en muelle por día</div>
+            <div class="chart-card-sub">Minutos promedio dentro del muelle</div>
+            <div class="chart-canvas-wrap short"><canvas id="chart-tiempo-muelle"></canvas></div>
+          </div>
+        </div>
+        <div class="chart-grid" style="margin-top:18px;">
+          <div class="chart-card">
+            <div class="chart-card-title">Promedio por tipo</div>
+            <div class="chart-card-sub">Promedio de tiempo en patio y muelle por tipo (Cargue / Descargue / Ambos)</div>
+            <div class="table-wrap" style="margin-top:8px;">
+              <div id="estad-por-tipo-body">Cargando…</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-title">Promedio por canal</div>
+            <div class="chart-card-sub">Promedio de tiempo en patio por canal (MQ / 3PD)</div>
+            <div class="table-wrap" style="margin-top:8px;">
+              <div id="estad-por-canal-body">Cargando…</div>
+            </div>
+          </div>
+          <div class="chart-card full">
+            <div class="chart-card-title">Muelles más usados por operario</div>
+            <div class="chart-card-sub">Muelle preferido de cada operario y cuántas veces lo usó</div>
+            <div class="table-wrap" style="margin-top:8px;">
+              <div id="estad-muelles-operario-body">Cargando…</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -931,19 +884,6 @@
           <div class="export-row">
             <button class="btn btn-primary" onclick="exportJSON()"><i class="ti ti-download"></i> Descargar JSON</button>
           </div>
-        </div>
-        <div class="export-card">
-          <h3><i class="ti ti-file-upload" style="font-size:15px;vertical-align:-2px;margin-right:6px;color:#854F0B"></i>Importar desde JSON</h3>
-          <p>Carga un archivo JSON exportado previamente. Los registros con el mismo ID no se duplicarán.</p>
-          <div class="export-row">
-            <input type="file" id="import-file" accept=".json" style="display:none">
-            <button class="btn" onclick="document.getElementById('import-file').click()"><i class="ti ti-upload"></i> Seleccionar JSON</button>
-          </div>
-        </div>
-        <div class="danger-card">
-          <h3><i class="ti ti-alert-triangle" style="font-size:15px;vertical-align:-2px;margin-right:6px"></i>Zona de peligro</h3>
-          <p>Elimina permanentemente todos los registros. Esta acción no se puede deshacer.</p>
-          <button class="btn btn-danger" onclick="borrarTodo()"><i class="ti ti-trash"></i> Borrar todos los registros</button>
         </div>
       </div>
 
@@ -996,72 +936,6 @@
   </div>
 </div>
 
-<!-- MODAL SALIDA -->
-<div class="modal-backdrop" id="modal-salida">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title"><i class="ti ti-logout"></i> Registrar salida</div>
-      <button class="modal-close" onclick="closeModal('modal-salida')"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="modal-info-box" id="modal-salida-info"></div>
-    <div class="form-group">
-      <label for="m-hora-salida">Hora de salida</label>
-      <input type="datetime-local" id="m-hora-salida">
-    </div>
-    <div class="form-group" style="margin-top:12px">
-      <label for="m-obs-salida">Observaciones de salida</label>
-      <textarea id="m-obs-salida" placeholder="Notas al momento de la salida (opcional)..."></textarea>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-salida')">Cancelar</button>
-      <button class="btn btn-primary" onclick="confirmarSalida()"><i class="ti ti-check"></i> Confirmar salida</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL EDITAR UBICACIÓN -->
-<div class="modal-backdrop" id="modal-editar">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title"><i class="ti ti-edit"></i> Editar ubicación</div>
-      <button class="modal-close" onclick="closeModal('modal-editar')"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="modal-info-box" id="modal-editar-info"></div>
-    <div class="form-group">
-      <label for="e-ubicacion">Ubicación *</label>
-      <select id="e-ubicacion" onchange="cambiarUbicacionEdit()">
-        <option value="Muelle">Muelle</option>
-        <option value="Patio">Patio</option>
-      </select>
-      <div id="muelle-options-edit" style="display:none">
-        <label>Número de muelle</label>
-        <select id="e-numeroMuelle">
-          <option>1</option>
-          <option>2</option>
-          <option>3</option>
-          <option>4</option>    
-          <option>5</option>
-          <option>6</option>  
-          <option>7</option>
-          <option>8</option>
-        </select>
-        <label>Bahía</label>
-        <select id="e-bahia">
-          <option>A</option>
-        </select>
-      </div>
-    </div>
-    <div class="form-group full">
-      <label for="e-obs-ubicacion">Observaciones de ubicación</label>
-      <textarea id="e-obs-ubicacion" placeholder="Descripción o motivo del cambio de ubicación"></textarea>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-editar')">Cancelar</button>
-      <button class="btn btn-primary" onclick="confirmarEdicionUbicacion()"><i class="ti ti-check"></i> Guardar cambios</button>
-    </div>
-  </div>
-</div>
-
 <!-- MODAL DETALLE -->
 <div class="modal-backdrop" id="modal-detalle">
   <div class="modal">
@@ -1076,25 +950,6 @@
   </div>
 </div>
 
-<!-- GATE OPERADOR -->
-<div class="gate-backdrop" id="gate-operador">
-  <div class="gate-card">
-    <div class="gate-icon"><i class="ti ti-id-badge-2"></i></div>
-    <h2>¿Quién está en turno?</h2>
-    <p>Selecciona tu nombre para identificar quién registra los movimientos de hoy.</p>
-    <div class="operator-row" id="operator-list"></div>
-    <label style="display:flex; align-items:flex-start; gap:8px; margin-top:14px; font-size:12.5px; color:var(--text-2); text-align:left; cursor:pointer;">
-      <input type="checkbox" id="gate-nuevo-turno" checked style="margin-top:2px;">
-      <span>Es un cambio de turno: reinicia los contadores del día. Los vehículos que sigan en patio o muelle (sin salida registrada) continúan igual en el turno nuevo.</span>
-    </label>
-    <div class="gate-footer">
-      <button class="btn btn-primary" id="gate-continue-btn" onclick="confirmarOperador()" disabled>
-        <i class="ti ti-check"></i> Continuar
-      </button>
-    </div>
-  </div>
-</div>
-
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -1104,29 +959,19 @@
 ════════════════════════════════════════════════════ -->
 <script>
 /* ══════════ ESTADO GLOBAL ══════════ */
+// Panel de solo lectura: no hay operador activo, no se registran entradas/salidas
+// ni se modifican registros. Solo se leen los datos que llegan del mismo Firebase
+// que usa la app de portería (o del respaldo local mientras no esté conectado).
 var records         = [];
 var currentFilter   = 'todos';
-var currentDashboardView = 'todos';
 var selectedId      = null;
-var currentOperator = null;
 var firebaseActive  = false;
-var _fbSave, _fbDelete, _fbDeleteAll; // funciones Firebase inyectadas dinámicamente
+var _fbSave; // se mantiene por compatibilidad con la app de portería, pero este panel nunca lo llama
 
-var OP_KEY       = 'porteria_op_v1';
 var RECORDS_KEY  = 'porteria_records_v1';
 var FB_CFG_KEY   = 'porteria_fb_cfg_v1';
-var TURNO_KEY    = 'porteria_turno_v1';
 
-var turnoActual  = null; // { operador, inicio }
-
-var OPERADORES = [
-  'Luis Milanes',
-  'Gerardo García',
-  'Tatiana Marentes',
-  'Seguridad',
-];
-
-/* ══════════ STORAGE LOCAL ══════════ */
+/* ══════════ STORAGE LOCAL (respaldo de lectura) ══════════ */
 function loadLocal() {
   try {
     var raw = localStorage.getItem(RECORDS_KEY);
@@ -1143,71 +988,35 @@ function saveLocal() {
   try { localStorage.setItem(RECORDS_KEY, JSON.stringify(records)); } catch(e) {}
 }
 
-/* ══════════ TURNOS ══════════ */
-function loadTurno() {
+/* ══════════ SINCRONIZACIÓN CON LA APP DE PORTERÍA (index) ══════════ */
+// Este panel es de solo lectura y antes solo leía localStorage UNA vez al
+// cargar la página (loadLocal() en init). Si la app de portería (index)
+// escribía nuevos registros mientras este panel ya estaba abierto, esos
+// cambios nunca se veían reflejados aquí hasta refrescar manualmente (F5).
+// Ahora escuchamos dos vías para enterarnos de datos nuevos sin recargar:
+//   1) Evento 'storage': el navegador lo dispara automáticamente en esta
+//      pestaña/iframe cuando OTRA pestaña/ventana del mismo origen (la app
+//      de portería) modifica localStorage. Es instantáneo.
+//   2) Sondeo periódico de respaldo: por si el índice usa otro mecanismo
+//      para escribir (por ejemplo, misma pestaña/iframe embebido) donde el
+//      evento 'storage' no llega, o si el navegador no lo dispara a tiempo.
+var _lastRecordsRaw = null;
+function syncFromLocalIfNeeded() {
+  if (firebaseActive) return; // Firebase ya empuja los datos en tiempo real vía onValue
   try {
-    var raw = localStorage.getItem(TURNO_KEY);
-    if (raw) {
-      var parsed = JSON.parse(raw);
-      if (parsed && parsed.inicio) { turnoActual = parsed; return; }
-    }
-  } catch(e) {}
-  // Sin turno guardado: se crea uno que "abarca" todo lo histórico,
-  // para no perder de vista contadores de datos ya existentes.
-  turnoActual = { operador: currentOperator, inicio: '1970-01-01T00:00' };
-  saveTurno();
-}
-function saveTurno() {
-  try { localStorage.setItem(TURNO_KEY, JSON.stringify(turnoActual)); } catch(e) {}
-}
-// Inicia un turno nuevo: reinicia los contadores del turno (entradas, salidas, cargues),
-// pero NO afecta a los vehículos que sigan en patio/muelle (sin salida registrada):
-// esos se siguen mostrando y contando igual, porque pasan al turno siguiente hasta que salgan.
-function nuevoTurno(operador) {
-  turnoActual = { operador: operador || currentOperator, inicio: nowLocal() };
-  saveTurno();
-
-  // Marcar continuidad en el historial de los vehículos que siguen sin salir,
-  // para que su información se traslade explícitamente al nuevo turno.
-  var activos = records.filter(function(r){ return !r.horaSalida; });
-  if (activos.length) {
-    var op = operador || currentOperator || null;
-    activos.forEach(function(rec){
-      var updated = Object.assign({}, rec, {
-        historial: agregarHistorial(rec, { fecha: turnoActual.inicio, tipo: 'turno', operador: op, texto: 'Continuación de turno' })
-      });
-      var idx = records.findIndex(function(x){ return x.id === rec.id; });
-      if (idx !== -1) records[idx] = updated;
-    });
-    // Si hay Firebase activo, sincronizamos los registros actualizados; si no, guardamos localmente.
-    if (firebaseActive && _fbSave) {
-      setSyncStatus('syncing');
-      Promise.all(activos.map(function(rec){
-        var up = records.find(function(x){ return x.id === rec.id; });
-        return _fbSave(up);
-      })).then(function(){
-        setSyncStatus('ok');
-        saveLocal();
-        refreshActiveView();
-      }).catch(function(){
-        setSyncStatus('error');
-        saveLocal();
-        refreshActiveView();
-      });
-    } else {
-      saveLocal();
-    }
-  }
-
+    var raw = localStorage.getItem(RECORDS_KEY);
+    if (raw === _lastRecordsRaw) return; // sin cambios, evitar re-render innecesario
+    _lastRecordsRaw = raw;
+  } catch(e) { return; }
+  loadLocal();
+  updateSidebarCount();
   refreshActiveView();
-  var enCurso = activos.length;
-  toast(
-    'Turno iniciado' + (enCurso ? ' — ' + enCurso + ' vehículo(s) en patio/muelle continúan en este turno' : ''),
-    'green', 'ti-id-badge-2'
-  );
 }
+window.addEventListener('storage', function(e) {
+  if (!e.key || e.key === RECORDS_KEY) syncFromLocalIfNeeded();
+});
 
-/* ══════════ FIREBASE (cargado dinámicamente) ══════════ */
+/* ══════════ FIREBASE (cargado dinámicamente, solo lectura) ══════════ */
 function conectarFirebase() {
   var cfg = {
     apiKey:        document.getElementById('fb-apiKey').value.trim(),
@@ -1225,19 +1034,18 @@ function conectarFirebase() {
 }
 
 function iniciarFirebase(cfg) {
-  // Cargar SDK de Firebase dinámicamente como módulo ES
+  // Cargar SDK de Firebase dinámicamente como módulo ES — SOLO LECTURA:
+  // este panel escucha "porteria/registros" pero nunca escribe ni borra nada,
+  // por eso solo importamos onValue (no set/remove).
   var script = document.createElement('script');
   script.type = 'module';
   script.textContent = [
     'import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";',
-    'import { getDatabase, ref, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";',
+    'import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";',
     'try {',
-    '  var app = initializeApp(' + JSON.stringify(cfg) + ', "porteria-" + Date.now());',
+    '  var app = initializeApp(' + JSON.stringify(cfg) + ', "porteria-supervisor-" + Date.now());',
     '  var db  = getDatabase(app);',
     '  var regRef = ref(db, "porteria/registros");',
-    '  window._fbSave = function(rec) { return set(ref(db,"porteria/registros/"+rec.id), rec); };',
-    '  window._fbDelete = function(id) { return remove(ref(db,"porteria/registros/"+id)); };',
-    '  window._fbDeleteAll = function() { return remove(ref(db,"porteria/registros")); };',
     '  onValue(regRef, function(snap) {',
     '    var data = snap.val();',
     '    var list = data ? Object.values(data) : [];',
@@ -1256,11 +1064,8 @@ function iniciarFirebase(cfg) {
     if (window._fbReady) {
       clearInterval(check);
       firebaseActive = true;
-      _fbSave      = window._fbSave;
-      _fbDelete    = window._fbDelete;
-      _fbDeleteAll = window._fbDeleteAll;
       setSyncStatus('ok');
-      toast('¡Firebase conectado! Datos en tiempo real activos.', 'green', 'ti-cloud-check');
+      toast('¡Conectado! Viendo los datos en tiempo real de portería.', 'green', 'ti-cloud-check');
       document.getElementById('local-mode-banner').style.display = 'none';
     } else if (window._fbError) {
       clearInterval(check);
@@ -1312,68 +1117,6 @@ function getDestino(r) {
   // 'destino' es el campo actual; 'muelle' se mantiene por compatibilidad con registros antiguos
   return r.destino || r.muelle || '—';
 }
-function filterByOperator(list) {
-  if (!Array.isArray(list)) return [];
-  if (!currentOperator) return list;
-  // Los vehículos que aún están activos (sin salida registrada) deben seguir
-  // siendo visibles para cualquier operador de turno, sin importar quién los
-  // recibió originalmente — el cambio de operador no debe "perder" vehículos
-  // que siguen en patio o muelle. Solo los registros ya cerrados (con salida)
-  // se filtran por el operador que los recibió, para las vistas históricas.
-  return list.filter(function(r){ return !r.horaSalida || r.operadorEntrada === currentOperator; });
-}
-function formatDuration(minutes) {
-  if (minutes == null || isNaN(minutes)) return '—';
-  minutes = Math.round(minutes);
-  if (minutes < 0) return '—';
-  var horas = Math.floor(minutes / 60);
-  var mins = minutes % 60;
-  return horas > 0 ? horas + 'h ' + mins + 'min' : mins + ' min';
-}
-function getLocationDurations(r) {
-  var hist = getHistorial(r).slice().sort(function(a,b){ return new Date(a.fecha || 0) - new Date(b.fecha || 0); });
-  var patio = 0, muelle = 0;
-  var lastLoc = null, lastTime = null;
-  hist.forEach(function(item) {
-    var fecha = new Date(item.fecha || 0);
-    if (item.tipo === 'entrada') {
-      lastLoc = (item.ubicacion || '').indexOf('Patio') === 0 ? 'Patio' : (item.ubicacion || '').indexOf('Muelle') === 0 ? 'Muelle' : null;
-      lastTime = fecha;
-      return;
-    }
-    if (item.tipo === 'ubicacion') {
-      if (lastLoc && lastTime) {
-        var diff = (fecha - lastTime) / 60000;
-        if (diff > 0) {
-          if (lastLoc === 'Patio') patio += diff;
-          else if (lastLoc === 'Muelle') muelle += diff;
-        }
-      }
-      lastLoc = (item.ubicacion || '').indexOf('Patio') === 0 ? 'Patio' : (item.ubicacion || '').indexOf('Muelle') === 0 ? 'Muelle' : lastLoc;
-      lastTime = fecha;
-      return;
-    }
-    if (item.tipo === 'salida') {
-      if (lastLoc && lastTime) {
-        var diff = (fecha - lastTime) / 60000;
-        if (diff > 0) {
-          if (lastLoc === 'Patio') patio += diff;
-          else if (lastLoc === 'Muelle') muelle += diff;
-        }
-      }
-      lastLoc = null;
-      lastTime = null;
-    }
-  });
-  if (!r.horaSalida && lastLoc && lastTime) {
-    var diff = (new Date() - lastTime) / 60000;
-    if (diff > 0) {
-      if (lastLoc === 'Patio') patio += diff;
-      else if (lastLoc === 'Muelle') muelle += diff;
-    }
-  }
-  return { patio: Math.round(patio), muelle: Math.round(muelle) };
-}
 function minutosEnPatio(r) {
   if (!r || !r.horaEntrada || r.horaSalida) return 0;
   var diff = (new Date() - new Date(r.horaEntrada)) / 60000;
@@ -1412,7 +1155,7 @@ function nivelPrioridad(minutos) {
 function celdaMotivoPatio(r) {
   if (r.horaSalida || r.ubicacion !== 'Patio') return '<span style="color:var(--text-3); font-size:12px;">—</span>';
   if (!r.obsUbicacion) {
-    return '<span style="color:var(--amber-600); font-size:12px; cursor:pointer; text-decoration:underline;" title="Clic para registrar el motivo" onclick="openModalEditar(\'' + r.id + '\')">Sin registrar</span>';
+    return '<span style="color:var(--amber-600); font-size:12px;">Sin registrar</span>';
   }
   var texto = r.obsUbicacion;
   var corto = texto.length > 55 ? texto.slice(0, 55) + '…' : texto;
@@ -1492,6 +1235,7 @@ function updateSidebarCount() {
 }
 function refreshActiveView() {
   if (document.getElementById('view-dashboard').classList.contains('active'))  renderDashboard();
+  if (document.getElementById('view-hoy').classList.contains('active'))       renderHoy();
   if (document.getElementById('view-registros').classList.contains('active'))  renderRegistros();
   if (document.getElementById('view-estadisticas').classList.contains('active')) renderEstadisticas();
 }
@@ -1506,58 +1250,13 @@ function toast(msg, type, icon) {
   t._to = setTimeout(function(){ t.className = 'toast'; }, 2800);
 }
 
-/* ══════════ OPERADOR ══════════ */
-function initials(name) {
-  return name.split(' ').map(function(p){ return p[0]; }).slice(0,2).join('').toUpperCase();
-}
-function renderOperatorList(selected) {
-  document.getElementById('operator-list').innerHTML = OPERADORES.map(function(name) {
-    return '<div class="operator-card ' + (name === selected ? 'selected' : '') + '" onclick="selectOperator(\'' + name + '\')">' +
-      '<div class="op-av">' + initials(name) + '</div>' +
-      '<div><div class="operator-card-name">' + name + '</div><div class="operator-card-role">Operador de turno</div></div>' +
-      '<i class="ti ti-circle-check chk"></i>' +
-    '</div>';
-  }).join('');
-}
-function selectOperator(name) {
-  currentOperator = name;
-  renderOperatorList(name);
-  document.getElementById('gate-continue-btn').disabled = false;
-}
-function confirmarOperador() {
-  if (!currentOperator) return;
-  var esNuevoTurno = document.getElementById('gate-nuevo-turno').checked;
-  try { localStorage.setItem(OP_KEY, currentOperator); } catch(e) {}
-  updateOperatorUI();
-  document.getElementById('gate-operador').classList.remove('open');
-  if (esNuevoTurno) {
-    nuevoTurno(currentOperator); // reinicia contadores del turno; muestra su propio toast
-  } else {
-    toast('Operador actualizado — ' + currentOperator, 'green', 'ti-id-badge-2');
-  }
-}
-function openGate() {
-  renderOperatorList(currentOperator);
-  document.getElementById('gate-continue-btn').disabled = !currentOperator;
-  var chk = document.getElementById('gate-nuevo-turno');
-  if (chk) chk.checked = true; // por defecto se asume cambio de turno
-  document.getElementById('gate-operador').classList.add('open');
-}
-function updateOperatorUI() {
-  var name = currentOperator || 'Sin operador';
-  var ini  = currentOperator ? initials(currentOperator) : '--';
-  document.getElementById('op-name-sb').textContent   = name;
-  document.getElementById('op-name-top').textContent  = name;
-  document.getElementById('op-avatar-sb').textContent = ini;
-}
-
 /* ══════════ NAVEGACIÓN ══════════ */
 var titles = {
   dashboard:  'Dashboard',
-  entrada:    'Registrar entrada',
+  hoy:        'Entradas registradas hoy',
   registros:  'Registros de vehículos',
   estadisticas: 'Estadísticas',
-  exportar:   'Exportar / Importar datos',
+  exportar:   'Exportar datos',
   configurar: 'Configurar Firebase'
 };
 function showView(v) {
@@ -1568,10 +1267,12 @@ function showView(v) {
     if (el.getAttribute('onclick') && el.getAttribute('onclick').indexOf("'" + v + "'") !== -1)
       el.classList.add('active');
   });
-  document.getElementById('topbar-title').textContent = titles[v] || v;
+  var topbarTitle = document.getElementById('topbar-title');
+  if (topbarTitle) topbarTitle.textContent = titles[v] || v;
   if (v === 'registros') renderRegistros();
   if (v === 'dashboard')  renderDashboard();
-  if (v === 'estadisticas') renderEstadisticas();
+  if (v === 'hoy') renderHoy();
+  if (v === 'estadisticas') setPeriodoEstadisticas(estadPeriodoActual);
   closeSidebar(); // en móvil, al elegir una sección se cierra el menú
 }
 
@@ -1583,182 +1284,6 @@ function toggleSidebar() {
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('open');
-}
-
-/* ══════════ TIPO OPERACIÓN (checkbox cards, permite Cargue + Descargue) ══════════ */
-// Nota: NO se hace toggle manual del checked aquí. El <label> ya envuelve el
-// <input>, así que el navegador se encarga de marcarlo/desmarcarlo al hacer
-// clic en cualquier parte de la tarjeta. Manipular "checked" a mano en un
-// onclick del label duplica el evento (una vez por JS, otra por el propio
-// navegador) y ambos cambios se cancelan, dejando el checkbox "atascado".
-// Por eso solo escuchamos "change" para refrescar los estilos.
-function syncTipoUI() {
-  var chkCargue    = document.querySelector('input[name=tipo][value=Cargue]');
-  var chkDescargue = document.querySelector('input[name=tipo][value=Descargue]');
-  document.getElementById('rc-cargue').className    = 'radio-card' + (chkCargue.checked    ? ' sel-cargue'    : '');
-  document.getElementById('rc-descargue').className = 'radio-card' + (chkDescargue.checked ? ' sel-descargue' : '');
-}
-function getTipoSeleccionado() {
-  var seleccionados = Array.prototype.slice.call(document.querySelectorAll('input[name=tipo]:checked')).map(function(i){ return i.value; });
-  if (seleccionados.length === 2) return 'Ambos';
-  return seleccionados[0] || null;
-}
-
-function cambiarProgramado() {
-  var programado = document.getElementById('f-programado').value;
-  var wrapper = document.getElementById('programacion-wrapper');
-  wrapper.style.display = programado === 'Programado' ? 'block' : 'none';
-}
-function cambiarServicioTipo() {
-  var servicioTipo = document.getElementById('f-servicio-tipo').value;
-  var wrapper = document.getElementById('servicio-empresa-wrapper');
-  var empresaSelect = document.getElementById('f-servicio-empresa');
-  var empresaText = document.getElementById('f-servicio-empresa-text');
-  if (servicioTipo === 'Reciclaje') {
-    wrapper.style.display = 'block';
-    empresaSelect.style.display = 'block';
-    empresaText.style.display = 'none';
-    empresaSelect.value = '';
-  } else if (servicioTipo === 'Insumos') {
-    wrapper.style.display = 'block';
-    empresaSelect.style.display = 'none';
-    empresaText.style.display = 'block';
-    empresaText.value = 'Pepsico';
-  } else {
-    wrapper.style.display = 'none';
-    empresaSelect.style.display = 'none';
-    empresaText.style.display = 'none';
-  }
-}
-
-function computeDestino(ubicacion, numeroMuelle, bahia) {
-  if (ubicacion === "Patio") return "Patio";
-  return "Muelle " + numeroMuelle + " - Bahía " + bahia;
-}
-function cambiarUbicacion() {
-
-    const ubicacion = document.getElementById("f-ubicacion").value;
-
-    document.getElementById("muelle-options").style.display =
-        ubicacion === "Muelle"
-            ? "block"
-            : "none";
-}
-
-/* ══════════ REGISTRAR ENTRADA ══════════ */
-function registrarEntrada() {
-  if (!currentOperator) { openGate(); toast('Selecciona el operador de turno', 'amber', 'ti-id-badge-2'); return; }
-
-  var conductor = document.getElementById('f-conductor').value.trim();
-  var placa     = document.getElementById('f-placa').value.trim().toUpperCase();
-  var hora      = document.getElementById('f-hora').value;
-  var ubicacion = document.getElementById('f-ubicacion').value.trim();
-  var numeroMuelle = document.getElementById('f-numeroMuelle').value;
-  var bahia = document.getElementById('f-bahia').value;
-  var canal     = document.getElementById('f-canal').value;
-  var tipo      = getTipoSeleccionado();
-  var programado = document.getElementById('f-programado').value;
-  var horaProgramacion = document.getElementById('f-hora-programacion').value;
-  var servicioTipo = document.getElementById('f-servicio-tipo').value;
-  var servicioEmpresa = servicioTipo === 'Reciclaje'
-    ? document.getElementById('f-servicio-empresa').value
-    : servicioTipo === 'Insumos'
-      ? document.getElementById('f-servicio-empresa-text').value
-      : '';
-  var cedula    = document.getElementById('f-cedula').value.trim();
-  var obs       = document.getElementById('f-obs').value.trim();
-  if (!hora)        { toast('Selecciona la hora de ingreso', 'red', 'ti-alert-circle'); return; }
-  if (!placa)       { toast('Ingresa la placa del vehículo', 'red', 'ti-alert-circle'); return; }
-  if (!ubicacion)   { toast('Ingresa la ubicación',       'red', 'ti-alert-circle'); return; }
-  if (!canal)       { toast('Selecciona el canal',        'red', 'ti-alert-circle'); return; }
-  if (!tipo)        { toast('Selecciona al menos un tipo de operación (Cargue y/o Descargue)', 'red', 'ti-alert-circle'); return; }
-  if (!programado)  { toast('Selecciona si el vehículo está programado o no', 'red', 'ti-alert-circle'); return; }
-  if (programado === 'Programado' && !horaProgramacion) {
-    toast('Ingresa hora de programación', 'red', 'ti-alert-circle'); return;
-  }
-  if (servicioTipo === 'Reciclaje' && !servicioEmpresa) {
-    toast('Selecciona la empresa de reciclaje', 'red', 'ti-alert-circle'); return;
-  }
-  var destinoCompleto = computeDestino(ubicacion, numeroMuelle, bahia);
-  var rec = {
-      id: uid(),
-      conductor: conductor,
-      placa: placa,
-
-      horaEntrada: hora,
-      programado: programado === 'Programado',
-      horaProgramacion: horaProgramacion || '',
-
-      ubicacion: ubicacion,
-      numeroMuelle: numeroMuelle,
-      bahia: bahia,
-      canal: canal,
-
-      destino: destinoCompleto,
-
-      tipo: tipo,
-
-      cedula: cedula,
-      obs: obs,
-
-      servicioTipo: servicioTipo || 'Normal',
-      servicioEmpresa: servicioEmpresa,
-
-      horaSalida: null,
-      obsSalida: '',
-
-      fecha: hora.slice(0,10),
-
-      operadorEntrada: currentOperator,
-      operadorSalida: null,
-
-      historial: [{
-        fecha: hora,
-        tipo: 'entrada',
-        operador: currentOperator,
-        ubicacion: destinoCompleto,
-        texto: obs || ''
-      }]
-  };
-  console.log('Registrar entrada:', rec);
-  if (firebaseActive && _fbSave) {
-    setSyncStatus('syncing');
-    _fbSave(rec)
-      .then(function() {
-        setSyncStatus('ok');
-        toast('Entrada registrada — ' + placa, 'green', 'ti-truck');
-        limpiarForm();
-        showView('dashboard');
-      })
-      .catch(function() {
-        setSyncStatus('error');
-        toast('Error al guardar en Firebase', 'red', 'ti-x');
-      });
-  } else {
-    // Modo local
-    records.unshift(rec);
-    saveLocal();
-    updateSidebarCount();
-    toast('Entrada registrada — ' + placa + ' (local)', 'green', 'ti-truck');
-    limpiarForm();
-    showView('dashboard');
-  }
-}
-
-function limpiarForm() {
-  ['f-conductor','f-placa','f-ubicacion','f-numeroMuelle','f-bahia','f-canal','f-cedula','f-obs','f-programado','f-hora-programacion','f-servicio-tipo'].forEach(function(id){
-    document.getElementById(id).value = '';
-  });
-  document.getElementById('f-servicio-empresa').value = '';
-  document.getElementById('f-servicio-empresa-text').value = 'Pepsico';
-  document.getElementById('programacion-wrapper').style.display = 'none';
-  document.getElementById('servicio-empresa-wrapper').style.display = 'none';
-  document.getElementById('f-canal').value = 'MQ';
-  document.getElementById('f-hora').value = nowLocal();
-  document.querySelector('input[name=tipo][value=Cargue]').checked = true;
-  document.querySelector('input[name=tipo][value=Descargue]').checked = false;
-  syncTipoUI();
-  cambiarServicioTipo();
 }
 
 /* ══════════ DASHBOARD ══════════ */
@@ -1785,86 +1310,78 @@ function puedeDespachar(r) {
   if (!r) return false;
   return r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0 || (r.destino || '').indexOf('Muelle') !== -1;
 }
-function setDashboardView(view, btn) {
-  currentDashboardView = view;
-  var parent = document.getElementById('view-dashboard');
-  parent.querySelectorAll('.filter-pills .pill').forEach(function(el){ el.classList.remove('active'); });
-  if (btn) btn.classList.add('active');
-  renderDashboard();
-}
-function getDashboardRecords() {
-  var base = filterByOperator(records);
-  var enPatio = base.filter(function(r){ return !r.horaSalida; });
-  if (currentDashboardView === 'muelle') {
-    return ordenarPorPrioridad(enPatio.filter(function(r){
-      return r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0;
-    }));
-  }
-  return ordenarPorPrioridad(enPatio);
-}
+// Dashboard: resumen estadístico del día — NO es la misma vista operativa que usan
+// los  de portería (esa muestra "vehículos en patio ahora" con acciones de
+// registrar salida/editar). Aquí solo se leen y resumen los datos, sin botones de acción.
 function renderDashboard() {
-  if (!turnoActual) loadTurno();
-  var inicioTurno = new Date(turnoActual.inicio);
-  var visibles = filterByOperator(records);
-
-  // Contadores que SÍ se reinician con el cambio de turno (entradas/salidas/cargues del turno actual)
-  // Incluye los vehículos que siguen activos (sin horaSalida) aunque su horaEntrada sea anterior al inicio del turno,
-  // para que "pasen" al nuevo turno con toda su información.
-  var entradasTurno = visibles.filter(function(r){
-    if (!r.horaEntrada) return false;
-    var he = new Date(r.horaEntrada);
-    if (he >= inicioTurno) return true; // ingresó durante este turno
-    // si ingresó antes pero sigue activo, contar como entrada del turno actual (continuación)
-    return !r.horaSalida;
+  var hoyStr = today();
+  var entradasHoy = records.filter(function(r){ return r.horaEntrada && r.horaEntrada.slice(0,10) === hoyStr; });
+  var salidasHoy  = records.filter(function(r){ return r.horaSalida  && r.horaSalida.slice(0,10)  === hoyStr; });
+  var tiemposHoy  = entradasHoy.filter(function(r){ return r.horaSalida; }).map(function(r){
+    return (new Date(r.horaSalida) - new Date(r.horaEntrada)) / 60000;
   });
-  var salidasTurno  = visibles.filter(function(r){ return r.horaSalida  && new Date(r.horaSalida)  >= inicioTurno; });
+  var promedioHoy = tiemposHoy.length ? Math.round(tiemposHoy.reduce(function(a,b){return a+b;},0) / tiemposHoy.length) : 0;
 
-  document.getElementById('s-total').textContent   = entradasTurno.length;
-  document.getElementById('s-salidas').textContent = salidasTurno.length;
-  document.getElementById('s-cargue').textContent  = entradasTurno.filter(function(r){ return r.tipo === 'Cargue' || r.tipo === 'Ambos'; }).length;
+  document.getElementById('s-total').textContent   = entradasHoy.length;
+  document.getElementById('s-salidas').textContent = salidasHoy.length;
+  document.getElementById('s-promedio').textContent = promedioHoy >= 60
+    ? Math.floor(promedioHoy/60) + 'h ' + (promedioHoy%60) + 'min' : promedioHoy + ' min';
 
-  // Patio/muelle NO se reinician: cualquier vehículo sin salida sigue contando aunque cambie el turno
-  document.getElementById('s-patio').textContent   = visibles.filter(function(r){ return !r.horaSalida && r.ubicacion !== 'Muelle'; }).length;
-  document.getElementById('s-muelle').textContent  = visibles.filter(function(r){ return !r.horaSalida && (r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0); }).length;
+  // Patio/muelle: estado actual, no depende del día (cualquier vehículo sin salida sigue contando)
+  document.getElementById('s-patio').textContent   = records.filter(function(r){ return !r.horaSalida && r.ubicacion !== 'Muelle'; }).length;
+  document.getElementById('s-muelle').textContent  = records.filter(function(r){ return !r.horaSalida && (r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0); }).length;
 
-  var turnoDuracion = entradasTurno.reduce(function(acc, r) {
-    var d = getLocationDurations(r);
-    acc.patio += d.patio;
-    acc.muelle += d.muelle;
-    return acc;
-  }, { patio: 0, muelle: 0 });
-  document.getElementById('s-tiempo-patio').textContent = formatDuration(turnoDuracion.patio);
-  document.getElementById('s-tiempo-muelle').textContent = formatDuration(turnoDuracion.muelle);
-
-  // Alerta de vehículos con más de 4 horas en patio (sobre activos del operador)
-  var vehiculosLargaEstadia = visibles.filter(function(r){ return requiereObservacionLargaEstadia(r); });
+  // Alerta de vehículos con más de 4 horas en patio
+  var vehiculosLargaEstadia = records.filter(function(r){ return requiereObservacionLargaEstadia(r); });
   var bannerAlerta = document.getElementById('alerta-patio-banner');
   if (vehiculosLargaEstadia.length) {
     document.getElementById('alerta-patio-titulo').textContent =
       (vehiculosLargaEstadia.length === 1 ? '1 vehículo lleva' : vehiculosLargaEstadia.length + ' vehículos llevan') + ' más de 4 horas en patio';
     document.getElementById('alerta-patio-detalle').textContent =
-      vehiculosLargaEstadia.map(function(r){ return r.placa; }).join(', ') + ' — registra el motivo desde "Editar ubicación".';
+      vehiculosLargaEstadia.map(function(r){ return r.placa; }).join(', ') + '.';
     bannerAlerta.style.display = 'flex';
   } else {
     bannerAlerta.style.display = 'none';
   }
 
-  var dashboardRecords = getDashboardRecords();
-  var tbody   = document.getElementById('dash-table');
-  var sectionTitle = document.getElementById('dashboard-section-title');
-  if (currentDashboardView === 'muelle') {
-    sectionTitle.textContent = 'Vehículos en muelle ahora';
+  // Diferencia entre turnos de hoy: se usa el operador que registró la entrada como
+  // referencia del turno, ya que cada turno lo cubre un operador distinto.
+  var porOperadorHoy = {};
+  entradasHoy.forEach(function(r){ var op = r.operadorEntrada || '—'; porOperadorHoy[op] = (porOperadorHoy[op]||0) + 1; });
+  var opLabels = Object.keys(porOperadorHoy).sort(function(a,b){ return porOperadorHoy[b]-porOperadorHoy[a]; });
+  var subEl = document.getElementById('s-turno-diff-sub');
+  if (opLabels.length >= 2) {
+    var diff = porOperadorHoy[opLabels[0]] - porOperadorHoy[opLabels[1]];
+    subEl.textContent = opLabels[0] + ' (' + porOperadorHoy[opLabels[0]] + ') vs. ' + opLabels[1] + ' (' + porOperadorHoy[opLabels[1]] + ') — diferencia de ' + diff;
+  } else if (opLabels.length === 1) {
+    subEl.textContent = 'Solo ' + opLabels[0] + ' ha registrado entradas hoy (' + porOperadorHoy[opLabels[0]] + ')';
   } else {
-    sectionTitle.textContent = 'Vehículos en patio ahora';
+    subEl.textContent = 'Aún no hay entradas registradas hoy';
   }
-  if (!dashboardRecords.length) {
-    var emptyMsg = currentDashboardView === 'muelle' ? 'No hay vehículos en muelle en este momento' : 'No hay vehículos en patio actualmente';
-    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-mood-happy"></i><p>' + emptyMsg + '</p></div></td></tr>';
+  renderChart('chart-turnos-hoy', {
+    type: 'bar',
+    data: { labels: opLabels, datasets: [{ label: 'Entradas hoy', data: opLabels.map(function(k){ return porOperadorHoy[k]; }), backgroundColor: ESTAD_COLORS.teal, borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+  });
+
+  // Entradas por hora — hoy
+  var porHora = new Array(24).fill(0);
+  entradasHoy.forEach(function(r){ var h = new Date(r.horaEntrada).getHours(); porHora[h]++; });
+  renderChart('chart-horas-hoy', {
+    type: 'bar',
+    data: { labels: porHora.map(function(_,i){ return i + ':00'; }), datasets: [{ label: 'Entradas', data: porHora, backgroundColor: ESTAD_COLORS.azul, borderRadius: 3 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { ticks: { autoSkip: true, maxTicksLimit: 12, font: { size: 10 } } } } }
+  });
+
+  // Últimas entradas registradas (informativo, sin acciones)
+  var ultimas = records.slice(0, 8);
+  var tbody = document.getElementById('dash-table');
+  if (!ultimas.length) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-mood-happy"></i><p>Aún no hay registros</p></div></td></tr>';
     return;
   }
-  tbody.innerHTML = dashboardRecords.map(function(r, idx) {
-    return '<tr>' +
-      '<td>' + badgePrioridad(r, idx + 1) + '</td>' +
+  tbody.innerHTML = ultimas.map(function(r) {
+    return '<tr style="cursor:pointer" onclick="openDetalle(\'' + r.id + '\')">' +
       '<td class="td-placa">' + r.placa + '</td>' +
       '<td>' + r.conductor + '</td>' +
       '<td>' + getDestino(r) + '</td>' +
@@ -1872,13 +1389,39 @@ function renderDashboard() {
         '<i class="ti ' + tipoIcon(r.tipo) + '"></i>' + r.tipo +
       '</span></td>' +
       '<td>' + fmtDt(r.horaEntrada) + '</td>' +
+      '<td><span class="badge ' + getStateBadgeClass(r) + '"><i class="ti ' + getStateIcon(r) + '"></i>' + getStateLabel(r) + '</span></td>' +
       '<td><span class="badge badge-operador"><i class="ti ti-user"></i>' + (r.operadorEntrada || '—') + '</span></td>' +
-      '<td class="td-actions">' +
-        (!r.horaSalida && puedeDespachar(r) ? '<button class="btn btn-sm btn-primary" onclick="openModalSalida(\'' + r.id + '\')"><i class="ti ti-logout"></i> Salida</button>' : '') +
-        (!r.horaSalida && !puedeDespachar(r) ? '<button class="btn btn-sm" disabled title="Debe pasar por muelle antes de despachar"><i class="ti ti-logout"></i></button>' : '') +
-        '<button class="btn btn-sm" onclick="openModalEditar(\'' + r.id + '\')" title="Editar ubicación"><i class="ti ti-edit"></i></button>' +
-        '<button class="btn btn-sm" onclick="openDetalle(\'' + r.id + '\')"><i class="ti ti-eye"></i></button>' +
-      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ══════════ ENTRADAS DE HOY ══════════ */
+function renderHoy() {
+  var hoyStr = today();
+  var q = (document.getElementById('search-input-hoy') ? document.getElementById('search-input-hoy').value : '').toLowerCase();
+  var entradasHoy = records.filter(function(r){
+    if (!r.horaEntrada || r.horaEntrada.slice(0,10) !== hoyStr) return false;
+    if (!q) return true;
+    return [r.placa, r.conductor, getDestino(r), r.canal, r.operadorEntrada].some(function(f){ return (f||'').toLowerCase().indexOf(q) !== -1; });
+  });
+  entradasHoy = ordenarPorPrioridad(entradasHoy);
+  var tbody = document.getElementById('hoy-table');
+  if (!entradasHoy.length) {
+    tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state"><i class="ti ti-calendar-off"></i><p>No hay entradas registradas hoy' + (q ? ' que coincidan con la búsqueda' : '') + '</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = entradasHoy.map(function(r) {
+    return '<tr>' +
+      '<td class="td-placa">' + r.placa + '</td>' +
+      '<td>' + r.conductor + '</td>' +
+      '<td>' + getDestino(r) + '</td>' +
+      '<td><span class="badge ' + tipoBadgeClass(r.tipo) + '">' + r.tipo + '</span></td>' +
+      '<td>' + (r.canal || '—') + '</td>' +
+      '<td>' + fmtDt(r.horaEntrada) + '</td>' +
+      '<td>' + fmtDt(r.horaSalida) + '</td>' +
+      '<td><span class="badge ' + getStateBadgeClass(r) + '"><i class="ti ' + getStateIcon(r) + '"></i>' + getStateLabel(r) + '</span></td>' +
+      '<td><span class="badge badge-operador"><i class="ti ti-user"></i>' + (r.operadorEntrada || '—') + '</span></td>' +
+      '<td><button class="btn btn-sm" onclick="openDetalle(\'' + r.id + '\')"><i class="ti ti-eye"></i></button></td>' +
     '</tr>';
   }).join('');
 }
@@ -1892,8 +1435,7 @@ function setFilter(f, btn) {
 }
 function getFiltered() {
   var q = (document.getElementById('search-input') ? document.getElementById('search-input').value : '').toLowerCase();
-  var base = filterByOperator(records);
-  var filtrados = base.filter(function(r) {
+  var filtrados = records.filter(function(r) {
     var mf =
       currentFilter === 'todos'    ? true :
       currentFilter === 'en_patio' ? !r.horaSalida :
@@ -1902,7 +1444,7 @@ function getFiltered() {
       currentFilter === 'Descargue' ? (r.tipo === 'Descargue' || r.tipo === 'Ambos') :
       currentFilter === 'Ambos'     ? r.tipo === 'Ambos' :
       true;
-    var ms = !q || [r.placa, r.conductor, getDestino(r), r.canal, r.cedula, r.obs, r.obsUbicacion, r.operadorEntrada, r.operadorSalida, r.servicioTipo, r.servicioEmpresa, r.programado ? 'Programado' : 'No programado']
+    var ms = !q || [r.placa, r.conductor, getDestino(r), r.canal, r.cedula, r.obs, r.obsUbicacion, r.operadorEntrada, r.operadorSalida]
       .concat(getHistorial(r).map(function(h){ return h.texto; }))
       .some(function(f){ return (f||'').toLowerCase().indexOf(q) !== -1; });
     return mf && ms;
@@ -1913,7 +1455,7 @@ function renderRegistros() {
   var filtered = getFiltered();
   var tbody    = document.getElementById('reg-table');
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="17"><div class="empty-state"><i class="ti ti-file-off"></i><p>No hay registros que coincidan</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12"><div class="empty-state"><i class="ti ti-file-off"></i><p>No hay registros que coincidan</p></div></td></tr>';
     return;
   }
   var rankActivo = 0;
@@ -1921,7 +1463,6 @@ function renderRegistros() {
     var alertaLarga = requiereObservacionLargaEstadia(r);
     var numObs = getHistorial(r).filter(function(h){ return h.texto; }).length;
     if (!r.horaSalida) rankActivo++;
-    var durations = getLocationDurations(r);
     return '<tr>' +
       '<td>' + badgePrioridad(r, rankActivo) + '</td>' +
       '<td class="td-placa">' + r.placa +
@@ -1939,164 +1480,13 @@ function renderRegistros() {
       '</span>' +
       (alertaLarga ? ' <span class="badge badge-amber" style="margin-left:6px;"><i class="ti ti-alert-circle"></i> >4h patio</span>' : '') +
       '</td>' +
-      '<td>' + (r.programado ? 'Sí' : 'No') + '</td>' +
-      '<td>' + (r.horaProgramacion ? fmtDt(r.horaProgramacion) : '—') + '</td>' +
-      '<td>' + (r.servicioTipo ? (r.servicioTipo + (r.servicioEmpresa ? ' / ' + r.servicioEmpresa : '')) : 'Normal') + '</td>' +
-      '<td>' + formatDuration(durations.patio) + '</td>' +
-      '<td>' + formatDuration(durations.muelle) + '</td>' +
       '<td>' + celdaMotivoPatio(r) + '</td>' +
       '<td><span class="badge badge-operador"><i class="ti ti-user"></i>' + (r.operadorEntrada||'—') + '</span></td>' +
       '<td class="td-actions">' +
-        (!r.horaSalida && puedeDespachar(r) ? '<button class="btn btn-sm btn-primary" onclick="openModalSalida(\'' + r.id + '\')"><i class="ti ti-logout"></i></button>' : '') +
-        (!r.horaSalida && !puedeDespachar(r) ? '<button class="btn btn-sm" disabled title="Debe pasar por muelle antes de despachar"><i class="ti ti-logout"></i></button>' : '') +
-        (!r.horaSalida ? '<button class="btn btn-sm" onclick="openModalEditar(\'' + r.id + '\')" title="Editar ubicación"><i class="ti ti-edit"></i></button>' : '') +
         '<button class="btn btn-sm" onclick="openDetalle(\'' + r.id + '\')"><i class="ti ti-eye"></i></button>' +
-        '<button class="btn btn-sm" style="color:var(--red-600);border-color:#F09595" onclick="eliminar(\'' + r.id + '\')"><i class="ti ti-trash"></i></button>' +
       '</td>' +
     '</tr>';
   }).join('');
-}
-
-/* ══════════ MODAL SALIDA ══════════ */
-function openModalSalida(id) {
-  if (!currentOperator) { openGate(); toast('Selecciona el operador de turno', 'amber', 'ti-id-badge-2'); return; }
-  var r = records.find(function(x){ return x.id === id; });
-  if (!puedeDespachar(r)) {
-    toast('Este vehículo aún no ha pasado por muelle; no se puede despachar', 'amber', 'ti-alert-circle');
-    return;
-  }
-  selectedId = id;
-  document.getElementById('modal-salida-info').innerHTML =
-    '<strong>' + r.placa + '</strong> — ' + r.conductor + '<br>' +
-    'Muelle: <strong>' + getDestino(r) + '</strong> &nbsp;·&nbsp;' +
-    '<span class="badge ' + tipoBadgeClass(r.tipo) + '" style="vertical-align:middle">' + r.tipo + '</span><br>' +
-    'Ingresó: ' + fmtDt(r.horaEntrada) + ' &nbsp;·&nbsp; Registró: ' + (r.operadorEntrada||'—');
-  document.getElementById('m-hora-salida').value = nowLocal();
-  document.getElementById('m-obs-salida').value  = '';
-  document.getElementById('modal-salida').classList.add('open');
-}
-
-function confirmarSalida() {
-  var hs  = document.getElementById('m-hora-salida').value;
-  var obs = document.getElementById('m-obs-salida').value.trim();
-  if (!hs) { toast('Selecciona la hora de salida', 'red', 'ti-alert-circle'); return; }
-
-  var rec = records.find(function(x){ return x.id === selectedId; });
-  if (!puedeDespachar(rec)) {
-    toast('Este vehículo aún no ha pasado por muelle; no se puede despachar', 'amber', 'ti-alert-circle');
-    return;
-  }
-  if (!rec) return;
-  var updated = Object.assign({}, rec, {
-    horaSalida: hs, obsSalida: obs, operadorSalida: currentOperator,
-    historial: agregarHistorial(rec, { fecha: hs, tipo: 'salida', operador: currentOperator, texto: obs || '' })
-  });
-
-  if (firebaseActive && _fbSave) {
-    setSyncStatus('syncing');
-    _fbSave(updated)
-      .then(function() {
-        setSyncStatus('ok');
-        closeModal('modal-salida');
-        toast('Salida registrada — ' + updated.placa, 'green', 'ti-logout');
-      })
-      .catch(function() {
-        setSyncStatus('error');
-        toast('Error al guardar en Firebase', 'red', 'ti-x');
-      });
-  } else {
-    var idx = records.findIndex(function(x){ return x.id === selectedId; });
-    if (idx !== -1) records[idx] = updated;
-    saveLocal();
-    refreshActiveView();
-    closeModal('modal-salida');
-    toast('Salida registrada — ' + updated.placa + ' (local)', 'green', 'ti-logout');
-  }
-}
-
-/* ══════════ MODAL EDITAR UBICACIÓN (Patio → Muelle sin crear nuevo registro) ══════════ */
-function cambiarUbicacionEdit() {
-  var ubicacion = document.getElementById('e-ubicacion').value;
-  document.getElementById('muelle-options-edit').style.display = ubicacion === 'Muelle' ? 'block' : 'none';
-  var lbl = document.querySelector('label[for="e-obs-ubicacion"]');
-  var txt = document.getElementById('e-obs-ubicacion');
-  if (ubicacion === 'Patio') {
-    if (lbl) lbl.textContent = '¿Por qué continúa en patio?' + (lbl.textContent.indexOf('*') !== -1 ? ' *' : '');
-    if (txt) txt.placeholder = 'Ej: sin bahía disponible, esperando documentación, pendiente de descargue en otro vehículo...';
-  } else {
-    if (lbl) lbl.textContent = 'Observaciones de ubicación';
-    if (txt) txt.placeholder = 'Descripción o motivo del cambio de ubicación';
-  }
-}
-function openModalEditar(id) {
-  selectedId = id;
-  var r = records.find(function(x){ return x.id === id; });
-  if (!r) return;
-  var longParked = requiereObservacionLargaEstadia(r);
-  document.getElementById('modal-editar-info').innerHTML =
-    (longParked ? '<div class="modal-info-box" style="background:#FFF4E5;color:#7A5118;border-color:#F6C27A; margin-bottom:12px;">' +
-      '<strong>Atención:</strong> Este vehículo lleva más de 4 horas en patio. Ingresa el motivo en las observaciones de ubicación.' +
-    '</div>' : '') +
-    '<strong>' + r.placa + '</strong> — ' + r.conductor + '<br>' +
-    'Ubicación actual: <strong>' + getDestino(r) + '</strong>';
-  document.getElementById('e-ubicacion').value = r.ubicacion === 'Muelle' ? 'Muelle' : 'Patio';
-  document.getElementById('e-numeroMuelle').value = r.numeroMuelle || '1';
-  document.getElementById('e-bahia').value = r.bahia || 'A';
-  document.getElementById('e-obs-ubicacion').value = r.obsUbicacion || '';
-  var lblObsUbic = document.querySelector('label[for="e-obs-ubicacion"]');
-  if (lblObsUbic) lblObsUbic.textContent = 'Observaciones de ubicación' + (longParked ? ' *' : '');
-  cambiarUbicacionEdit();
-  document.getElementById('modal-editar').classList.add('open');
-}
-function confirmarEdicionUbicacion() {
-  var ubicacion    = document.getElementById('e-ubicacion').value;
-  var numeroMuelle = document.getElementById('e-numeroMuelle').value;
-  var bahia        = document.getElementById('e-bahia').value;
-  var destinoCompleto = computeDestino(ubicacion, numeroMuelle, bahia);
-
-  var rec = records.find(function(x){ return x.id === selectedId; });
-  if (!rec) return;
-  var obsUbicacion = document.getElementById('e-obs-ubicacion').value.trim();
-  if (requiereObservacionLargaEstadia(rec) && !obsUbicacion) {
-    toast('Describe por qué el vehículo lleva más de 4 horas en patio', 'red', 'ti-alert-circle');
-    return;
-  }
-  var updated = Object.assign({}, rec, {
-    ubicacion: ubicacion,
-    numeroMuelle: numeroMuelle,
-    bahia: bahia,
-    destino: destinoCompleto,
-    obsUbicacion: obsUbicacion || rec.obsUbicacion || '',
-    historial: agregarHistorial(rec, {
-      fecha: nowLocal(),
-      tipo: 'ubicacion',
-      operador: currentOperator,
-      ubicacionAnterior: getDestino(rec),
-      ubicacion: destinoCompleto,
-      texto: obsUbicacion || ''
-    })
-  });
-
-  if (firebaseActive && _fbSave) {
-    setSyncStatus('syncing');
-    _fbSave(updated)
-      .then(function() {
-        setSyncStatus('ok');
-        closeModal('modal-editar');
-        toast('Ubicación actualizada — ' + updated.placa, 'green', 'ti-edit');
-      })
-      .catch(function() {
-        setSyncStatus('error');
-        toast('Error al guardar en Firebase', 'red', 'ti-x');
-      });
-  } else {
-    var idx = records.findIndex(function(x){ return x.id === selectedId; });
-    if (idx !== -1) records[idx] = updated;
-    saveLocal();
-    refreshActiveView();
-    closeModal('modal-editar');
-    toast('Ubicación actualizada — ' + updated.placa + ' (local)', 'green', 'ti-edit');
-  }
 }
 
 /* ══════════ MODAL DETALLE ══════════ */
@@ -2109,11 +1499,6 @@ function openDetalle(id) {
     ['ti-building-warehouse','Muelle',          getDestino(r)],
     ['ti-map-pin',          'Ubicación',        r.ubicacion || '—'],
     ['ti-notes',            'Canal',            r.canal || '—'],
-    ['ti-notes',            'Programado',       r.programado ? 'Sí' : 'No'],
-    ['ti-clock',            'Hora programación', r.horaProgramacion ? fmtDt(r.horaProgramacion) : '—'],
-    ['ti-notes',            'Servicio',         r.servicioTipo ? (r.servicioTipo + (r.servicioEmpresa ? ' / ' + r.servicioEmpresa : '')) : 'Normal'],
-    ['ti-clock',            'Tiempo patio',     formatDuration(getLocationDurations(r).patio)],
-    ['ti-clock',            'Tiempo muelle',    formatDuration(getLocationDurations(r).muelle)],
     ['ti-notes',            'Obs. ubicación',   r.obsUbicacion || '—'],
     ['ti-package-import',   'Tipo',            '<span class="badge ' + tipoBadgeClass(r.tipo) + '">' + r.tipo + '</span>'],
     ['ti-login',            'Hora entrada',     fmtDt(r.horaEntrada)],
@@ -2140,23 +1525,6 @@ function closeModal(id) {
   selectedId = null;
 }
 
-/* ══════════ ELIMINAR ══════════ */
-function eliminar(id) {
-  if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
-  if (firebaseActive && _fbDelete) {
-    setSyncStatus('syncing');
-    _fbDelete(id)
-      .then(function(){ setSyncStatus('ok'); toast('Registro eliminado', 'amber', 'ti-trash'); })
-      .catch(function(){ setSyncStatus('error'); toast('Error al eliminar', 'red', 'ti-x'); });
-  } else {
-    records = records.filter(function(r){ return r.id !== id; });
-    saveLocal();
-    updateSidebarCount();
-    refreshActiveView();
-    toast('Registro eliminado', 'amber', 'ti-trash');
-  }
-}
-
 /* ══════════ EXPORTAR ══════════ */
 function buildExcelData(data) {
   return data.map(function(r) {
@@ -2169,11 +1537,6 @@ function buildExcelData(data) {
       'Bahía': r.bahia || '',
       'Tipo': r.tipo,
       'Canal': r.canal || '',
-      'Programado': r.programado ? 'Sí' : 'No',
-      'Hora programación': fmtDt(r.horaProgramacion),
-      'Servicio': r.servicioTipo ? (r.servicioTipo + (r.servicioEmpresa ? ' / ' + r.servicioEmpresa : '')) : 'Normal',
-      'Duración patio': formatDuration(getLocationDurations(r).patio),
-      'Duración muelle': formatDuration(getLocationDurations(r).muelle),
       'Hora entrada': fmtDt(r.horaEntrada),
       'Operador entrada': r.operadorEntrada || '',
       'Hora salida': fmtDt(r.horaSalida),
@@ -2193,7 +1556,7 @@ function buildExcelData(data) {
 function exportExcel() {
   if (!records.length) { toast('No hay registros para exportar', 'amber', 'ti-alert-circle'); return; }
   var ws = XLSX.utils.json_to_sheet(buildExcelData(records));
-  ws['!cols'] = [14,22,16,12,10,10,10,10,10,16,18,18,18,18,18,18,16,12,18,18,18,38,12,12].map(function(w){ return {wch:w}; });
+  ws['!cols'] = [14,22,16,12,10,10,10,10,18,18,18,18,16,12,18,18,18,38,12].map(function(w){ return {wch:w}; });
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Registros');
   XLSX.writeFile(wb, 'porteria_' + today() + '.xlsx');
@@ -2203,7 +1566,7 @@ function exportExcelHoy() {
   var hoy = records.filter(function(r){ return r.fecha === today(); });
   if (!hoy.length) { toast('No hay registros de hoy', 'amber', 'ti-alert-circle'); return; }
   var ws = XLSX.utils.json_to_sheet(buildExcelData(hoy));
-  ws['!cols'] = [14,22,16,12,10,10,10,10,10,16,18,18,18,18,18,18,16,12,18,18,18,38,12,12,12,12,12].map(function(w){ return {wch:w}; });
+  ws['!cols'] = [14,22,16,12,10,10,10,10,18,18,18,18,16,12,18,18,18,38,12].map(function(w){ return {wch:w}; });
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Hoy');
   XLSX.writeFile(wb, 'porteria_hoy_' + today() + '.xlsx');
@@ -2217,53 +1580,6 @@ function exportJSON() {
   a.download = 'porteria_backup_' + today() + '.json';
   a.click();
   toast('JSON descargado', 'blue', 'ti-download');
-}
-
-document.getElementById('import-file').addEventListener('change', function(e) {
-  var file = e.target.files[0]; if (!file) return;
-  var reader = new FileReader();
-  reader.onload = function(ev) {
-    try {
-      var imported = JSON.parse(ev.target.result);
-      if (!Array.isArray(imported)) { toast('Archivo JSON inválido', 'red', 'ti-x'); return; }
-      var existingIds = new Set(records.map(function(r){ return r.id; }));
-      var nuevos = imported.filter(function(r){ return !existingIds.has(r.id); });
-      if (!nuevos.length) { toast('No hay registros nuevos para importar', 'amber', 'ti-alert-circle'); return; }
-      if (firebaseActive && _fbSave) {
-        setSyncStatus('syncing');
-        Promise.all(nuevos.map(function(r){ return _fbSave(r); }))
-          .then(function(){ setSyncStatus('ok'); toast(nuevos.length + ' registro(s) importado(s)', 'green', 'ti-upload'); })
-          .catch(function(){ setSyncStatus('error'); toast('Error al importar', 'red', 'ti-x'); });
-      } else {
-        nuevos.forEach(function(r){ records.push(r); });
-        records.sort(function(a,b){ return new Date(b.horaEntrada)-new Date(a.horaEntrada); });
-        saveLocal();
-        updateSidebarCount();
-        refreshActiveView();
-        toast(nuevos.length + ' registro(s) importado(s) (local)', 'green', 'ti-upload');
-      }
-    } catch(err) { toast('Error al leer el archivo', 'red', 'ti-x'); }
-  };
-  reader.readAsText(file);
-  e.target.value = '';
-});
-
-/* ══════════ BORRAR TODO ══════════ */
-function borrarTodo() {
-  if (!confirm('¿Eliminar TODOS los registros? Esta acción no se puede deshacer.')) return;
-  if (!confirm('Confirmación final: se borrarán todos los datos.')) return;
-  if (firebaseActive && _fbDeleteAll) {
-    setSyncStatus('syncing');
-    _fbDeleteAll()
-      .then(function(){ setSyncStatus('ok'); toast('Todos los registros eliminados', 'red', 'ti-trash'); })
-      .catch(function(){ setSyncStatus('error'); toast('Error al borrar', 'red', 'ti-x'); });
-  } else {
-    records = [];
-    saveLocal();
-    updateSidebarCount();
-    refreshActiveView();
-    toast('Todos los registros eliminados', 'red', 'ti-trash');
-  }
 }
 
 /* ══════════ CONFIG FIREBASE ══════════ */
@@ -2303,7 +1619,15 @@ var ESTAD_COLORS = {
 
 function setPeriodoEstadisticas(p, btn) {
   estadPeriodoActual = p;
+  // limpiar estado visual
   document.querySelectorAll('#view-estadisticas .filter-pills .pill').forEach(function(el){ el.classList.remove('active'); });
+  // Si no se pasó el botón, buscar el elemento que lo contiene
+  if (!btn) {
+    document.querySelectorAll('#view-estadisticas .filter-pills .pill').forEach(function(el){
+      var oc = el.getAttribute('onclick') || '';
+      if (oc.indexOf("'" + p + "'") !== -1) btn = el;
+    });
+  }
   if (btn) btn.classList.add('active');
   var custom = document.getElementById('estad-rango-custom');
   if (p === 'personalizado') {
@@ -2374,12 +1698,66 @@ function renderChart(canvasId, config) {
   estadCharts[canvasId] = new Chart(ctx, config);
 }
 
+// Helpers local a esta página: formatear duraciones y calcular patio/muelle
+function formatDuration(minutes) {
+  if (minutes == null || isNaN(minutes)) return '—';
+  minutes = Math.round(minutes);
+  if (minutes < 0) return '—';
+  var horas = Math.floor(minutes / 60);
+  var mins = minutes % 60;
+  return horas > 0 ? horas + 'h ' + mins + 'min' : mins + ' min';
+}
+
+function getLocationDurations(r) {
+  // Basado en el historial; suma minutos en Patio y en Muelle
+  var hist = getHistorial(r).slice().sort(function(a,b){ return new Date(a.fecha || 0) - new Date(b.fecha || 0); });
+  var patio = 0, muelle = 0;
+  var lastLoc = null, lastTime = null;
+  hist.forEach(function(item) {
+    var fecha = new Date(item.fecha || 0);
+    if (item.tipo === 'entrada') {
+      lastLoc = (item.ubicacion || '').indexOf('Patio') === 0 ? 'Patio' : (item.ubicacion || '').indexOf('Muelle') === 0 ? 'Muelle' : null;
+      lastTime = fecha;
+      return;
+    }
+    if (item.tipo === 'ubicacion') {
+      if (lastLoc && lastTime) {
+        var diff = (fecha - lastTime) / 60000;
+        if (diff > 0) {
+          if (lastLoc === 'Patio') patio += diff; else if (lastLoc === 'Muelle') muelle += diff;
+        }
+      }
+      lastLoc = (item.ubicacion || '').indexOf('Patio') === 0 ? 'Patio' : (item.ubicacion || '').indexOf('Muelle') === 0 ? 'Muelle' : lastLoc;
+      lastTime = fecha;
+      return;
+    }
+    if (item.tipo === 'salida') {
+      if (lastLoc && lastTime) {
+        var diff = (fecha - lastTime) / 60000;
+        if (diff > 0) {
+          if (lastLoc === 'Patio') patio += diff; else if (lastLoc === 'Muelle') muelle += diff;
+        }
+      }
+      lastLoc = null; lastTime = null;
+    }
+  });
+  if (!r.horaSalida && lastLoc && lastTime) {
+    var diff = (new Date() - lastTime) / 60000;
+    if (diff > 0) { if (lastLoc === 'Patio') patio += diff; else if (lastLoc === 'Muelle') muelle += diff; }
+  }
+  return { patio: Math.round(patio), muelle: Math.round(muelle) };
+}
+
 function renderEstadisticas() {
-  if (typeof Chart === 'undefined') return; // Chart.js aún no cargó (sin conexión, por ejemplo)
+  // Nota: antes había un "return" aquí si Chart.js no estaba listo, lo que dejaba
+  // en blanco TODA la pestaña (tarjetas, tablas y gráficas) hasta que el usuario
+  // hiciera otra acción (cambiar de pestaña de nuevo, tocar un filtro, etc.) y
+  // para ese momento Chart.js ya hubiera terminado de cargar. Ahora las tarjetas
+  // y tablas se calculan siempre; solo las gráficas se omiten si Chart.js no está
+  // disponible (renderChart() ya valida eso internamente), y si Chart.js llega a
+  // cargar después, reintentamos automáticamente sin que el usuario tenga que hacer nada.
   var rango = getRangoEstadisticas();
   var recs = getRecordsEnRango(rango);
-  // Las estadísticas deben mostrar el total histórico del periodo seleccionado,
-  // no solo los registros del operador que está actualmente en turno.
   var dias = buildDayBuckets(rango.desde, rango.hasta);
 
   // ── Tarjetas resumen ──
@@ -2396,6 +1774,8 @@ function renderEstadisticas() {
   document.getElementById('es-promedio').textContent = promedioMin >= 60
     ? Math.floor(promedioMin/60) + 'h ' + (promedioMin%60) + 'min' : promedioMin + ' min';
   document.getElementById('es-cargue-pct').textContent = totalEntradas ? Math.round(cargues/totalEntradas*100) + '%' : '0%';
+  // Cantidad general: no depende del periodo seleccionado, cuenta TODOS los registros conocidos.
+  document.getElementById('es-total-general').textContent = records.length;
 
   var porDiaCount = dias.map(function(dStr){
     return recs.filter(function(r){ return r.horaEntrada.slice(0,10) === dStr; }).length;
@@ -2413,7 +1793,7 @@ function renderEstadisticas() {
 
   // ── Entradas y salidas por día ──
   var salidasPorDia = dias.map(function(dStr){
-    return recs.filter(function(r){ return r.horaSalida && r.horaSalida.slice(0,10) === dStr; }).length;
+    return records.filter(function(r){ return r.horaSalida && r.horaSalida.slice(0,10) === dStr; }).length;
   });
   renderChart('chart-entradas-dia', {
     type: 'bar',
@@ -2448,27 +1828,21 @@ function renderEstadisticas() {
   });
 
   // ── Por operador ──
-  var chartOperadorContainer = document.getElementById('chart-operador').closest('.chart-card');
-  if (currentOperator) {
-    if (chartOperadorContainer) chartOperadorContainer.style.display = 'none';
-  } else {
-    if (chartOperadorContainer) chartOperadorContainer.style.display = 'block';
-    var porOperador = {};
-    recs.forEach(function(r){ var op = r.operadorEntrada || '—'; porOperador[op] = (porOperador[op]||0) + 1; });
-    var opLabels = Object.keys(porOperador).sort(function(a,b){ return porOperador[b]-porOperador[a]; });
-    renderChart('chart-operador', {
-      type: 'bar',
-      data: {
-        labels: opLabels,
-        datasets: [{ label: 'Vehículos atendidos', data: opLabels.map(function(k){ return porOperador[k]; }), backgroundColor: ESTAD_COLORS.teal, borderRadius: 4 }]
-      },
-      options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
-      }
-    });
-  }
+  var porOperador = {};
+  recs.forEach(function(r){ var op = r.operadorEntrada || '—'; porOperador[op] = (porOperador[op]||0) + 1; });
+  var opLabels = Object.keys(porOperador).sort(function(a,b){ return porOperador[b]-porOperador[a]; });
+  renderChart('chart-operador', {
+    type: 'bar',
+    data: {
+      labels: opLabels,
+      datasets: [{ label: 'Vehículos atendidos', data: opLabels.map(function(k){ return porOperador[k]; }), backgroundColor: ESTAD_COLORS.teal, borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
 
   // ── Tiempo promedio en patio por día ──
   var tiempoPorDia = dias.map(function(dStr){
@@ -2509,6 +1883,155 @@ function renderEstadisticas() {
       scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
     }
   });
+
+  // ── Tablas segmentadas por canal y por tipo ──
+  // Asegurarnos de tener helpers locales: formatDuration, getLocationDurations
+  try {
+    var canalHtml = '';
+    if (!canalLabels.length) {
+      canalHtml = '<div style="color:var(--text-3);">No hay datos para el periodo.</div>';
+    } else {
+      canalHtml = '<table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid var(--border)">Canal</th><th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Promedio patio</th><th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)"># Vehículos</th></tr></thead><tbody>';
+      canalLabels.forEach(function(k){
+        var grupo = recs.filter(function(r){ return (r.canal||'—') === k; });
+        var suma = grupo.reduce(function(acc, r){ return acc + (getLocationDurations(r).patio || 0); }, 0);
+        var prom = grupo.length ? Math.round(suma / grupo.length) : 0;
+        canalHtml += '<tr><td style="padding:8px">' + k + '</td><td style="padding:8px;text-align:right">' + formatDuration(prom) + '</td><td style="padding:8px;text-align:right">' + grupo.length + '</td></tr>';
+      });
+      canalHtml += '</tbody></table>';
+    }
+    document.getElementById('estad-por-canal-body').innerHTML = canalHtml;
+
+    // Por tipo: Cargue / Descargue / Ambos — mostrar promedio patio y muelle
+    var tipos = ['Cargue','Descargue','Ambos'];
+    var tipoHtml = '<table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid var(--border)">Tipo</th><th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Promedio patio</th><th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Promedio muelle</th><th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)"># Vehículos</th></tr></thead><tbody>';
+    tipos.forEach(function(t){
+      var grupo = recs.filter(function(r){ return r.tipo === t; });
+      var sumaP = grupo.reduce(function(acc, r){ return acc + (getLocationDurations(r).patio || 0); }, 0);
+      var sumaM = grupo.reduce(function(acc, r){ return acc + (getLocationDurations(r).muelle || 0); }, 0);
+      var promP = grupo.length ? Math.round(sumaP / grupo.length) : 0;
+      var promM = grupo.length ? Math.round(sumaM / grupo.length) : 0;
+      tipoHtml += '<tr><td style="padding:8px">' + t + '</td><td style="padding:8px;text-align:right">' + formatDuration(promP) + '</td><td style="padding:8px;text-align:right">' + formatDuration(promM) + '</td><td style="padding:8px;text-align:right">' + grupo.length + '</td></tr>';
+    });
+    tipoHtml += '</tbody></table>';
+    document.getElementById('estad-por-tipo-body').innerHTML = tipoHtml;
+  } catch(e) {
+    console.error('Error al generar tablas segmentadas:', e);
+    document.getElementById('estad-por-canal-body').textContent = 'Error';
+    document.getElementById('estad-por-tipo-body').textContent = 'Error';
+  }
+
+  // ── Franja horaria: entradas por hora del día (0-23h) ──
+  var porHora = new Array(24).fill(0);
+  recs.forEach(function(r) {
+    if (!r.horaEntrada) return;
+    var h = new Date(r.horaEntrada).getHours();
+    if (h >= 0 && h < 24) porHora[h]++;
+  });
+  var horasLabels = [];
+  for (var hh = 0; hh < 24; hh++) horasLabels.push((hh < 10 ? '0' : '') + hh + 'h');
+  renderChart('chart-franja-horaria', {
+    type: 'bar',
+    data: {
+      labels: horasLabels,
+      datasets: [{ label: 'Entradas', data: porHora, backgroundColor: ESTAD_COLORS.azulClaro, borderColor: ESTAD_COLORS.azul, borderWidth: 1, borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+
+  // ── Muelles más usados (general) ──
+  // Solo se cuentan destinos que son un muelle (no "Patio"), usando el mismo
+  // criterio que ya usa el resto del panel: destino que empieza con "Muelle".
+  var porMuelle = {};
+  recs.forEach(function(r) {
+    var dest = getDestino(r);
+    if (dest.indexOf('Muelle') !== 0) return;
+    porMuelle[dest] = (porMuelle[dest] || 0) + 1;
+  });
+  var muelleLabels = Object.keys(porMuelle).sort(function(a,b){ return porMuelle[b]-porMuelle[a]; });
+  renderChart('chart-muelles-general', {
+    type: 'bar',
+    data: {
+      labels: muelleLabels,
+      datasets: [{ label: 'Veces usado', data: muelleLabels.map(function(k){ return porMuelle[k]; }), backgroundColor: ESTAD_COLORS.teal, borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+
+  // ── Tiempo promedio en muelle por día ──
+  var muellePorDia = dias.map(function(dStr){
+    var recsDia = recs.filter(function(r){ return r.horaSalida && r.horaEntrada.slice(0,10) === dStr; });
+    if (!recsDia.length) return 0;
+    var tot = recsDia.reduce(function(a,r){ return a + (getLocationDurations(r).muelle || 0); }, 0);
+    return Math.round(tot / recsDia.length);
+  });
+  renderChart('chart-tiempo-muelle', {
+    type: 'line',
+    data: {
+      labels: dias.map(fmtDiaCorto),
+      datasets: [{
+        label: 'Minutos promedio', data: muellePorDia,
+        borderColor: ESTAD_COLORS.teal, backgroundColor: 'rgba(15,110,86,0.15)', fill: true, tension: .3, pointRadius: 3
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+
+  // ── Muelles más usados por operario ──
+  try {
+    var porOperarioMuelle = {}; // { operario: { muelle: count, ... } }
+    recs.forEach(function(r) {
+      var dest = getDestino(r);
+      if (dest.indexOf('Muelle') !== 0) return;
+      var op = r.operadorEntrada || '—';
+      if (!porOperarioMuelle[op]) porOperarioMuelle[op] = {};
+      porOperarioMuelle[op][dest] = (porOperarioMuelle[op][dest] || 0) + 1;
+    });
+    var operariosConMuelle = Object.keys(porOperarioMuelle);
+    var opMuelleHtml = '';
+    if (!operariosConMuelle.length) {
+      opMuelleHtml = '<div style="color:var(--text-3);">No hay datos de muelle para el periodo.</div>';
+    } else {
+      // Ordenar operarios por total de usos de muelle, de mayor a menor.
+      operariosConMuelle.sort(function(a, b) {
+        var totalA = Object.keys(porOperarioMuelle[a]).reduce(function(s,k){ return s + porOperarioMuelle[a][k]; }, 0);
+        var totalB = Object.keys(porOperarioMuelle[b]).reduce(function(s,k){ return s + porOperarioMuelle[b][k]; }, 0);
+        return totalB - totalA;
+      });
+      opMuelleHtml = '<table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr>' +
+        '<th style="text-align:left;padding:8px;border-bottom:1px solid var(--border)">Operario</th>' +
+        '<th style="text-align:left;padding:8px;border-bottom:1px solid var(--border)">Muelle más usado</th>' +
+        '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Veces</th>' +
+        '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Total usos de muelle</th>' +
+        '</tr></thead><tbody>';
+      operariosConMuelle.forEach(function(op) {
+        var muelles = porOperarioMuelle[op];
+        var muelleKeys = Object.keys(muelles).sort(function(a,b){ return muelles[b]-muelles[a]; });
+        var top = muelleKeys[0];
+        var totalOp = muelleKeys.reduce(function(s,k){ return s + muelles[k]; }, 0);
+        opMuelleHtml += '<tr><td style="padding:8px">' + op + '</td><td style="padding:8px">' + top + '</td>' +
+          '<td style="padding:8px;text-align:right">' + muelles[top] + '</td>' +
+          '<td style="padding:8px;text-align:right">' + totalOp + '</td></tr>';
+      });
+      opMuelleHtml += '</tbody></table>';
+    }
+    document.getElementById('estad-muelles-operario-body').innerHTML = opMuelleHtml;
+  } catch(e) {
+    console.error('Error al generar tabla de muelles por operario:', e);
+    document.getElementById('estad-muelles-operario-body').textContent = 'Error';
+  }
 }
 
 /* ══════════ INIT ══════════ */
@@ -2519,19 +2042,11 @@ function renderEstadisticas() {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
 
-  // Hora actual en formulario
-  document.getElementById('f-hora').value = nowLocal();
-
-  // Cargar operador guardado
-  try { currentOperator = localStorage.getItem(OP_KEY) || null; } catch(e) {}
-  updateOperatorUI();
-  if (!currentOperator) openGate();
-
-  // Cargar turno actual (contadores del día) y registros locales
-  loadTurno();
+  // Cargar registros (respaldo local mientras se conecta Firebase) y pintar todo
   loadLocal();
+  try { _lastRecordsRaw = localStorage.getItem(RECORDS_KEY); } catch(e) {}
   updateSidebarCount();
-  renderDashboard();
+  showView('dashboard');
 
   // Mostrar banner modo local si no hay Firebase
   document.getElementById('local-mode-banner').style.display = 'flex';
@@ -2540,7 +2055,7 @@ function renderEstadisticas() {
   // Intentar reconectar Firebase si hay config guardada
   cargarFbConfigGuardada();
 
-  // Cerrar modales al clic fuera
+  // Cerrar modal al clic fuera
   document.querySelectorAll('.modal-backdrop').forEach(function(bd) {
     bd.addEventListener('click', function(e) {
       if (e.target === bd) bd.classList.remove('open');
@@ -2549,15 +2064,16 @@ function renderEstadisticas() {
 
   // Búsqueda en tiempo real
   document.getElementById('search-input').addEventListener('input', renderRegistros);
+  document.getElementById('search-input-hoy').addEventListener('input', renderHoy);
 
-  // Tarjetas Cargue/Descargue: refrescar estilos cuando el checkbox cambia
-  document.querySelectorAll('input[name=tipo]').forEach(function(chk) {
-    chk.addEventListener('change', syncTipoUI);
-  });
-  syncTipoUI();
+  // Sondeo de respaldo: revisa cada pocos segundos si el índice (app de
+  // portería) escribió datos nuevos en localStorage, por si el evento
+  // 'storage' no llegó a dispararse. syncFromLocalIfNeeded() no hace nada
+  // costoso si no hubo cambios (compara el string crudo antes de parsear).
+  setInterval(syncFromLocalIfNeeded, 4000);
 
   // Revisar cada minuto si algún vehículo superó las 4 horas en patio,
-  // para que la alerta aparezca sola sin esperar a otra acción del usuario.
+  // y refrescar la vista activa para que los datos y gráficos se mantengan al día.
   setInterval(refreshActiveView, 60000);
 })();
 </script>
