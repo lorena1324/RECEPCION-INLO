@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" onload="window._chartJsReady=true; if (typeof refreshActiveView === 'function') refreshActiveView();" onerror="window._chartJsFailed=true;"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js" onload="if (typeof Chart !== 'undefined' && typeof ChartDataLabels !== 'undefined') { Chart.register(ChartDataLabels); Chart.defaults.set('plugins.datalabels', { display: false }); window._chartDataLabelsReady = true; if (typeof refreshActiveView === 'function') refreshActiveView(); }"></script>
 <style>
 :root {
   --blue-50: #E6F1FB; --blue-100: #B5D4F4; --blue-600: #185FA5; --blue-800: #0C447C;
@@ -1370,7 +1371,19 @@ function renderDashboard() {
   renderChart('chart-horas-hoy', {
     type: 'bar',
     data: { labels: porHora.map(function(_,i){ return i + ':00'; }), datasets: [{ label: 'Entradas', data: porHora, backgroundColor: ESTAD_COLORS.azul, borderRadius: 3 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { ticks: { autoSkip: true, maxTicksLimit: 12, font: { size: 10 } } } } }
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          display: function(ctx){ return ctx.dataset.data[ctx.dataIndex] > 0; },
+          anchor: 'center', align: 'center',
+          color: '#fff', font: { size: 10, weight: '600' },
+          formatter: function(v){ return v; }
+        }
+      },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { ticks: { autoSkip: true, maxTicksLimit: 12, font: { size: 10 } } } }
+    }
   });
 
   // Últimas entradas registradas (informativo, sin acciones)
@@ -1791,23 +1804,45 @@ function renderEstadisticas() {
     grid.style.opacity = '1';
   }
 
-  // ── Entradas y salidas por día ──
+  // ── Entradas y salidas por día (entradas divididas en Patio / Muelle) ──
   var salidasPorDia = dias.map(function(dStr){
     return records.filter(function(r){ return r.horaSalida && r.horaSalida.slice(0,10) === dStr; }).length;
+  });
+  var entradasPatioPorDia = dias.map(function(dStr){
+    return recs.filter(function(r){
+      return r.horaEntrada.slice(0,10) === dStr && getDestino(r).indexOf('Muelle') !== 0;
+    }).length;
+  });
+  var entradasMuellePorDia = dias.map(function(dStr){
+    return recs.filter(function(r){
+      return r.horaEntrada.slice(0,10) === dStr && getDestino(r).indexOf('Muelle') === 0;
+    }).length;
   });
   renderChart('chart-entradas-dia', {
     type: 'bar',
     data: {
       labels: dias.map(fmtDiaCorto),
       datasets: [
-        { label: 'Entradas', data: porDiaCount, backgroundColor: ESTAD_COLORS.azul, borderRadius: 4 },
+        { label: 'Entradas — Patio', data: entradasPatioPorDia, backgroundColor: ESTAD_COLORS.azul, borderRadius: 4 },
+        { label: 'Entradas — Muelle', data: entradasMuellePorDia, backgroundColor: ESTAD_COLORS.azulClaro, borderRadius: 4 },
         { label: 'Salidas', data: salidasPorDia, backgroundColor: ESTAD_COLORS.verde, borderRadius: 4 }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
-      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+        datalabels: {
+          display: function(ctx){ return ctx.dataset.data[ctx.dataIndex] > 0; },
+          anchor: 'end', align: 'top', offset: 2,
+          color: '#3A3A38', font: { size: 10, weight: '600' },
+          formatter: function(v){ return v; }
+        }
+      },
+      scales: {
+        x: { stacked: false },
+        y: { stacked: false, beginAtZero: true, ticks: { precision: 0 } }
+      }
     }
   });
 
@@ -1921,25 +1956,54 @@ function renderEstadisticas() {
     document.getElementById('estad-por-tipo-body').textContent = 'Error';
   }
 
-  // ── Franja horaria: entradas por hora del día (0-23h) ──
-  var porHora = new Array(24).fill(0);
+  // ── Franja horaria: entradas por hora del día (0-23h), divididas por canal (3PD / Maquila) ──
+  var porHora3PD = new Array(24).fill(0);
+  var porHoraMaquila = new Array(24).fill(0);
+  var porHoraOtros = new Array(24).fill(0);
   recs.forEach(function(r) {
     if (!r.horaEntrada) return;
     var h = new Date(r.horaEntrada).getHours();
-    if (h >= 0 && h < 24) porHora[h]++;
+    if (h < 0 || h >= 24) return;
+    var canalUp = (r.canal || '').toUpperCase();
+    if (canalUp.indexOf('3PD') !== -1) {
+      porHora3PD[h]++;
+    } else if (canalUp.indexOf('MAQ') !== -1 || canalUp === 'MQ') {
+      porHoraMaquila[h]++;
+    } else {
+      porHoraOtros[h]++;
+    }
   });
   var horasLabels = [];
   for (var hh = 0; hh < 24; hh++) horasLabels.push((hh < 10 ? '0' : '') + hh + 'h');
+  var franjaDatasets = [
+    { label: '3PD', data: porHora3PD, backgroundColor: ESTAD_COLORS.azulClaro, borderColor: ESTAD_COLORS.azul, borderWidth: 1, borderRadius: 4, stack: 'franja' },
+    { label: 'Maquila', data: porHoraMaquila, backgroundColor: ESTAD_COLORS.tealClaro, borderColor: ESTAD_COLORS.teal, borderWidth: 1, borderRadius: 4, stack: 'franja' }
+  ];
+  // Solo se agrega "Otros" si hay registros con canal distinto a 3PD/Maquila, para no ensuciar la leyenda.
+  if (porHoraOtros.some(function(v){ return v > 0; })) {
+    franjaDatasets.push({ label: 'Otros', data: porHoraOtros, backgroundColor: ESTAD_COLORS.gris, borderRadius: 4, stack: 'franja' });
+  }
   renderChart('chart-franja-horaria', {
     type: 'bar',
     data: {
       labels: horasLabels,
-      datasets: [{ label: 'Entradas', data: porHora, backgroundColor: ESTAD_COLORS.azulClaro, borderColor: ESTAD_COLORS.azul, borderWidth: 1, borderRadius: 4 }]
+      datasets: franjaDatasets
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+        datalabels: {
+          display: function(ctx){ return ctx.dataset.data[ctx.dataIndex] > 0; },
+          anchor: 'center', align: 'center',
+          color: '#2B2B29', font: { size: 9, weight: '600' },
+          formatter: function(v){ return v; }
+        }
+      },
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
+      }
     }
   });
 

@@ -209,6 +209,28 @@
   .btn-sm { padding: 5px 12px; font-size: 12px; }
   .btn-sm i { font-size: 13px; }
   .btn-icon { padding: 7px; }
+  .muelles-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 26px;
+  }
+  .muelle-card {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-left: 4px solid var(--gray-200);
+    border-radius: var(--radius-lg); padding: 12px 14px;
+  }
+  .muelle-card.libre { border-left-color: var(--green-600); }
+  .muelle-card.ocupado { border-left-color: var(--amber-600); }
+  .muelle-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .muelle-card-num { font-size: 13.5px; font-weight: 600; color: var(--text-1); }
+  .muelle-card-status {
+    font-size: 10.5px; font-weight: 600; padding: 2px 9px; border-radius: 20px; white-space: nowrap;
+  }
+  .muelle-card-status.libre { background: var(--green-50); color: var(--green-600); }
+  .muelle-card-status.ocupado { background: var(--amber-50); color: var(--amber-600); }
+  .muelle-card-body { font-size: 12px; color: var(--text-2); line-height: 1.55; min-height: 34px; }
+  .muelle-card-placa { font-weight: 600; color: var(--text-1); font-size: 13px; }
+  .muelle-card-empty { color: var(--text-3); font-style: italic; }
+  @media (max-width: 1100px) { .muelles-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 780px) { .muelles-grid { grid-template-columns: repeat(2, 1fr); } }
   .table-wrap {
     background: var(--surface); border: 0.5px solid var(--border);
     border-radius: var(--radius-lg); overflow-x: auto;
@@ -638,12 +660,16 @@
           </div>
         </div>
         <div class="section-header">
-          <div class="section-title" id="dashboard-section-title">Vehículos en patio ahora</div>
+          <div class="section-title">Muelles (1 a 8)</div>
           <div class="toolbar" style="margin-bottom:0; gap:8px;">
-            <div class="filter-pills">
-              <button class="pill active" onclick="setDashboardView('todos', this)">Todos</button>
-              <button class="pill" onclick="setDashboardView('muelle', this)">En muelle</button>
-            </div>
+            <span style="font-size:12px; color:var(--text-3);" id="muelles-resumen"></span>
+          </div>
+        </div>
+        <div id="muelles-grid" class="muelles-grid"></div>
+
+        <div class="section-header">
+          <div class="section-title">Vehículos en patio ahora</div>
+          <div class="toolbar" style="margin-bottom:0; gap:8px;">
             <button class="btn btn-sm" onclick="showView('registros')">
               <i class="ti ti-arrow-right"></i> Ver todos
             </button>
@@ -656,7 +682,6 @@
                 <th>Prioridad</th>
                 <th>Placa</th>
                 <th>Conductor</th>
-                <th>Muelle</th>
                 <th>Tipo</th>
                 <th>Ingreso</th>
                 <th>Operador</th>
@@ -708,9 +733,7 @@
 
                     <label>Bahía</label>
 
-                    <select id="f-bahia">
-                        <option>A</option>
-                    </select>
+                    <input type="text" id="f-bahia" value="A" readonly disabled style="background:var(--surface-3); color:var(--text-2); cursor:not-allowed;">
 
                 </div>
             </div>
@@ -738,7 +761,7 @@
             </div>
             <div class="form-group" id="programacion-wrapper" style="display:none;">
               <label for="f-hora-programacion">Hora de programación</label>
-              <input type="datetime-local" id="f-hora-programacion">
+              <input type="time" id="f-hora-programacion">
             </div>
             <div class="form-group full">
               <label for="f-servicio-tipo">Tipo de servicio</label>
@@ -761,6 +784,7 @@
             <div class="form-group full">
               <label for="f-canal">Canal *</label>
               <select id="f-canal">
+                <option value="Sin canal">Sin canal</option>
                 <option value="MQ">MQ</option>
                 <option value="3PD">3PD</option>
               </select>
@@ -1046,10 +1070,36 @@
           <option>8</option>
         </select>
         <label>Bahía</label>
-        <select id="e-bahia">
-          <option>A</option>
-        </select>
+        <input type="text" id="e-bahia" value="A" readonly disabled style="background:var(--surface-3); color:var(--text-2); cursor:not-allowed;">
       </div>
+    </div>
+    <div class="form-group full">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:400; text-transform:none;">
+        <input type="checkbox" id="e-tipo-cambio" onchange="toggleTipoEdit()" style="width:16px; height:16px; cursor:pointer;">
+        ¿Cambió el tipo de operación? <span style="font-weight:400;color:var(--text-3)">(opcional)</span>
+      </label>
+      <div id="tipo-edit-wrapper" style="display:none; margin-top:10px;">
+        <div class="radio-row" id="radio-tipo-edit">
+          <label class="radio-card sel-cargue" id="e-rc-cargue">
+            <input type="checkbox" name="e-tipo" value="Cargue" onchange="syncTipoUIEdit()" checked>
+            <i class="ti ti-package-import"></i> Cargue
+          </label>
+          <label class="radio-card" id="e-rc-descargue">
+            <input type="checkbox" name="e-tipo" value="Descargue" onchange="syncTipoUIEdit()">
+            <i class="ti ti-package-export"></i> Descargue
+          </label>
+        </div>
+        <div class="tipo-hint">Selecciona Cargue, Descargue, o ambos si el tipo de operación cambió.</div>
+      </div>
+    </div>
+    <div class="form-group full">
+      <label for="e-canal" id="e-canal-label">Canal</label>
+      <select id="e-canal" onchange="syncCanalEdit()">
+        <option value="Sin canal">Sin canal</option>
+        <option value="MQ">MQ</option>
+        <option value="3PD">3PD</option>
+      </select>
+      <div class="tipo-hint" id="e-canal-hint" style="display:none">Este vehículo llegó sin canal asignado: selecciona MQ o 3PD para guardar.</div>
     </div>
     <div class="form-group full">
       <label for="e-obs-ubicacion">Observaciones de ubicación</label>
@@ -1304,6 +1354,17 @@ function today() {
   var off = now.getTimezoneOffset() * 60000;
   return new Date(now - off).toISOString().slice(0,10);
 }
+// Valida que una fecha (string 'YYYY-MM-DD' o datetime-local) esté entre ayer y hoy,
+// es decir, no permite fechas futuras ni fechas de hace más de un día.
+function fechaDentroDeRango(valor) {
+  if (!valor) return false;
+  var fechaStr = valor.slice(0, 10);
+  var hoy = new Date(today() + 'T00:00:00');
+  var fecha = new Date(fechaStr + 'T00:00:00');
+  var ayer = new Date(hoy);
+  ayer.setDate(ayer.getDate() - 1);
+  return fecha >= ayer && fecha <= hoy;
+}
 function fmtDt(s) {
   if (!s) return '—';
   return new Date(s).toLocaleString('es-CO', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
@@ -1449,7 +1510,7 @@ function getHistorial(r) {
   return h;
 }
 function iconoHistorial(tipo) {
-  return tipo === 'entrada' ? 'ti-login' : tipo === 'salida' ? 'ti-logout' : 'ti-edit';
+  return tipo === 'entrada' ? 'ti-login' : tipo === 'salida' ? 'ti-logout' : tipo === 'operacion' ? 'ti-transfer-in' : tipo === 'canal' ? 'ti-route' : 'ti-edit';
 }
 function tituloHistorial(item) {
   if (item.tipo === 'entrada') return 'Entrada registrada' + (item.ubicacion ? ' — ' + item.ubicacion : '');
@@ -1458,6 +1519,16 @@ function tituloHistorial(item) {
     return item.ubicacionAnterior && item.ubicacionAnterior !== item.ubicacion
       ? 'Ubicación actualizada: ' + item.ubicacionAnterior + ' → ' + item.ubicacion
       : 'Ubicación confirmada' + (item.ubicacion ? ' — ' + item.ubicacion : '');
+  }
+  if (item.tipo === 'operacion') {
+    return item.tipoAnterior && item.tipoAnterior !== item.tipoNuevo
+      ? 'Tipo de operación actualizado: ' + item.tipoAnterior + ' → ' + item.tipoNuevo
+      : 'Tipo de operación confirmado' + (item.tipoNuevo ? ' — ' + item.tipoNuevo : '');
+  }
+  if (item.tipo === 'canal') {
+    return item.canalAnterior && item.canalAnterior !== item.canalNuevo
+      ? 'Canal actualizado: ' + item.canalAnterior + ' → ' + item.canalNuevo
+      : 'Canal confirmado' + (item.canalNuevo ? ' — ' + item.canalNuevo : '');
   }
   return 'Actualización';
 }
@@ -1494,6 +1565,30 @@ function refreshActiveView() {
   if (document.getElementById('view-dashboard').classList.contains('active'))  renderDashboard();
   if (document.getElementById('view-registros').classList.contains('active'))  renderRegistros();
   if (document.getElementById('view-estadisticas').classList.contains('active')) renderEstadisticas();
+  refreshMuelleSelectsSiAbiertos();
+}
+
+// Si el formulario de "Nueva entrada" o el modal "Editar ubicación" están abiertos
+// con "Muelle" seleccionado, refresca la lista de muelles libres cada vez que llegan
+// datos nuevos (Firebase en tiempo real o el ciclo de refresco local), para que un
+// muelle recién liberado aparezca como opción sin tener que recargar la página.
+function refreshMuelleSelectsSiAbiertos() {
+  var viewEntrada = document.getElementById('view-entrada');
+  if (viewEntrada && viewEntrada.classList.contains('active')) {
+    var ubicacionForm = document.getElementById('f-ubicacion');
+    if (ubicacionForm && ubicacionForm.value === 'Muelle') {
+      poblarSelectMuelles(document.getElementById('f-numeroMuelle'), null);
+    }
+  }
+  var modalEditar = document.getElementById('modal-editar');
+  if (modalEditar && modalEditar.classList.contains('open')) {
+    var ubicacionEdit = document.getElementById('e-ubicacion');
+    if (ubicacionEdit && ubicacionEdit.value === 'Muelle') {
+      var rec = records.find(function(x){ return x.id === selectedId; });
+      var muelleActual = (rec && rec.ubicacion === 'Muelle') ? rec.numeroMuelle : null;
+      poblarSelectMuelles(document.getElementById('e-numeroMuelle'), muelleActual);
+    }
+  }
 }
 
 /* ══════════ TOAST ══════════ */
@@ -1604,6 +1699,39 @@ function getTipoSeleccionado() {
   return seleccionados[0] || null;
 }
 
+/* ══════════ TIPO OPERACIÓN — versión del modal Editar ubicación ══════════ */
+// Checkboxes independientes (name="e-tipo") para no interferir con el formulario
+// de registro de entrada, que usa name="tipo" sobre los mismos valores.
+// El cambio de tipo es OPCIONAL: solo se aplica si se marca "¿Cambió el tipo de operación?".
+function toggleTipoEdit() {
+  var activo = document.getElementById('e-tipo-cambio').checked;
+  document.getElementById('tipo-edit-wrapper').style.display = activo ? 'block' : 'none';
+}
+function syncTipoUIEdit() {
+  var chkCargue    = document.querySelector('input[name=e-tipo][value=Cargue]');
+  var chkDescargue = document.querySelector('input[name=e-tipo][value=Descargue]');
+  document.getElementById('e-rc-cargue').className    = 'radio-card' + (chkCargue.checked    ? ' sel-cargue'    : '');
+  document.getElementById('e-rc-descargue').className = 'radio-card' + (chkDescargue.checked ? ' sel-descargue' : '');
+}
+function getTipoSeleccionadoEdit() {
+  var seleccionados = Array.prototype.slice.call(document.querySelectorAll('input[name=e-tipo]:checked')).map(function(i){ return i.value; });
+  if (seleccionados.length === 2) return 'Ambos';
+  return seleccionados[0] || null;
+}
+
+/* ══════════ CANAL — editable en el modal Editar ubicación ══════════ */
+// Algunos vehículos llegan sin saber a qué canal van; el canal queda "Sin canal"
+// hasta que se defina. Mientras esté en "Sin canal", el campo es obligatorio
+// (no se puede guardar la edición sin resolverlo).
+function syncCanalEdit() {
+  var valor = document.getElementById('e-canal').value;
+  var lbl = document.getElementById('e-canal-label');
+  var hint = document.getElementById('e-canal-hint');
+  var sinCanal = valor === 'Sin canal';
+  lbl.textContent = 'Canal' + (sinCanal ? ' *' : '');
+  hint.style.display = sinCanal ? 'block' : 'none';
+}
+
 function cambiarProgramado() {
   var programado = document.getElementById('f-programado').value;
   var wrapper = document.getElementById('programacion-wrapper');
@@ -1643,6 +1771,11 @@ function cambiarUbicacion() {
         ubicacion === "Muelle"
             ? "block"
             : "none";
+
+    if (ubicacion === "Muelle") {
+        var libres = poblarSelectMuelles(document.getElementById('f-numeroMuelle'), null);
+        if (!libres) toast('No hay muelles libres en este momento', 'red', 'ti-alert-circle');
+    }
 }
 
 /* ══════════ REGISTRAR ENTRADA ══════════ */
@@ -1654,11 +1787,12 @@ function registrarEntrada() {
   var hora      = document.getElementById('f-hora').value;
   var ubicacion = document.getElementById('f-ubicacion').value.trim();
   var numeroMuelle = document.getElementById('f-numeroMuelle').value;
-  var bahia = document.getElementById('f-bahia').value;
+  var bahia = 'A'; // Única bahía disponible por muelle (J3)
   var canal     = document.getElementById('f-canal').value;
   var tipo      = getTipoSeleccionado();
   var programado = document.getElementById('f-programado').value;
-  var horaProgramacion = document.getElementById('f-hora-programacion').value;
+  var horaProgramacionInput = document.getElementById('f-hora-programacion').value;
+  var horaProgramacion = horaProgramacionInput ? (today() + 'T' + horaProgramacionInput) : '';
   var servicioTipo = document.getElementById('f-servicio-tipo').value;
   var servicioEmpresa = servicioTipo === 'Reciclaje'
     ? document.getElementById('f-servicio-empresa').value
@@ -1668,8 +1802,12 @@ function registrarEntrada() {
   var cedula    = document.getElementById('f-cedula').value.trim();
   var obs       = document.getElementById('f-obs').value.trim();
   if (!hora)        { toast('Selecciona la hora de ingreso', 'red', 'ti-alert-circle'); return; }
+  if (!fechaDentroDeRango(hora)) {
+    toast('La fecha de ingreso no puede ser futura ni anterior a ayer', 'red', 'ti-alert-circle'); return;
+  }
   if (!placa)       { toast('Ingresa la placa del vehículo', 'red', 'ti-alert-circle'); return; }
   if (!ubicacion)   { toast('Ingresa la ubicación',       'red', 'ti-alert-circle'); return; }
+  if (ubicacion === 'Muelle' && !numeroMuelle) { toast('No hay muelles libres para asignar en este momento', 'red', 'ti-alert-circle'); return; }
   if (!canal)       { toast('Selecciona el canal',        'red', 'ti-alert-circle'); return; }
   if (!tipo)        { toast('Selecciona al menos un tipo de operación (Cargue y/o Descargue)', 'red', 'ti-alert-circle'); return; }
   if (!programado)  { toast('Selecciona si el vehículo está programado o no', 'red', 'ti-alert-circle'); return; }
@@ -1746,14 +1884,15 @@ function registrarEntrada() {
 }
 
 function limpiarForm() {
-  ['f-conductor','f-placa','f-ubicacion','f-numeroMuelle','f-bahia','f-canal','f-cedula','f-obs','f-programado','f-hora-programacion','f-servicio-tipo'].forEach(function(id){
+  ['f-conductor','f-placa','f-ubicacion','f-numeroMuelle','f-canal','f-cedula','f-obs','f-programado','f-hora-programacion','f-servicio-tipo'].forEach(function(id){
     document.getElementById(id).value = '';
   });
+  document.getElementById('f-bahia').value = 'A';
   document.getElementById('f-servicio-empresa').value = '';
   document.getElementById('f-servicio-empresa-text').value = 'Pepsico';
   document.getElementById('programacion-wrapper').style.display = 'none';
   document.getElementById('servicio-empresa-wrapper').style.display = 'none';
-  document.getElementById('f-canal').value = 'MQ';
+  document.getElementById('f-canal').value = 'Sin canal';
   document.getElementById('f-hora').value = nowLocal();
   document.querySelector('input[name=tipo][value=Cargue]').checked = true;
   document.querySelector('input[name=tipo][value=Descargue]').checked = false;
@@ -1785,22 +1924,89 @@ function puedeDespachar(r) {
   if (!r) return false;
   return r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0 || (r.destino || '').indexOf('Muelle') !== -1;
 }
-function setDashboardView(view, btn) {
-  currentDashboardView = view;
-  var parent = document.getElementById('view-dashboard');
-  parent.querySelectorAll('.filter-pills .pill').forEach(function(el){ el.classList.remove('active'); });
-  if (btn) btn.classList.add('active');
-  renderDashboard();
-}
 function getDashboardRecords() {
+  // Solo los vehículos activos que están en Patio (los de Muelle se muestran en la grilla de muelles)
   var base = filterByOperator(records);
-  var enPatio = base.filter(function(r){ return !r.horaSalida; });
-  if (currentDashboardView === 'muelle') {
-    return ordenarPorPrioridad(enPatio.filter(function(r){
-      return r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0;
-    }));
-  }
+  var enPatio = base.filter(function(r){
+    return !r.horaSalida && r.ubicacion !== 'Muelle' && (r.destino || '').indexOf('Muelle') !== 0;
+  });
   return ordenarPorPrioridad(enPatio);
+}
+// Devuelve, para cada muelle del 1 al 8, el vehículo activo que lo ocupa (o null si está libre)
+function getMuellesOcupacion() {
+  var base = filterByOperator(records);
+  var enMuelle = base.filter(function(r){
+    return !r.horaSalida && (r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0);
+  });
+  var ocupacion = {};
+  for (var n = 1; n <= 8; n++) {
+    ocupacion[n] = enMuelle.find(function(r){ return String(r.numeroMuelle) === String(n); }) || null;
+  }
+  return ocupacion;
+}
+// Llena un <select> de número de muelle solo con los muelles libres.
+// Si se pasa muelleActual (edición de un vehículo ya asignado a un muelle),
+// ese muelle también se incluye aunque esté "ocupado", porque lo ocupa el propio vehículo.
+// Devuelve la cantidad de opciones disponibles.
+function poblarSelectMuelles(selectEl, muelleActual) {
+  if (!selectEl) return 0;
+  var ocupacion = getMuellesOcupacion();
+  var valorPrevio = selectEl.value;
+  var html = '';
+  var libres = 0;
+  for (var n = 1; n <= 8; n++) {
+    var ocupante = ocupacion[n];
+    var esElActual = muelleActual != null && String(n) === String(muelleActual);
+    if (!ocupante || esElActual) {
+      libres++;
+      html += '<option value="' + n + '">' + n + (esElActual ? ' (actual)' : '') + '</option>';
+    }
+  }
+  selectEl.innerHTML = html || '<option value="" disabled selected>No hay muelles libres</option>';
+  if (valorPrevio && selectEl.querySelector('option[value="' + valorPrevio + '"]')) {
+    selectEl.value = valorPrevio;
+  } else if (muelleActual != null && selectEl.querySelector('option[value="' + muelleActual + '"]')) {
+    selectEl.value = muelleActual;
+  }
+  return libres;
+}
+function renderMuellesGrid() {
+  var ocupacion = getMuellesOcupacion();
+  var grid = document.getElementById('muelles-grid');
+  var ocupados = 0;
+  var html = '';
+  for (var n = 1; n <= 8; n++) {
+    var r = ocupacion[n];
+    if (r) {
+      ocupados++;
+      var min = minutosEsperando(r);
+      var horas = Math.floor(min / 60), mins = Math.round(min % 60);
+      var tiempoTxt = horas > 0 ? horas + 'h ' + mins + 'min' : mins + 'min';
+      html += '<div class="muelle-card ocupado">' +
+        '<div class="muelle-card-top">' +
+          '<span class="muelle-card-num">Muelle ' + n + '</span>' +
+          '<span class="muelle-card-status ocupado">Ocupado</span>' +
+        '</div>' +
+        '<div class="muelle-card-body">' +
+          '<div class="muelle-card-placa">' + r.placa + '</div>' +
+          r.conductor + '<br>' +
+          '<span class="badge ' + tipoBadgeClass(r.tipo) + '" style="margin-top:4px;"><i class="ti ' + tipoIcon(r.tipo) + '"></i>' + r.tipo + '</span>' +
+          ' · ' + tiempoTxt +
+        '</div>' +
+      '</div>';
+    } else {
+      html += '<div class="muelle-card libre">' +
+        '<div class="muelle-card-top">' +
+          '<span class="muelle-card-num">Muelle ' + n + '</span>' +
+          '<span class="muelle-card-status libre">Libre</span>' +
+        '</div>' +
+        '<div class="muelle-card-body muelle-card-empty">Disponible</div>' +
+      '</div>';
+    }
+  }
+  grid.innerHTML = html;
+  var resumen = document.getElementById('muelles-resumen');
+  if (resumen) resumen.textContent = ocupados + ' de 8 ocupados · ' + (8 - ocupados) + ' libres';
 }
 function renderDashboard() {
   if (!turnoActual) loadTurno();
@@ -1849,17 +2055,12 @@ function renderDashboard() {
     bannerAlerta.style.display = 'none';
   }
 
+  renderMuellesGrid();
+
   var dashboardRecords = getDashboardRecords();
   var tbody   = document.getElementById('dash-table');
-  var sectionTitle = document.getElementById('dashboard-section-title');
-  if (currentDashboardView === 'muelle') {
-    sectionTitle.textContent = 'Vehículos en muelle ahora';
-  } else {
-    sectionTitle.textContent = 'Vehículos en patio ahora';
-  }
   if (!dashboardRecords.length) {
-    var emptyMsg = currentDashboardView === 'muelle' ? 'No hay vehículos en muelle en este momento' : 'No hay vehículos en patio actualmente';
-    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-mood-happy"></i><p>' + emptyMsg + '</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-mood-happy"></i><p>No hay vehículos en patio actualmente</p></div></td></tr>';
     return;
   }
   tbody.innerHTML = dashboardRecords.map(function(r, idx) {
@@ -1867,7 +2068,6 @@ function renderDashboard() {
       '<td>' + badgePrioridad(r, idx + 1) + '</td>' +
       '<td class="td-placa">' + r.placa + '</td>' +
       '<td>' + r.conductor + '</td>' +
-      '<td>' + getDestino(r) + '</td>' +
       '<td><span class="badge ' + tipoBadgeClass(r.tipo) + '">' +
         '<i class="ti ' + tipoIcon(r.tipo) + '"></i>' + r.tipo +
       '</span></td>' +
@@ -2018,6 +2218,12 @@ function confirmarSalida() {
 function cambiarUbicacionEdit() {
   var ubicacion = document.getElementById('e-ubicacion').value;
   document.getElementById('muelle-options-edit').style.display = ubicacion === 'Muelle' ? 'block' : 'none';
+  if (ubicacion === 'Muelle') {
+    var rec = records.find(function(x){ return x.id === selectedId; });
+    var muelleActual = (rec && rec.ubicacion === 'Muelle') ? rec.numeroMuelle : null;
+    var libres = poblarSelectMuelles(document.getElementById('e-numeroMuelle'), muelleActual);
+    if (!libres) toast('No hay muelles libres en este momento', 'red', 'ti-alert-circle');
+  }
   var lbl = document.querySelector('label[for="e-obs-ubicacion"]');
   var txt = document.getElementById('e-obs-ubicacion');
   if (ubicacion === 'Patio') {
@@ -2038,11 +2244,18 @@ function openModalEditar(id) {
       '<strong>Atención:</strong> Este vehículo lleva más de 4 horas en patio. Ingresa el motivo en las observaciones de ubicación.' +
     '</div>' : '') +
     '<strong>' + r.placa + '</strong> — ' + r.conductor + '<br>' +
-    'Ubicación actual: <strong>' + getDestino(r) + '</strong>';
+    'Ubicación actual: <strong>' + getDestino(r) + '</strong> · Operación actual: <strong>' + (r.tipo || '—') + '</strong>';
   document.getElementById('e-ubicacion').value = r.ubicacion === 'Muelle' ? 'Muelle' : 'Patio';
   document.getElementById('e-numeroMuelle').value = r.numeroMuelle || '1';
   document.getElementById('e-bahia').value = r.bahia || 'A';
   document.getElementById('e-obs-ubicacion').value = r.obsUbicacion || '';
+  document.querySelector('input[name=e-tipo][value=Cargue]').checked    = (r.tipo === 'Cargue'    || r.tipo === 'Ambos');
+  document.querySelector('input[name=e-tipo][value=Descargue]').checked = (r.tipo === 'Descargue' || r.tipo === 'Ambos');
+  syncTipoUIEdit();
+  document.getElementById('e-tipo-cambio').checked = false;
+  toggleTipoEdit();
+  document.getElementById('e-canal').value = r.canal || 'Sin canal';
+  syncCanalEdit();
   var lblObsUbic = document.querySelector('label[for="e-obs-ubicacion"]');
   if (lblObsUbic) lblObsUbic.textContent = 'Observaciones de ubicación' + (longParked ? ' *' : '');
   cambiarUbicacionEdit();
@@ -2051,8 +2264,17 @@ function openModalEditar(id) {
 function confirmarEdicionUbicacion() {
   var ubicacion    = document.getElementById('e-ubicacion').value;
   var numeroMuelle = document.getElementById('e-numeroMuelle').value;
-  var bahia        = document.getElementById('e-bahia').value;
+  var bahia        = 'A'; // Única bahía disponible por muelle (J3)
   var destinoCompleto = computeDestino(ubicacion, numeroMuelle, bahia);
+  var cambioTipo = document.getElementById('e-tipo-cambio').checked;
+  var tipo = null;
+  if (cambioTipo) {
+    tipo = getTipoSeleccionadoEdit();
+    if (!tipo) { toast('Selecciona Cargue y/o Descargue, o desmarca "¿Cambió el tipo de operación?"', 'red', 'ti-alert-circle'); return; }
+  }
+  var canal = document.getElementById('e-canal').value;
+  if (canal === 'Sin canal') { toast('Selecciona el canal (MQ o 3PD) antes de guardar', 'red', 'ti-alert-circle'); return; }
+  if (ubicacion === 'Muelle' && !numeroMuelle) { toast('No hay muelles libres para asignar en este momento', 'red', 'ti-alert-circle'); return; }
 
   var rec = records.find(function(x){ return x.id === selectedId; });
   if (!rec) return;
@@ -2061,20 +2283,43 @@ function confirmarEdicionUbicacion() {
     toast('Describe por qué el vehículo lleva más de 4 horas en patio', 'red', 'ti-alert-circle');
     return;
   }
+  var historial = agregarHistorial(rec, {
+    fecha: nowLocal(),
+    tipo: 'ubicacion',
+    operador: currentOperator,
+    ubicacionAnterior: getDestino(rec),
+    ubicacion: destinoCompleto,
+    texto: obsUbicacion || ''
+  });
+  if (cambioTipo && rec.tipo !== tipo) {
+    historial = agregarHistorial({ historial: historial }, {
+      fecha: nowLocal(),
+      tipo: 'operacion',
+      operador: currentOperator,
+      tipoAnterior: rec.tipo || '—',
+      tipoNuevo: tipo,
+      texto: ''
+    });
+  }
+  if (canal !== (rec.canal || 'Sin canal')) {
+    historial = agregarHistorial({ historial: historial }, {
+      fecha: nowLocal(),
+      tipo: 'canal',
+      operador: currentOperator,
+      canalAnterior: rec.canal || 'Sin canal',
+      canalNuevo: canal,
+      texto: ''
+    });
+  }
   var updated = Object.assign({}, rec, {
     ubicacion: ubicacion,
     numeroMuelle: numeroMuelle,
     bahia: bahia,
     destino: destinoCompleto,
+    tipo: cambioTipo ? tipo : rec.tipo,
+    canal: canal,
     obsUbicacion: obsUbicacion || rec.obsUbicacion || '',
-    historial: agregarHistorial(rec, {
-      fecha: nowLocal(),
-      tipo: 'ubicacion',
-      operador: currentOperator,
-      ubicacionAnterior: getDestino(rec),
-      ubicacion: destinoCompleto,
-      texto: obsUbicacion || ''
-    })
+    historial: historial
   });
 
   if (firebaseActive && _fbSave) {
@@ -2522,6 +2767,17 @@ function renderEstadisticas() {
   // Hora actual en formulario
   document.getElementById('f-hora').value = nowLocal();
 
+  // Restringe el selector de fecha/hora de ingreso: no permite fechas futuras
+  // ni anteriores a ayer (límite inferior = ayer 00:00, límite superior = hoy 23:59)
+  (function limitarFechaIngreso() {
+    var ayer = new Date(today() + 'T00:00:00');
+    ayer.setDate(ayer.getDate() - 1);
+    var ayerStr = ayer.toISOString().slice(0,10);
+    var fHora = document.getElementById('f-hora');
+    fHora.min = ayerStr + 'T00:00';
+    fHora.max = today() + 'T23:59';
+  })();
+
   // Cargar operador guardado
   try { currentOperator = localStorage.getItem(OP_KEY) || null; } catch(e) {}
   updateOperatorUI();
@@ -2558,7 +2814,7 @@ function renderEstadisticas() {
 
   // Revisar cada minuto si algún vehículo superó las 4 horas en patio,
   // para que la alerta aparezca sola sin esperar a otra acción del usuario.
-  setInterval(refreshActiveView, 60000);
+  setInterval(refreshActiveView, 15000);
 })();
 </script>
 </body>
