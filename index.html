@@ -1565,9 +1565,16 @@ function updateSidebarCount() {
   if (el) el.textContent = records.length + ' registro' + (records.length !== 1 ? 's' : '');
 }
 function refreshActiveView() {
-  if (document.getElementById('view-dashboard').classList.contains('active'))  renderDashboard();
-  if (document.getElementById('view-registros').classList.contains('active'))  renderRegistros();
-  if (document.getElementById('view-estadisticas').classList.contains('active')) renderEstadisticas();
+  // IMPORTANTE: se refrescan SIEMPRE las tres vistas (Dashboard, Registros, Estadísticas),
+  // sin importar cuál esté visible en este momento. Antes solo se re-renderizaba la vista
+  // activa, así que si una entrada/salida llegaba mientras el usuario estaba en otra pestaña,
+  // esa vista se quedaba con datos viejos hasta que el usuario la abriera. Además, dentro de
+  // una misma vista (Dashboard) las tarjetas superiores (s-total, s-patio, s-muelle, etc.) y
+  // la grilla de muelles se pintan ahora siempre en la misma pasada, para que nunca se vea
+  // una actualizada y la otra no.
+  renderDashboard();
+  renderRegistros();
+  renderEstadisticas();
   refreshMuelleSelectsSiAbiertos();
 }
 
@@ -2625,7 +2632,18 @@ function renderChart(canvasId, config) {
 }
 
 function renderEstadisticas() {
-  if (typeof Chart === 'undefined') return; // Chart.js aún no cargó (sin conexión, por ejemplo)
+  if (typeof Chart === 'undefined') {
+    // Chart.js aún no cargó (p. ej. justo al abrir la app). Antes esto cortaba TODA la
+    // función con un return temprano, así que ni las tarjetas (es-total, es-salidas, etc.)
+    // ni las gráficas se actualizaban. Ahora reintentamos automáticamente en cuanto el
+    // script de Chart.js termine de cargar, sin depender de que el usuario haga clic en algo.
+    var scriptChart = document.querySelector('script[src*="chart.js"]');
+    if (scriptChart && !scriptChart._retryEstadisticasBound) {
+      scriptChart._retryEstadisticasBound = true;
+      scriptChart.addEventListener('load', renderEstadisticas);
+    }
+    return;
+  }
   var rango = getRangoEstadisticas();
   var recs = getRecordsEnRango(rango);
   // Las estadísticas deben mostrar el total histórico del periodo seleccionado,

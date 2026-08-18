@@ -116,10 +116,11 @@
   .sync-badge i { font-size: 12px; }
   .main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; }
   .topbar {
+    display: none;
     height: var(--header-h);
     background: var(--surface);
     border-bottom: 0.5px solid var(--border);
-    display: flex; align-items: center; justify-content: space-between;
+    align-items: center; justify-content: space-between;
     padding: 0 28px;
     position: sticky; top: 0; z-index: 40;
   }
@@ -458,6 +459,7 @@
     .main { margin-left: 0; }
     .sidebar { transform: translateX(-100%); transition: transform .2s; }
     .sidebar.open { transform: none; }
+    .topbar { display: flex; justify-content: flex-start; }
     .menu-toggle { display: inline-flex !important; }
     .stats-row { grid-template-columns: repeat(3, 1fr); }
     .form-grid { grid-template-columns: 1fr; }
@@ -548,6 +550,10 @@
           <i class="ti ti-device-floppy"></i> Local
         </div>
       </div>
+      <div class="sidebar-footer-row">
+        <i class="ti ti-calendar"></i>
+        <span id="topbar-date"></span>
+      </div>
     </div>
   </aside>
   <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
@@ -559,19 +565,6 @@
         <button class="menu-toggle" id="btn-menu-toggle" onclick="toggleSidebar()" aria-label="Abrir menú">
           <i class="ti ti-menu-2"></i>
         </button>
-        <div>
-          <div class="topbar-sub" id="topbar-date"></div>
-        </div>
-      </div>
-      <div class="topbar-right">
-        <div class="topbar-operator" style="cursor:default;">
-          <i class="ti ti-eye"></i>
-          <span class="full-label">Panel de solo lectura</span>
-        </div>
-        <div id="sync-top" class="sync-badge">
-          <i class="ti ti-device-floppy"></i>
-          <span>Local</span>
-        </div>
       </div>
     </header>
 
@@ -593,54 +586,135 @@
             <span id="alerta-patio-detalle"></span>
           </div>
         </div>
-        <div class="stats-row">
-          <div class="stat-card">
-            <div class="stat-ico blue"><i class="ti ti-truck"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="s-total">0</div>
-              <div class="stat-lbl">Total del día</div>
-            </div>
+
+        <div class="section-header" style="margin-top:16px;">
+          <div class="section-title">Estadísticas de vehículos por periodo</div>
+        </div>
+        <div class="toolbar" style="justify-content: space-between; align-items: center;">
+          <div class="filter-pills">
+            <button class="pill active" onclick="setPeriodoDashboard('hoy', this)">Hoy</button>
+            <button class="pill" onclick="setPeriodoDashboard('3dias', this)">Últimos 3 días</button>
+            <button class="pill" onclick="setPeriodoDashboard('semana', this)">Última semana</button>
+            <button class="pill" onclick="setPeriodoDashboard('mes', this)">Último mes</button>
+            <button class="pill" onclick="setPeriodoDashboard('todo', this)">Todo</button>
+            <button class="pill" onclick="setPeriodoDashboard('personalizado', this)">Personalizado</button>
           </div>
+        </div>
+        <div id="dash-rango-custom" class="estad-rango-custom">
+          <label style="font-size:12.5px; color:var(--text-2);">Desde
+            <input type="date" id="dash-desde">
+          </label>
+          <label style="font-size:12.5px; color:var(--text-2);">Hasta
+            <input type="date" id="dash-hasta">
+          </label>
+          <button class="btn btn-sm btn-primary" onclick="renderDashboardPeriodo()"><i class="ti ti-filter"></i> Aplicar</button>
+        </div>
+
+        <div class="stats-row" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
           <div class="stat-card">
             <div class="stat-ico green"><i class="ti ti-building-warehouse"></i></div>
             <div class="stat-body">
               <div class="stat-val" id="s-patio">0</div>
-              <div class="stat-lbl">En patio</div>
+              <div class="stat-lbl">En patio ahora</div>
             </div>
           </div>
           <div class="stat-card">
             <div class="stat-ico teal"><i class="ti ti-Door"></i></div>
             <div class="stat-body">
               <div class="stat-val" id="s-muelle">0</div>
-              <div class="stat-lbl">En muelle</div>
+              <div class="stat-lbl">En muelle ahora</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-ico blue"><i class="ti ti-truck"></i></div>
+            <div class="stat-body">
+              <div class="stat-val" id="es-total">0</div>
+              <div class="stat-lbl">Entradas en el periodo</div>
             </div>
           </div>
           <div class="stat-card">
             <div class="stat-ico amber"><i class="ti ti-logout"></i></div>
             <div class="stat-body">
-              <div class="stat-val" id="s-salidas">0</div>
-              <div class="stat-lbl">Salidas hoy</div>
+              <div class="stat-val" id="es-salidas">0</div>
+              <div class="stat-lbl">Salidas en el periodo</div>
             </div>
           </div>
           <div class="stat-card">
             <div class="stat-ico teal"><i class="ti ti-clock-hour-4"></i></div>
             <div class="stat-body">
-              <div class="stat-val" id="s-promedio">0 min</div>
-              <div class="stat-lbl">Tiempo promedio hoy</div>
+              <div class="stat-val" id="es-promedio">0 min</div>
+              <div class="stat-lbl">Tiempo promedio en patio</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-ico green"><i class="ti ti-package-import"></i></div>
+            <div class="stat-body">
+              <div class="stat-val" id="es-cargue-pct">0%</div>
+              <div class="stat-lbl">Con cargue</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-ico blue"><i class="ti ti-calendar-stats"></i></div>
+            <div class="stat-body">
+              <div class="stat-val" id="es-pico">—</div>
+              <div class="stat-lbl">Día con más movimiento</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-ico gray"><i class="ti ti-database"></i></div>
+            <div class="stat-body">
+              <div class="stat-val" id="es-total-general">0</div>
+              <div class="stat-lbl">Vehículos registrados (general)</div>
             </div>
           </div>
         </div>
 
-        <div class="chart-grid">
-          <div class="chart-card">
-            <div class="chart-card-title">Diferencia entre turnos — hoy</div>
-            <div class="chart-card-sub" id="s-turno-diff-sub">Vehículos atendidos por cada operador en el día</div>
-            <div class="chart-canvas-wrap short"><canvas id="chart-turnos-hoy"></canvas></div>
+        <div class="chart-grid" id="dash-chart-grid">
+          <div class="chart-card full">
+            <div class="chart-card-title">Entradas y salidas por día</div>
+            <div class="chart-card-sub">Volumen diario de vehículos dentro del periodo seleccionado</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-entradas-dia"></canvas></div>
           </div>
           <div class="chart-card">
-            <div class="chart-card-title">Entradas por hora — hoy</div>
-            <div class="chart-card-sub">Distribución horaria del movimiento de hoy</div>
-            <div class="chart-canvas-wrap short"><canvas id="chart-horas-hoy"></canvas></div>
+            <div class="chart-card-title">Vehículos por canal</div>
+            <div class="chart-card-sub">Distribución por canal (MQ / 3PD)</div>
+            <div class="chart-canvas-wrap short"><canvas id="chart-canal"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-title">Tiempo promedio en muelle por día</div>
+            <div class="chart-card-sub">Minutos promedio dentro del muelle</div>
+            <div class="chart-canvas-wrap short"><canvas id="chart-tiempo-muelle"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-title">Tipo de operación</div>
+            <div class="chart-card-sub">Cargue, descargue o ambos</div>
+            <div class="chart-canvas-wrap short"><canvas id="chart-tipo"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-title">Tiempo promedio en patio por día</div>
+            <div class="chart-card-sub">Minutos promedio entre entrada y salida</div>
+            <div class="chart-canvas-wrap short"><canvas id="chart-tiempo-patio"></canvas></div>
+          </div>
+          <div class="chart-card full">
+            <div class="chart-card-title">Franja horaria</div>
+            <div class="chart-card-sub">Entradas de vehículos por hora del día, dentro del periodo seleccionado</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-franja-horaria"></canvas></div>
+          </div>
+        </div>
+        <div class="chart-grid" style="margin-top:18px;">
+          <div class="chart-card">
+            <div class="chart-card-title">Promedio por tipo</div>
+            <div class="chart-card-sub">Promedio de tiempo en patio y muelle por tipo (Cargue / Descargue / Ambos)</div>
+            <div class="table-wrap" style="margin-top:8px;">
+              <div id="estad-por-tipo-body">Cargando…</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-title">Promedio por canal</div>
+            <div class="chart-card-sub">Promedio de tiempo en patio por canal (MQ / 3PD)</div>
+            <div class="table-wrap" style="margin-top:8px;">
+              <div id="estad-por-canal-body">Cargando…</div>
+            </div>
           </div>
         </div>
 
@@ -763,108 +837,24 @@
           <button class="btn btn-sm btn-primary" onclick="renderEstadisticas()"><i class="ti ti-filter"></i> Aplicar</button>
         </div>
 
-        <div class="stats-row">
-          <div class="stat-card">
-            <div class="stat-ico blue"><i class="ti ti-truck"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="es-total">0</div>
-              <div class="stat-lbl">Entradas en el periodo</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico amber"><i class="ti ti-logout"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="es-salidas">0</div>
-              <div class="stat-lbl">Salidas en el periodo</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico teal"><i class="ti ti-clock-hour-4"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="es-promedio">0 min</div>
-              <div class="stat-lbl">Tiempo promedio en patio</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico green"><i class="ti ti-package-import"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="es-cargue-pct">0%</div>
-              <div class="stat-lbl">Con cargue</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico blue"><i class="ti ti-calendar-stats"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="es-pico">—</div>
-              <div class="stat-lbl">Día con más movimiento</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico gray"><i class="ti ti-database"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="es-total-general">0</div>
-              <div class="stat-lbl">Vehículos registrados (general)</div>
-            </div>
-          </div>
-        </div>
-
         <div class="chart-grid" id="estad-chart-grid">
-          <div class="chart-card full">
-            <div class="chart-card-title">Entradas y salidas por día</div>
-            <div class="chart-card-sub">Volumen diario de vehículos dentro del periodo seleccionado</div>
-            <div class="chart-canvas-wrap"><canvas id="chart-entradas-dia"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-card-title">Tipo de operación</div>
-            <div class="chart-card-sub">Cargue, descargue o ambos</div>
-            <div class="chart-canvas-wrap short"><canvas id="chart-tipo"></canvas></div>
-          </div>
           <div class="chart-card">
             <div class="chart-card-title">Vehículos por operador</div>
             <div class="chart-card-sub">Entradas registradas por cada operador</div>
             <div class="chart-canvas-wrap short"><canvas id="chart-operador"></canvas></div>
           </div>
           <div class="chart-card">
-            <div class="chart-card-title">Tiempo promedio en patio por día</div>
-            <div class="chart-card-sub">Minutos promedio entre entrada y salida</div>
-            <div class="chart-canvas-wrap short"><canvas id="chart-tiempo-patio"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-card-title">Vehículos por canal</div>
-            <div class="chart-card-sub">Distribución por canal (MQ / 3PD)</div>
-            <div class="chart-canvas-wrap short"><canvas id="chart-canal"></canvas></div>
+            <div class="chart-card-title">Diferencia entre turnos — hoy</div>
+            <div class="chart-card-sub" id="s-turno-diff-sub">Vehículos atendidos por cada operador en el día</div>
+            <div class="chart-canvas-wrap short"><canvas id="chart-turnos-hoy"></canvas></div>
           </div>
           <div class="chart-card full">
-            <div class="chart-card-title">Franja horaria</div>
-            <div class="chart-card-sub">Entradas de vehículos por hora del día, dentro del periodo seleccionado</div>
-            <div class="chart-canvas-wrap"><canvas id="chart-franja-horaria"></canvas></div>
-          </div>
-          <div class="chart-card">
             <div class="chart-card-title">Muelles más usados — general</div>
             <div class="chart-card-sub">Cantidad de veces que se usó cada muelle</div>
-            <div class="chart-canvas-wrap short"><canvas id="chart-muelles-general"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-card-title">Tiempo promedio en muelle por día</div>
-            <div class="chart-card-sub">Minutos promedio dentro del muelle</div>
-            <div class="chart-canvas-wrap short"><canvas id="chart-tiempo-muelle"></canvas></div>
+            <div class="chart-canvas-wrap"><canvas id="chart-muelles-general"></canvas></div>
           </div>
         </div>
         <div class="chart-grid" style="margin-top:18px;">
-          <div class="chart-card">
-            <div class="chart-card-title">Promedio por tipo</div>
-            <div class="chart-card-sub">Promedio de tiempo en patio y muelle por tipo (Cargue / Descargue / Ambos)</div>
-            <div class="table-wrap" style="margin-top:8px;">
-              <div id="estad-por-tipo-body">Cargando…</div>
-            </div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-card-title">Promedio por canal</div>
-            <div class="chart-card-sub">Promedio de tiempo en patio por canal (MQ / 3PD)</div>
-            <div class="table-wrap" style="margin-top:8px;">
-              <div id="estad-por-canal-body">Cargando…</div>
-            </div>
-          </div>
           <div class="chart-card full">
             <div class="chart-card-title">Muelles más usados por operario</div>
             <div class="chart-card-sub">Muelle preferido de cada operario y cuántas veces lo usó</div>
@@ -1271,7 +1261,7 @@ function updateSidebarCount() {
   if (el) el.textContent = records.length + ' registro' + (records.length !== 1 ? 's' : '');
 }
 function refreshActiveView() {
-  if (document.getElementById('view-dashboard').classList.contains('active'))  renderDashboard();
+  if (document.getElementById('view-dashboard').classList.contains('active'))  { renderDashboard(); renderDashboardPeriodo(); }
   if (document.getElementById('view-hoy').classList.contains('active'))       renderHoy();
   if (document.getElementById('view-registros').classList.contains('active'))  renderRegistros();
   if (document.getElementById('view-estadisticas').classList.contains('active')) renderEstadisticas();
@@ -1307,7 +1297,7 @@ function showView(v) {
   var topbarTitle = document.getElementById('topbar-title');
   if (topbarTitle) topbarTitle.textContent = titles[v] || v;
   if (v === 'registros') renderRegistros();
-  if (v === 'dashboard')  renderDashboard();
+  if (v === 'dashboard')  { renderDashboard(); setPeriodoDashboard(dashPeriodoActual); }
   if (v === 'hoy') renderHoy();
   if (v === 'estadisticas') setPeriodoEstadisticas(estadPeriodoActual);
   closeSidebar(); // en móvil, al elegir una sección se cierra el menú
@@ -1351,19 +1341,6 @@ function puedeDespachar(r) {
 // los  de portería (esa muestra "vehículos en patio ahora" con acciones de
 // registrar salida/editar). Aquí solo se leen y resumen los datos, sin botones de acción.
 function renderDashboard() {
-  var hoyStr = today();
-  var entradasHoy = records.filter(function(r){ return r.horaEntrada && r.horaEntrada.slice(0,10) === hoyStr; });
-  var salidasHoy  = records.filter(function(r){ return r.horaSalida  && r.horaSalida.slice(0,10)  === hoyStr; });
-  var tiemposHoy  = entradasHoy.filter(function(r){ return r.horaSalida; }).map(function(r){
-    return (new Date(r.horaSalida) - new Date(r.horaEntrada)) / 60000;
-  });
-  var promedioHoy = tiemposHoy.length ? Math.round(tiemposHoy.reduce(function(a,b){return a+b;},0) / tiemposHoy.length) : 0;
-
-  document.getElementById('s-total').textContent   = entradasHoy.length;
-  document.getElementById('s-salidas').textContent = salidasHoy.length;
-  document.getElementById('s-promedio').textContent = promedioHoy >= 60
-    ? Math.floor(promedioHoy/60) + 'h ' + (promedioHoy%60) + 'min' : promedioHoy + ' min';
-
   // Patio/muelle: estado actual, no depende del día (cualquier vehículo sin salida sigue contando)
   document.getElementById('s-patio').textContent   = records.filter(function(r){ return !r.horaSalida && r.ubicacion !== 'Muelle'; }).length;
   document.getElementById('s-muelle').textContent  = records.filter(function(r){ return !r.horaSalida && (r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0); }).length;
@@ -1380,47 +1357,6 @@ function renderDashboard() {
   } else {
     bannerAlerta.style.display = 'none';
   }
-
-  // Diferencia entre turnos de hoy: se usa el operador que registró la entrada como
-  // referencia del turno, ya que cada turno lo cubre un operador distinto.
-  var porOperadorHoy = {};
-  entradasHoy.forEach(function(r){ var op = r.operadorEntrada || '—'; porOperadorHoy[op] = (porOperadorHoy[op]||0) + 1; });
-  var opLabels = Object.keys(porOperadorHoy).sort(function(a,b){ return porOperadorHoy[b]-porOperadorHoy[a]; });
-  var subEl = document.getElementById('s-turno-diff-sub');
-  if (opLabels.length >= 2) {
-    var diff = porOperadorHoy[opLabels[0]] - porOperadorHoy[opLabels[1]];
-    subEl.textContent = opLabels[0] + ' (' + porOperadorHoy[opLabels[0]] + ') vs. ' + opLabels[1] + ' (' + porOperadorHoy[opLabels[1]] + ') — diferencia de ' + diff;
-  } else if (opLabels.length === 1) {
-    subEl.textContent = 'Solo ' + opLabels[0] + ' ha registrado entradas hoy (' + porOperadorHoy[opLabels[0]] + ')';
-  } else {
-    subEl.textContent = 'Aún no hay entradas registradas hoy';
-  }
-  renderChart('chart-turnos-hoy', {
-    type: 'bar',
-    data: { labels: opLabels, datasets: [{ label: 'Entradas hoy', data: opLabels.map(function(k){ return porOperadorHoy[k]; }), backgroundColor: ESTAD_COLORS.teal, borderRadius: 4 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
-  });
-
-  // Entradas por hora — hoy
-  var porHora = new Array(24).fill(0);
-  entradasHoy.forEach(function(r){ var h = new Date(r.horaEntrada).getHours(); porHora[h]++; });
-  renderChart('chart-horas-hoy', {
-    type: 'bar',
-    data: { labels: porHora.map(function(_,i){ return i + ':00'; }), datasets: [{ label: 'Entradas', data: porHora, backgroundColor: ESTAD_COLORS.azul, borderRadius: 3 }] },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        datalabels: {
-          display: function(ctx){ return ctx.dataset.data[ctx.dataIndex] > 0; },
-          anchor: 'center', align: 'center',
-          color: '#fff', font: { size: 10, weight: '600' },
-          formatter: function(v){ return v; }
-        }
-      },
-      scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { ticks: { autoSkip: true, maxTicksLimit: 12, font: { size: 10 } } } }
-    }
-  });
 
   // Últimas entradas registradas (informativo, sin acciones)
   var ultimas = records.slice(0, 8);
@@ -1658,62 +1594,86 @@ function cargarFbConfigGuardada() {
   } catch(e) {}
 }
 
-/* ══════════ ESTADÍSTICAS ══════════ */
+/* ══════════ ESTADÍSTICAS / PERIODOS ══════════ */
 var estadPeriodoActual = 'hoy';
+var dashPeriodoActual = 'hoy';
 var estadCharts = {};
 var ESTAD_COLORS = {
   azul: '#185FA5', azulClaro: '#B5D4F4', verde: '#3B6D11', verdeClaro: '#EAF3DE',
   ambar: '#854F0B', ambarClaro: '#FAEEDA', teal: '#0F6E56', tealClaro: '#E1F5EE', gris: '#888780'
 };
 
-function setPeriodoEstadisticas(p, btn) {
-  estadPeriodoActual = p;
-  // limpiar estado visual
-  document.querySelectorAll('#view-estadisticas .filter-pills .pill').forEach(function(el){ el.classList.remove('active'); });
-  // Si no se pasó el botón, buscar el elemento que lo contiene
+// Función genérica de selección de periodo, reutilizada por el filtro de
+// Estadísticas (de operarios) y el filtro de vehículos por periodo del Dashboard.
+function setPeriodo(opts) {
+  opts.setActual(opts.p);
+  document.querySelectorAll(opts.viewSelector + ' .filter-pills .pill').forEach(function(el){ el.classList.remove('active'); });
+  var btn = opts.btn;
   if (!btn) {
-    document.querySelectorAll('#view-estadisticas .filter-pills .pill').forEach(function(el){
+    document.querySelectorAll(opts.viewSelector + ' .filter-pills .pill').forEach(function(el){
       var oc = el.getAttribute('onclick') || '';
-      if (oc.indexOf("'" + p + "'") !== -1) btn = el;
+      if (oc.indexOf("'" + opts.p + "'") !== -1) btn = el;
     });
   }
   if (btn) btn.classList.add('active');
-  var custom = document.getElementById('estad-rango-custom');
-  if (p === 'personalizado') {
+  var custom = document.getElementById(opts.customId);
+  if (opts.p === 'personalizado') {
     custom.style.display = 'flex';
-    if (!document.getElementById('estad-hasta').value) {
-      document.getElementById('estad-hasta').value = today();
-      document.getElementById('estad-desde').value = today();
+    if (!document.getElementById(opts.hastaId).value) {
+      document.getElementById(opts.hastaId).value = today();
+      document.getElementById(opts.desdeId).value = today();
     }
     return; // esperar a que el usuario pulse "Aplicar"
   }
   custom.style.display = 'none';
-  renderEstadisticas();
+  opts.render();
+}
+
+function setPeriodoEstadisticas(p, btn) {
+  setPeriodo({
+    p: p, btn: btn,
+    setActual: function(v){ estadPeriodoActual = v; },
+    viewSelector: '#view-estadisticas',
+    customId: 'estad-rango-custom', desdeId: 'estad-desde', hastaId: 'estad-hasta',
+    render: renderEstadisticas
+  });
+}
+
+function setPeriodoDashboard(p, btn) {
+  setPeriodo({
+    p: p, btn: btn,
+    setActual: function(v){ dashPeriodoActual = v; },
+    viewSelector: '#view-dashboard',
+    customId: 'dash-rango-custom', desdeId: 'dash-desde', hastaId: 'dash-hasta',
+    render: renderDashboardPeriodo
+  });
 }
 
 // Devuelve {desde, hasta} como objetos Date que delimitan el periodo elegido.
-function getRangoEstadisticas() {
+function getRangoPeriodo(periodoActual, desdeId, hastaId) {
   var hasta = new Date(); hasta.setHours(23,59,59,999);
   var desde = new Date(); desde.setHours(0,0,0,0);
-  if (estadPeriodoActual === '3dias') {
+  if (periodoActual === '3dias') {
     desde.setDate(desde.getDate() - 2);
-  } else if (estadPeriodoActual === 'semana') {
+  } else if (periodoActual === 'semana') {
     desde.setDate(desde.getDate() - 6);
-  } else if (estadPeriodoActual === 'mes') {
+  } else if (periodoActual === 'mes') {
     desde.setDate(desde.getDate() - 29);
-  } else if (estadPeriodoActual === 'todo') {
+  } else if (periodoActual === 'todo') {
     desde = records.length
       ? new Date(records.reduce(function(min, r){ return r.horaEntrada && r.horaEntrada < min ? r.horaEntrada : min; }, today() + 'T23:59'))
       : new Date(0);
     desde.setHours(0,0,0,0);
-  } else if (estadPeriodoActual === 'personalizado') {
-    var dIn = document.getElementById('estad-desde').value;
-    var hIn = document.getElementById('estad-hasta').value;
+  } else if (periodoActual === 'personalizado') {
+    var dIn = document.getElementById(desdeId).value;
+    var hIn = document.getElementById(hastaId).value;
     desde = dIn ? new Date(dIn + 'T00:00:00') : new Date(0);
     hasta = hIn ? new Date(hIn + 'T23:59:59') : hasta;
   }
   return { desde: desde, hasta: hasta };
 }
+function getRangoEstadisticas() { return getRangoPeriodo(estadPeriodoActual, 'estad-desde', 'estad-hasta'); }
+function getRangoDashboard() { return getRangoPeriodo(dashPeriodoActual, 'dash-desde', 'dash-hasta'); }
 
 function getRecordsEnRango(rango) {
   return records.filter(function(r) {
@@ -1797,15 +1757,128 @@ function getLocationDurations(r) {
   return { patio: Math.round(patio), muelle: Math.round(muelle) };
 }
 
+// Estadísticas de operarios: vehículos por operador, diferencia entre turnos
+// de hoy, y muelles más usados (general y por operario). Todo lo relacionado
+// con vehículos por periodo vive ahora en el Dashboard (renderDashboardPeriodo).
 function renderEstadisticas() {
-  // Nota: antes había un "return" aquí si Chart.js no estaba listo, lo que dejaba
-  // en blanco TODA la pestaña (tarjetas, tablas y gráficas) hasta que el usuario
-  // hiciera otra acción (cambiar de pestaña de nuevo, tocar un filtro, etc.) y
-  // para ese momento Chart.js ya hubiera terminado de cargar. Ahora las tarjetas
-  // y tablas se calculan siempre; solo las gráficas se omiten si Chart.js no está
-  // disponible (renderChart() ya valida eso internamente), y si Chart.js llega a
-  // cargar después, reintentamos automáticamente sin que el usuario tenga que hacer nada.
   var rango = getRangoEstadisticas();
+  var recs = getRecordsEnRango(rango);
+
+  // Diferencia entre turnos de hoy: se usa el operador que registró la entrada como
+  // referencia del turno, ya que cada turno lo cubre un operador distinto. Esta tarjeta
+  // siempre es sobre "hoy", independiente del periodo seleccionado en esta pestaña.
+  var hoyStrOp = today();
+  var entradasHoyOp = records.filter(function(r){ return r.horaEntrada && r.horaEntrada.slice(0,10) === hoyStrOp; });
+  var porOperadorHoy = {};
+  entradasHoyOp.forEach(function(r){ var op = r.operadorEntrada || '—'; porOperadorHoy[op] = (porOperadorHoy[op]||0) + 1; });
+  var opHoyLabels = Object.keys(porOperadorHoy).sort(function(a,b){ return porOperadorHoy[b]-porOperadorHoy[a]; });
+  var subElTurno = document.getElementById('s-turno-diff-sub');
+  if (opHoyLabels.length >= 2) {
+    var diffTurno = porOperadorHoy[opHoyLabels[0]] - porOperadorHoy[opHoyLabels[1]];
+    subElTurno.textContent = opHoyLabels[0] + ' (' + porOperadorHoy[opHoyLabels[0]] + ') vs. ' + opHoyLabels[1] + ' (' + porOperadorHoy[opHoyLabels[1]] + ') — diferencia de ' + diffTurno;
+  } else if (opHoyLabels.length === 1) {
+    subElTurno.textContent = 'Solo ' + opHoyLabels[0] + ' ha registrado entradas hoy (' + porOperadorHoy[opHoyLabels[0]] + ')';
+  } else {
+    subElTurno.textContent = 'Aún no hay entradas registradas hoy';
+  }
+  renderChart('chart-turnos-hoy', {
+    type: 'bar',
+    data: { labels: opHoyLabels, datasets: [{ label: 'Entradas hoy', data: opHoyLabels.map(function(k){ return porOperadorHoy[k]; }), backgroundColor: ESTAD_COLORS.teal, borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+  });
+
+  var grid = document.getElementById('estad-chart-grid');
+  if (grid) grid.style.opacity = recs.length ? '1' : '0.45';
+
+  // ── Por operador ──
+  var porOperador = {};
+  recs.forEach(function(r){ var op = r.operadorEntrada || '—'; porOperador[op] = (porOperador[op]||0) + 1; });
+  var opLabels = Object.keys(porOperador).sort(function(a,b){ return porOperador[b]-porOperador[a]; });
+  renderChart('chart-operador', {
+    type: 'bar',
+    data: {
+      labels: opLabels,
+      datasets: [{ label: 'Vehículos atendidos', data: opLabels.map(function(k){ return porOperador[k]; }), backgroundColor: ESTAD_COLORS.teal, borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+
+  // ── Muelles más usados (general) ──
+  // Solo se cuentan destinos que son un muelle (no "Patio"), usando el mismo
+  // criterio que ya usa el resto del panel: destino que empieza con "Muelle".
+  var porMuelle = {};
+  recs.forEach(function(r) {
+    var dest = getDestino(r);
+    if (dest.indexOf('Muelle') !== 0) return;
+    porMuelle[dest] = (porMuelle[dest] || 0) + 1;
+  });
+  var muelleLabels = Object.keys(porMuelle).sort(function(a,b){ return porMuelle[b]-porMuelle[a]; });
+  renderChart('chart-muelles-general', {
+    type: 'bar',
+    data: {
+      labels: muelleLabels,
+      datasets: [{ label: 'Veces usado', data: muelleLabels.map(function(k){ return porMuelle[k]; }), backgroundColor: ESTAD_COLORS.teal, borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+
+  // ── Muelles más usados por operario ──
+  try {
+    var porOperarioMuelle = {}; // { operario: { muelle: count, ... } }
+    recs.forEach(function(r) {
+      var dest = getDestino(r);
+      if (dest.indexOf('Muelle') !== 0) return;
+      var op = r.operadorEntrada || '—';
+      if (!porOperarioMuelle[op]) porOperarioMuelle[op] = {};
+      porOperarioMuelle[op][dest] = (porOperarioMuelle[op][dest] || 0) + 1;
+    });
+    var operariosConMuelle = Object.keys(porOperarioMuelle);
+    var opMuelleHtml = '';
+    if (!operariosConMuelle.length) {
+      opMuelleHtml = '<div style="color:var(--text-3);">No hay datos de muelle para el periodo.</div>';
+    } else {
+      // Ordenar operarios por total de usos de muelle, de mayor a menor.
+      operariosConMuelle.sort(function(a, b) {
+        var totalA = Object.keys(porOperarioMuelle[a]).reduce(function(s,k){ return s + porOperarioMuelle[a][k]; }, 0);
+        var totalB = Object.keys(porOperarioMuelle[b]).reduce(function(s,k){ return s + porOperarioMuelle[b][k]; }, 0);
+        return totalB - totalA;
+      });
+      opMuelleHtml = '<table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr>' +
+        '<th style="text-align:left;padding:8px;border-bottom:1px solid var(--border)">Operario</th>' +
+        '<th style="text-align:left;padding:8px;border-bottom:1px solid var(--border)">Muelle más usado</th>' +
+        '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Veces</th>' +
+        '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Total usos de muelle</th>' +
+        '</tr></thead><tbody>';
+      operariosConMuelle.forEach(function(op) {
+        var muelles = porOperarioMuelle[op];
+        var muelleKeys = Object.keys(muelles).sort(function(a,b){ return muelles[b]-muelles[a]; });
+        var top = muelleKeys[0];
+        var totalOp = muelleKeys.reduce(function(s,k){ return s + muelles[k]; }, 0);
+        opMuelleHtml += '<tr><td style="padding:8px">' + op + '</td><td style="padding:8px">' + top + '</td>' +
+          '<td style="padding:8px;text-align:right">' + muelles[top] + '</td>' +
+          '<td style="padding:8px;text-align:right">' + totalOp + '</td></tr>';
+      });
+      opMuelleHtml += '</tbody></table>';
+    }
+    document.getElementById('estad-muelles-operario-body').innerHTML = opMuelleHtml;
+  } catch(e) {
+    console.error('Error al generar tabla de muelles por operario:', e);
+    document.getElementById('estad-muelles-operario-body').textContent = 'Error';
+  }
+}
+
+// Estadísticas de vehículos por periodo, mostradas en el Dashboard: entradas,
+// salidas, tiempos en patio/muelle, tipo de operación, canal y franja horaria.
+function renderDashboardPeriodo() {
+  var rango = getRangoDashboard();
   var recs = getRecordsEnRango(rango);
   var dias = buildDayBuckets(rango.desde, rango.hasta);
 
@@ -1833,12 +1906,8 @@ function renderEstadisticas() {
   document.getElementById('es-pico').textContent = porDiaCount[picoIdx] > 0
     ? fmtDiaCorto(dias[picoIdx]) + ' (' + porDiaCount[picoIdx] + ')' : '—';
 
-  var grid = document.getElementById('estad-chart-grid');
-  if (!totalEntradas) {
-    grid.style.opacity = '0.45';
-  } else {
-    grid.style.opacity = '1';
-  }
+  var grid = document.getElementById('dash-chart-grid');
+  if (grid) grid.style.opacity = totalEntradas ? '1' : '0.45';
 
   // ── Entradas y salidas por día (entradas divididas en Patio / Muelle) ──
   var salidasPorDia = dias.map(function(dStr){
@@ -1895,23 +1964,6 @@ function renderEstadisticas() {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } }
-    }
-  });
-
-  // ── Por operador ──
-  var porOperador = {};
-  recs.forEach(function(r){ var op = r.operadorEntrada || '—'; porOperador[op] = (porOperador[op]||0) + 1; });
-  var opLabels = Object.keys(porOperador).sort(function(a,b){ return porOperador[b]-porOperador[a]; });
-  renderChart('chart-operador', {
-    type: 'bar',
-    data: {
-      labels: opLabels,
-      datasets: [{ label: 'Vehículos atendidos', data: opLabels.map(function(k){ return porOperador[k]; }), backgroundColor: ESTAD_COLORS.teal, borderRadius: 4 }]
-    },
-    options: {
-      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
     }
   });
 
@@ -2043,29 +2095,6 @@ function renderEstadisticas() {
     }
   });
 
-  // ── Muelles más usados (general) ──
-  // Solo se cuentan destinos que son un muelle (no "Patio"), usando el mismo
-  // criterio que ya usa el resto del panel: destino que empieza con "Muelle".
-  var porMuelle = {};
-  recs.forEach(function(r) {
-    var dest = getDestino(r);
-    if (dest.indexOf('Muelle') !== 0) return;
-    porMuelle[dest] = (porMuelle[dest] || 0) + 1;
-  });
-  var muelleLabels = Object.keys(porMuelle).sort(function(a,b){ return porMuelle[b]-porMuelle[a]; });
-  renderChart('chart-muelles-general', {
-    type: 'bar',
-    data: {
-      labels: muelleLabels,
-      datasets: [{ label: 'Veces usado', data: muelleLabels.map(function(k){ return porMuelle[k]; }), backgroundColor: ESTAD_COLORS.teal, borderRadius: 4 }]
-    },
-    options: {
-      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
-    }
-  });
-
   // ── Tiempo promedio en muelle por día ──
   var muellePorDia = dias.map(function(dStr){
     var recsDia = recs.filter(function(r){ return r.horaSalida && r.horaEntrada.slice(0,10) === dStr; });
@@ -2088,50 +2117,6 @@ function renderEstadisticas() {
       scales: { y: { beginAtZero: true } }
     }
   });
-
-  // ── Muelles más usados por operario ──
-  try {
-    var porOperarioMuelle = {}; // { operario: { muelle: count, ... } }
-    recs.forEach(function(r) {
-      var dest = getDestino(r);
-      if (dest.indexOf('Muelle') !== 0) return;
-      var op = r.operadorEntrada || '—';
-      if (!porOperarioMuelle[op]) porOperarioMuelle[op] = {};
-      porOperarioMuelle[op][dest] = (porOperarioMuelle[op][dest] || 0) + 1;
-    });
-    var operariosConMuelle = Object.keys(porOperarioMuelle);
-    var opMuelleHtml = '';
-    if (!operariosConMuelle.length) {
-      opMuelleHtml = '<div style="color:var(--text-3);">No hay datos de muelle para el periodo.</div>';
-    } else {
-      // Ordenar operarios por total de usos de muelle, de mayor a menor.
-      operariosConMuelle.sort(function(a, b) {
-        var totalA = Object.keys(porOperarioMuelle[a]).reduce(function(s,k){ return s + porOperarioMuelle[a][k]; }, 0);
-        var totalB = Object.keys(porOperarioMuelle[b]).reduce(function(s,k){ return s + porOperarioMuelle[b][k]; }, 0);
-        return totalB - totalA;
-      });
-      opMuelleHtml = '<table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr>' +
-        '<th style="text-align:left;padding:8px;border-bottom:1px solid var(--border)">Operario</th>' +
-        '<th style="text-align:left;padding:8px;border-bottom:1px solid var(--border)">Muelle más usado</th>' +
-        '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Veces</th>' +
-        '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Total usos de muelle</th>' +
-        '</tr></thead><tbody>';
-      operariosConMuelle.forEach(function(op) {
-        var muelles = porOperarioMuelle[op];
-        var muelleKeys = Object.keys(muelles).sort(function(a,b){ return muelles[b]-muelles[a]; });
-        var top = muelleKeys[0];
-        var totalOp = muelleKeys.reduce(function(s,k){ return s + muelles[k]; }, 0);
-        opMuelleHtml += '<tr><td style="padding:8px">' + op + '</td><td style="padding:8px">' + top + '</td>' +
-          '<td style="padding:8px;text-align:right">' + muelles[top] + '</td>' +
-          '<td style="padding:8px;text-align:right">' + totalOp + '</td></tr>';
-      });
-      opMuelleHtml += '</tbody></table>';
-    }
-    document.getElementById('estad-muelles-operario-body').innerHTML = opMuelleHtml;
-  } catch(e) {
-    console.error('Error al generar tabla de muelles por operario:', e);
-    document.getElementById('estad-muelles-operario-body').textContent = 'Error';
-  }
 }
 
 /* ══════════ INIT ══════════ */
