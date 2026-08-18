@@ -502,8 +502,14 @@
     <div class="sidebar-brand">
       <div class="brand-icon"><i class="ti ti-chart-histogram"></i></div>
       <div class="brand-text">
-        <strong>Portería</strong>
+        <strong id="brand-titulo">Portería</strong>
         <span>Panel Supervisor</span>
+      </div>
+    </div>
+    <div style="padding:10px 12px; border-bottom:0.5px solid var(--border);">
+      <div style="display:flex; background:var(--surface-2); border-radius:var(--radius-md); padding:3px; gap:3px;">
+        <button id="btn-bodega-j3" onclick="cambiarBodega('J3')" style="flex:1; border:none; background:none; padding:7px 0; border-radius:6px; font-size:12.5px; font-weight:600; cursor:pointer; transition:all .15s;">Bodega J3</button>
+        <button id="btn-bodega-j4" onclick="cambiarBodega('J4')" style="flex:1; border:none; background:none; padding:7px 0; border-radius:6px; font-size:12.5px; font-weight:600; cursor:pointer; transition:all .15s;">Bodega J4</button>
       </div>
     </div>
     <nav class="nav">
@@ -969,8 +975,38 @@ var selectedId      = null;
 var firebaseActive  = false;
 var _fbSave; // se mantiene por compatibilidad con la app de portería, pero este panel nunca lo llama
 
-var RECORDS_KEY  = 'porteria_records_v1';
-var FB_CFG_KEY   = 'porteria_fb_cfg_v1';
+var RECORDS_KEY, FB_CFG_KEY, FB_PATH;
+var BODEGA_LS_KEY = 'porteria_estad_bodega_activa';
+function resolverBodegaActiva() {
+  var qp = new URLSearchParams(location.search).get('bodega');
+  if (qp === 'J3' || qp === 'J4') {
+    try { localStorage.setItem(BODEGA_LS_KEY, qp); } catch(e) {}
+    return qp;
+  }
+  try {
+    var saved = localStorage.getItem(BODEGA_LS_KEY);
+    if (saved === 'J3' || saved === 'J4') return saved;
+  } catch(e) {}
+  return 'J3';
+}
+var currentBodega = resolverBodegaActiva();
+function aplicarClavesBodega() {
+  if (currentBodega === 'J4') {
+    RECORDS_KEY = 'porteria_j4_records_v1';
+    FB_CFG_KEY  = 'porteria_j4_fb_cfg_v1';
+    FB_PATH     = 'porteria_j4/registros';
+  } else {
+    RECORDS_KEY = 'porteria_records_v1';
+    FB_CFG_KEY  = 'porteria_fb_cfg_v1';
+    FB_PATH     = 'porteria/registros';
+  }
+}
+aplicarClavesBodega();
+function cambiarBodega(b) {
+  if (b === currentBodega) return;
+  try { localStorage.setItem(BODEGA_LS_KEY, b); } catch(e) {}
+  location.href = location.pathname + '?bodega=' + b;
+}
 
 /* ══════════ STORAGE LOCAL (respaldo de lectura) ══════════ */
 function loadLocal() {
@@ -1046,7 +1082,7 @@ function iniciarFirebase(cfg) {
     'try {',
     '  var app = initializeApp(' + JSON.stringify(cfg) + ', "porteria-supervisor-" + Date.now());',
     '  var db  = getDatabase(app);',
-    '  var regRef = ref(db, "porteria/registros");',
+    '  var regRef = ref(db, ' + JSON.stringify(FB_PATH) + ');',
     '  onValue(regRef, function(snap) {',
     '    var data = snap.val();',
     '    var list = data ? Object.values(data) : [];',
@@ -2099,6 +2135,23 @@ function renderEstadisticas() {
 }
 
 /* ══════════ INIT ══════════ */
+function actualizarUiBodega() {
+  var j3 = document.getElementById('btn-bodega-j3');
+  var j4 = document.getElementById('btn-bodega-j4');
+  var titulo = document.getElementById('brand-titulo');
+  if (!j3 || !j4) return;
+  if (currentBodega === 'J4') {
+    j4.style.background = 'var(--surface)'; j4.style.color = 'var(--blue-600)'; j4.style.boxShadow = 'var(--shadow-sm)';
+    j3.style.background = 'none'; j3.style.color = 'var(--text-2)'; j3.style.boxShadow = 'none';
+    if (titulo) titulo.textContent = 'Portería J4';
+    document.title = 'Portería J4 — Panel Supervisor';
+  } else {
+    j3.style.background = 'var(--surface)'; j3.style.color = 'var(--blue-600)'; j3.style.boxShadow = 'var(--shadow-sm)';
+    j4.style.background = 'none'; j4.style.color = 'var(--text-2)'; j4.style.boxShadow = 'none';
+    if (titulo) titulo.textContent = 'Portería J3';
+    document.title = 'Portería J3 — Panel Supervisor';
+  }
+}
 (function init() {
   // Fecha en topbar
   var d = new Date();

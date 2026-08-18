@@ -10,7 +10,7 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --blue-50: #E6F1FB; --blue-100: #B5D4F4; --blue-600: #185FA5; --blue-800: #0C447C;
+    --blue-50: #FDECDD; --blue-100: #F7C79A; --blue-600: #C2540A; --blue-800: #8F3D07;
     --green-50: #EAF3DE; --green-600: #3B6D11; --green-800: #27500A;
     --amber-50: #FAEEDA; --amber-600: #854F0B; --amber-800: #633806;
     --red-50: #FCEBEB; --red-600: #A32D2D;
@@ -210,6 +210,7 @@
   .btn-sm i { font-size: 13px; }
   .btn-icon { padding: 7px; }
   .muelles-grid {
+    /* <<< AQUÍ: columnas del grid de tarjetas de puertos (visual, no depende de NUM_MUELLES en JS) */
     display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 26px;
   }
   .muelle-card {
@@ -536,9 +537,6 @@
       <button class="nav-item" onclick="showView('estadisticas')">
         <i class="ti ti-chart-histogram"></i> Estadísticas
       </button>
-      <a class="nav-item" href="bodega-J4.html" style="text-decoration:none;">
-        <i class="ti ti-building-warehouse"></i> Bodega J4
-      </a>
       <div class="nav-label">Herramientas</div>
       <button class="nav-item" onclick="showView('exportar')">
         <i class="ti ti-download"></i> Exportar datos
@@ -663,7 +661,8 @@
           </div>
         </div>
         <div class="section-header">
-          <div class="section-title">Muelles (1 a 8)</div>
+          <!-- <<< AQUÍ: el texto "(1 a N)" se rellena solo desde NUM_MUELLES en el script de abajo -->
+          <div class="section-title" id="muelles-titulo">Muelles</div>
           <div class="toolbar" style="margin-bottom:0; gap:8px;">
             <span style="font-size:12px; color:var(--text-3);" id="muelles-resumen"></span>
           </div>
@@ -723,15 +722,13 @@
 
                     <label>Número de muelle</label>
 
+                    <!-- <<< AQUÍ: opciones de respaldo (se ven un instante antes de que el JS las
+                         reemplace usando NUM_MUELLES). Si cambias NUM_MUELLES arriba en el script,
+                         agrega/quita <option> aquí también para que coincidan -->
                     <select id="f-numeroMuelle">
                         <option>1</option>
                         <option>2</option>
                         <option>3</option>
-                        <option>4</option>
-                        <option>5</option>
-                        <option>6</option>
-                        <option>7</option>
-                        <option>8</option>
                     </select>
 
                     <label>Bahía</label>
@@ -953,7 +950,7 @@
           </div>
         </div>
         <div class="export-card">
-          <h3><i class="ti ti-file-code" style="font-size:15px;vertical-align:-2px;margin-right:6px;color:#185FA5"></i>Exportar a JSON</h3>
+          <h3><i class="ti ti-file-code" style="font-size:15px;vertical-align:-2px;margin-right:6px;color:#C2540A"></i>Exportar a JSON</h3>
           <p>Copia de seguridad completa en formato JSON para importar en otro sistema.</p>
           <div class="export-row">
             <button class="btn btn-primary" onclick="exportJSON()"><i class="ti ti-download"></i> Descargar JSON</button>
@@ -1062,15 +1059,12 @@
       </select>
       <div id="muelle-options-edit" style="display:none">
         <label>Número de muelle</label>
+        <!-- <<< AQUÍ: mismas opciones de respaldo que f-numeroMuelle — si cambias NUM_MUELLES,
+             actualiza también este bloque para que coincida -->
         <select id="e-numeroMuelle">
           <option>1</option>
           <option>2</option>
           <option>3</option>
-          <option>4</option>    
-          <option>5</option>
-          <option>6</option>  
-          <option>7</option>
-          <option>8</option>
         </select>
         <label>Bahía</label>
         <input type="text" id="e-bahia" value="A" readonly disabled style="background:var(--surface-3); color:var(--text-2); cursor:not-allowed;">
@@ -1165,19 +1159,25 @@ var currentOperator = null;
 var firebaseActive  = false;
 var _fbSave, _fbDelete, _fbDeleteAll; // funciones Firebase inyectadas dinámicamente
 
-var OP_KEY       = 'porteria_op_v1';
-var RECORDS_KEY  = 'porteria_records_v1';
-var FB_CFG_KEY   = 'porteria_fb_cfg_v1';
-var TURNO_KEY    = 'porteria_turno_v1';
+var OP_KEY       = 'porteria_j4_op_v1';
+var RECORDS_KEY  = 'porteria_j4_records_v1';
+var FB_CFG_KEY   = 'porteria_j4_fb_cfg_v1';
+var TURNO_KEY    = 'porteria_j4_turno_v1';
 
 var turnoActual  = null; // { operador, inicio }
 
 var OPERADORES = [
-  'Luis Milanes',
-  'Gerardo García',
-  'Tatiana Marentes',
   'Seguridad',
+  'Diego Colmenares',
 ];
+
+// ══════════════════════════════════════════════════════════════════
+// CONFIG: cantidad de puertos/muelles disponibles.
+// Para cambiar el número de puertos (ej. volver a 8, o pasar a 5),
+// solo modifica este valor — todo el resto del código (grid, selects
+// de asignación, tarjetas) se ajusta automáticamente.
+// ══════════════════════════════════════════════════════════════════
+var NUM_MUELLES = 3;
 
 /* ══════════ STORAGE LOCAL ══════════ */
 function loadLocal() {
@@ -1287,10 +1287,10 @@ function iniciarFirebase(cfg) {
     'try {',
     '  var app = initializeApp(' + JSON.stringify(cfg) + ', "porteria-" + Date.now());',
     '  var db  = getDatabase(app);',
-    '  var regRef = ref(db, "porteria/registros");',
-    '  window._fbSave = function(rec) { return set(ref(db,"porteria/registros/"+rec.id), rec); };',
-    '  window._fbDelete = function(id) { return remove(ref(db,"porteria/registros/"+id)); };',
-    '  window._fbDeleteAll = function() { return remove(ref(db,"porteria/registros")); };',
+    '  var regRef = ref(db, "porteria_j4/registros");',
+    '  window._fbSave = function(rec) { return set(ref(db,"porteria_j4/registros/"+rec.id), rec); };',
+    '  window._fbDelete = function(id) { return remove(ref(db,"porteria_j4/registros/"+id)); };',
+    '  window._fbDeleteAll = function() { return remove(ref(db,"porteria_j4/registros")); };',
     '  onValue(regRef, function(snap) {',
     '    var data = snap.val();',
     '    var list = data ? Object.values(data) : [];',
@@ -1935,14 +1935,15 @@ function getDashboardRecords() {
   });
   return ordenarPorPrioridad(enPatio);
 }
-// Devuelve, para cada muelle del 1 al 8, el vehículo activo que lo ocupa (o null si está libre)
+// Devuelve, para cada muelle del 1 a NUM_MUELLES, el vehículo activo que lo ocupa (o null si está libre)
 function getMuellesOcupacion() {
   var base = filterByOperator(records);
   var enMuelle = base.filter(function(r){
     return !r.horaSalida && (r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0);
   });
   var ocupacion = {};
-  for (var n = 1; n <= 8; n++) {
+  // <<< AQUÍ: si necesitas cambiar la cantidad de muelles, edita NUM_MUELLES arriba (no este bucle)
+  for (var n = 1; n <= NUM_MUELLES; n++) {
     ocupacion[n] = enMuelle.find(function(r){ return String(r.numeroMuelle) === String(n); }) || null;
   }
   return ocupacion;
@@ -1957,7 +1958,8 @@ function poblarSelectMuelles(selectEl, muelleActual) {
   var valorPrevio = selectEl.value;
   var html = '';
   var libres = 0;
-  for (var n = 1; n <= 8; n++) {
+  // <<< AQUÍ: si agregas/quitas opciones de puerto, este bucle ya se ajusta solo con NUM_MUELLES
+  for (var n = 1; n <= NUM_MUELLES; n++) {
     var ocupante = ocupacion[n];
     var esElActual = muelleActual != null && String(n) === String(muelleActual);
     if (!ocupante || esElActual) {
@@ -1978,7 +1980,8 @@ function renderMuellesGrid() {
   var grid = document.getElementById('muelles-grid');
   var ocupados = 0;
   var html = '';
-  for (var n = 1; n <= 8; n++) {
+  // <<< AQUÍ: las tarjetas del grid de puertos también siguen a NUM_MUELLES automáticamente
+  for (var n = 1; n <= NUM_MUELLES; n++) {
     var r = ocupacion[n];
     if (r) {
       ocupados++;
@@ -2547,7 +2550,7 @@ function cargarFbConfigGuardada() {
 var estadPeriodoActual = 'hoy';
 var estadCharts = {};
 var ESTAD_COLORS = {
-  azul: '#185FA5', azulClaro: '#B5D4F4', verde: '#3B6D11', verdeClaro: '#EAF3DE',
+  azul: '#C2540A', azulClaro: '#F7C79A', verde: '#3B6D11', verdeClaro: '#EAF3DE',
   ambar: '#854F0B', ambarClaro: '#FAEEDA', teal: '#0F6E56', tealClaro: '#E1F5EE', gris: '#888780'
 };
 
@@ -2782,6 +2785,9 @@ function renderEstadisticas() {
     fHora.min = ayerStr + 'T00:00';
     fHora.max = today() + 'T23:59';
   })();
+
+  // Título de la sección de muelles (usa NUM_MUELLES, ver constante arriba)
+  document.getElementById('muelles-titulo').textContent = 'Muelles (1 a ' + NUM_MUELLES + ')';
 
   // Cargar operador guardado
   try { currentOperator = localStorage.getItem(OP_KEY) || null; } catch(e) {}
