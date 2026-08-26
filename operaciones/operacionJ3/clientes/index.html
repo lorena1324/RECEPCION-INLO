@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portería J3 — Panel Cliente</title>
+
+<!-- Iconos + librerías externas -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+<!-- CSS compartido del proyecto -->
+<link rel="stylesheet" href="../../../css/base.css">
+<link rel="stylesheet" href="../../../css/layout.css">
+<link rel="stylesheet" href="../../../css/components.css">
+<!-- Reutiliza los estilos del panel de supervisor (cards, tablas, badges, stats-grid) -->
+<link rel="stylesheet" href="../supervisor/supervisor.css">
+<!-- Solo lo específico de esta vista -->
+<link rel="stylesheet" href="clientes.css">
+</head>
+<body class="cargando">
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon"><i class="ti ti-truck"></i></div>
+      <div class="brand-text">
+        <strong>Portería</strong>
+        <span>Pepsico · J3</span>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="sidebar-footer-row">
+        <i class="ti ti-user-circle"></i>
+        <span id="nombre-usuario">—</span>
+      </div>
+      <div class="sidebar-footer-row">
+        <div id="badge-conexion" class="badge badge-offline">
+          <i class="ti ti-plug-connected-x"></i> Sin conexión
+        </div>
+      </div>
+      <button class="btn-link" id="btn-cerrar-sesion" style="margin-top:8px;">
+        <i class="ti ti-logout"></i> Cerrar sesión
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-left">
+        <div>
+          <div class="topbar-title">Panel estadístico</div>
+          <div class="topbar-sub">Solo lectura · Operación J3 (Pepsico)</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <select id="filtro-canal">
+          <option value="">Todos los canales</option>
+          <option value="MQ">MQ</option>
+          <option value="3PD">3PD</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="content">
+
+      <!-- RESUMEN -->
+      <div class="cards-resumen">
+        <div class="card-resumen destacada">
+          <div class="card-resumen-valor" id="kpi-mejor-dia-fecha">—</div>
+          <div class="card-resumen-label"><i class="ti ti-trending-up"></i> Día con más movimiento</div>
+          <div class="card-resumen-detalle" id="kpi-mejor-dia-detalle"></div>
+        </div>
+        <div class="card-resumen">
+          <div class="card-resumen-valor" id="kpi-total-general">0</div>
+          <div class="card-resumen-label"><i class="ti ti-truck"></i> Vehículos (histórico)</div>
+        </div>
+        <div class="card-resumen">
+          <div class="card-resumen-valor" id="kpi-hoy">0</div>
+          <div class="card-resumen-label"><i class="ti ti-calendar"></i> Entradas hoy (6am–6am)</div>
+        </div>
+        <div class="card-resumen">
+          <div class="card-resumen-valor" id="kpi-patio-actual">0</div>
+          <div class="card-resumen-label"><i class="ti ti-building-warehouse"></i> En patio ahora</div>
+        </div>
+        <div class="card-resumen">
+          <div class="card-resumen-valor" id="kpi-muelle-actual">0</div>
+          <div class="card-resumen-label"><i class="ti ti-door"></i> En muelle ahora</div>
+        </div>
+        <div class="card-resumen">
+          <div class="card-resumen-valor" id="kpi-alerta">0</div>
+          <div class="card-resumen-label alerta"><i class="ti ti-alert-triangle"></i> En alerta</div>
+        </div>
+      </div>
+
+      <!-- PRIORIDADES -->
+      <div class="subtitulo">Prioridades — vehículos en patio ahora mismo</div>
+      <div class="prioridad-row">
+        <div class="prioridad-chip normal">
+          <span class="prioridad-chip-label">Normal</span>
+          <span class="prioridad-chip-valor" id="prioridad-normal">0</span>
+        </div>
+        <div class="prioridad-chip media">
+          <span class="prioridad-chip-label">Atención</span>
+          <span class="prioridad-chip-valor" id="prioridad-media">0</span>
+        </div>
+        <div class="prioridad-chip alta">
+          <span class="prioridad-chip-label">Urgente</span>
+          <span class="prioridad-chip-valor" id="prioridad-alta">0</span>
+        </div>
+      </div>
+
+      <!-- GRÁFICAS -->
+      <div class="stats-grid">
+        <div class="stat-box">
+          <h3>Tiempo promedio por tipo de operación (hoy)</h3>
+          <canvas id="chart-tipos-operacion"></canvas>
+        </div>
+        <div class="stat-box">
+          <h3>Comportamiento por franja horaria (hoy)</h3>
+          <canvas id="chart-franja-horaria"></canvas>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     clientes.js: módulo ES que trae su propio guard
+     (rolesPermitidos: ["cliente"], operacion: "J3"),
+     suscripción en vivo y todo el render de este panel.
+════════════════════════════════════════════════════ -->
+<script type="module" src="clientes.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,308 @@
+/* ============================================================
+   supervisor.css — Portería J3 · Rol Supervisor
+   Escrito desde cero (no viene del index.html monolítico).
+   TODO (limpieza futura): igual que operador.css, revisar qué
+   de esto (layout/sidebar/tabla/badges genéricos) ya cubre
+   /css/base.css, /css/layout.css o /css/components.css y quitar
+   duplicados aquí — se dejó todo por seguridad mientras se arma
+   la vista por primera vez.
+   ============================================================ */
+
+body.cargando .layout { visibility: hidden; }
+
+.cards-resumen {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.card-resumen {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.card-resumen-valor {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.card-resumen-label {
+  font-size: 13px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card-resumen-label.alerta { color: #b45309; }
+
+.card-resumen.destacada {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.card-resumen-detalle {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.subtitulo {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 24px 0 12px;
+  color: #374151;
+}
+
+.tabla-wrap { overflow-x: auto; }
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tabla th, .tabla td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13.5px;
+}
+
+.tabla th {
+  background: #f9fafb;
+  color: #6b7280;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: .03em;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-online { background: #dcfce7; color: #166534; }
+.badge-offline { background: #fee2e2; color: #991b1b; }
+
+.badge-prioridad-normal { background: #e0f2fe; color: #075985; }
+.badge-prioridad-media { background: #fef3c7; color: #92400e; }
+.badge-prioridad-alta { background: #fee2e2; color: #991b1b; }
+
+/* ── Tablero de muelles ── */
+
+.grid-muelles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+@media (max-width: 900px) {
+  .grid-muelles { grid-template-columns: repeat(2, 1fr); }
+  .cards-resumen { grid-template-columns: repeat(2, 1fr); }
+}
+
+.muelle-card {
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.muelle-card.libre {
+  background: #f8fafc;
+  border-style: dashed;
+}
+
+.muelle-card.ocupado { border-color: #93c5fd; background: #eff6ff; }
+.muelle-card.ocupado.prioridad-media { border-color: #fcd34d; background: #fffbeb; }
+.muelle-card.ocupado.prioridad-alta { border-color: #fca5a5; background: #fef2f2; }
+
+.muelle-card-titulo {
+  font-weight: 700;
+  font-size: 14px;
+  color: #1f2937;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.muelle-card-cuerpo { font-size: 13px; color: #374151; margin-top: 8px; }
+.muelle-card-placa { font-weight: 700; font-size: 15px; }
+.muelle-card-libre-texto { color: #9ca3af; font-size: 13px; font-style: italic; }
+
+.lista-patio {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.patio-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 16px;
+}
+
+.patio-item.prioridad-media { border-left: 4px solid #f59e0b; }
+.patio-item.prioridad-alta { border-left: 4px solid #ef4444; }
+
+/* ── Filtros / registros ── */
+
+.filtros-barra {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filtros-barra input, .filtros-barra select {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+
+/* ── Estadísticas ── */
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .stats-grid { grid-template-columns: 1fr; }
+}
+
+.stat-box {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.stat-box h3 {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 10px;
+}
+
+/* ── Exportar ── */
+
+.exportar-form {
+  display: flex;
+  gap: 16px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.exportar-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.toolbar-estad {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.filter-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.pill.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.estad-rango-custom {
+  display: none;
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.estad-rango-custom label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.stat-box.full {
+  grid-column: 1 / -1;
+}
+
+.stat-box canvas {
+  max-height: 260px;
+}
+
+.btn-primario {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.texto-ayuda { color: #6b7280; font-size: 13.5px; margin-bottom: 12px; }

@@ -1,0 +1,19 @@
+/* =========================================================
+   INLOTRANS — Operación J4 — Operador
+   Estilos específicos de este rol
+
+   Todo lo genérico (botones, formularios, tablas, modales,
+   badges, grilla de muelles) vive en css/components.css.
+   Este archivo queda disponible para overrides puntuales de
+   esta vista si aparecen más adelante.
+   ========================================================= */
+
+/* Override: J4 solo tiene 3 muelles, así que 3 columnas fijas
+   (no 4, que dejaría un hueco). Se carga después de
+   components.css, así que gana por cascada. */
+.muelles-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 28px;
+}

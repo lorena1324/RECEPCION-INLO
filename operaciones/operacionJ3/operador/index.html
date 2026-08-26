@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inlotrans | Operador J3</title>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+
+    <link rel="stylesheet" href="../../../css/base.css">
+    <link rel="stylesheet" href="../../../css/layout.css">
+    <link rel="stylesheet" href="../../../css/components.css">
+    <link rel="stylesheet" href="operador.css">
+</head>
+<body>
+
+<div class="layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon"><i class="ti ti-truck"></i></div>
+            <div class="brand-text">
+                <strong>Inlotrans</strong>
+                <span>Operación J3</span>
+            </div>
+        </div>
+
+        <nav class="nav">
+            <div class="nav-label">Principal</div>
+            <button class="nav-item active" data-view="dashboard">
+                <i class="ti ti-dashboard"></i> Dashboard
+            </button>
+            <button class="nav-item" data-view="entrada">
+                <i class="ti ti-login"></i> Registrar entrada
+            </button>
+            <button class="nav-item" data-view="registros">
+                <i class="ti ti-list-details"></i> Registros
+            </button>
+            <div class="nav-label">Herramientas</div>
+            <button class="nav-item" data-view="exportar">
+                <i class="ti ti-download"></i> Exportar datos
+            </button>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="operator-chip">
+                <div class="operator-avatar" id="op-avatar">--</div>
+                <div class="operator-info">
+                    <strong id="op-nombre">Cargando…</strong>
+                    <span>Operador J3</span>
+                </div>
+            </div>
+            <div class="sidebar-footer-row">
+                <i class="ti ti-database"></i>
+                <span id="sidebar-count">0 registros</span>
+            </div>
+            <div class="sidebar-footer-row">
+                <div id="sync-indicator" class="sync-badge">
+                    <i class="ti ti-cloud-check"></i> Conectado
+                </div>
+            </div>
+        </div>
+    </aside>
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <!-- MAIN -->
+    <div class="main">
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="menu-toggle" id="btn-menu-toggle" aria-label="Abrir menú">
+                    <i class="ti ti-menu-2"></i>
+                </button>
+                <div>
+                    <div class="topbar-title" id="topbar-title">Dashboard</div>
+                    <div class="topbar-sub" id="topbar-date"></div>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="topbar-operator">
+                    <i class="ti ti-user-circle"></i>
+                    <span>Turno: <strong id="op-nombre-top">Cargando…</strong></span>
+                </div>
+            </div>
+        </header>
+
+        <main class="content">
+
+            <!-- DASHBOARD -->
+            <div id="view-dashboard" class="view active">
+
+                <div id="alerta-patio-banner" class="local-banner" style="display:none; background:#FFF4E5; border-color:#F6C27A; color:#7A5118;">
+                    <i class="ti ti-alert-triangle"></i>
+                    <div>
+                        <strong id="alerta-patio-titulo">Vehículos con más de 4 horas en patio</strong>
+                        <span id="alerta-patio-detalle"></span>
+                    </div>
+                </div>
+
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="stat-ico blue"><i class="ti ti-truck"></i></div>
+                        <div class="stat-body"><div class="stat-val" id="s-total">0</div><div class="stat-lbl">Total activos</div></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-ico green"><i class="ti ti-building-warehouse"></i></div>
+                        <div class="stat-body"><div class="stat-val" id="s-patio">0</div><div class="stat-lbl">En patio</div></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-ico teal"><i class="ti ti-door"></i></div>
+                        <div class="stat-body"><div class="stat-val" id="s-muelle">0</div><div class="stat-lbl">En muelle</div></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-ico teal"><i class="ti ti-clock"></i></div>
+                        <div class="stat-body"><div class="stat-val" id="s-tiempo-patio">0 min</div><div class="stat-lbl">Tiempo prom. patio</div></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-ico teal"><i class="ti ti-clock-hour-4"></i></div>
+                        <div class="stat-body"><div class="stat-val" id="s-tiempo-muelle">0 min</div><div class="stat-lbl">Tiempo prom. muelle</div></div>
+                    </div>
+                </div>
+
+                <div class="section-header">
+                    <div class="section-title">Muelles (1 a 8)</div>
+                </div>
+                <div id="muelles-grid" class="muelles-grid"></div>
+
+                <div class="section-header">
+                    <div class="section-title">Vehículos en patio ahora</div>
+                    <button class="btn btn-sm" data-view="registros"><i class="ti ti-arrow-right"></i> Ver todos</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Prioridad</th><th>Placa</th><th>Conductor</th><th>Tipo</th><th>Ingreso</th><th>Operador</th><th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dash-table"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ENTRADA -->
+            <div id="view-entrada" class="view">
+                <div class="form-card">
+                    <div class="form-grid">
+
+                        <div class="form-group">
+                            <label for="f-conductor">Conductor *</label>
+                            <input type="text" id="f-conductor" placeholder="Nombre completo del conductor" autocomplete="off">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="f-placa">Placa del vehículo *</label>
+                            <input type="text" id="f-placa" placeholder="Ej: ABC-123" autocomplete="off">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="f-hora">Hora de ingreso *</label>
+                            <input type="datetime-local" id="f-hora">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="f-ubicacion">Ubicación *</label>
+                            <select id="f-ubicacion">
+                                <option value="">Selecciona</option>
+                                <option value="Muelle">Muelle</option>
+                                <option value="Patio">Patio</option>
+                            </select>
+                            <div id="muelle-options" style="display:none; margin-top:8px;">
+                                <label>Número de muelle</label>
+                                <select id="f-numeroMuelle"></select>
+                            </div>
+                        </div>
+
+                        <div class="form-group full">
+                            <label>Tipo de operación * <span style="text-transform:none;font-weight:400;color:var(--text-3)">(puedes elegir ambas)</span></label>
+                            <div class="radio-row" id="radio-tipo">
+                                <label class="radio-card sel-cargue" id="rc-cargue">
+                                    <input type="checkbox" name="tipo" value="Cargue" checked>
+                                    <i class="ti ti-package-import"></i> Cargue
+                                </label>
+                                <label class="radio-card" id="rc-descargue">
+                                    <input type="checkbox" name="tipo" value="Descargue">
+                                    <i class="ti ti-package-export"></i> Descargue
+                                </label>
+                            </div>
+                            <div class="tipo-hint">Selecciona Cargue, Descargue, o ambos si el vehículo hará las dos operaciones.</div>
+                        </div>
+
+                        <div class="form-group full">
+                            <label for="f-programado">Vehículo programado *</label>
+                            <select id="f-programado">
+                                <option value="">Selecciona</option>
+                                <option value="No programado">No programado</option>
+                                <option value="Programado">Programado</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" id="programacion-wrapper" style="display:none;">
+                            <label for="f-hora-programacion">Hora de programación</label>
+                            <input type="time" id="f-hora-programacion">
+                        </div>
+
+                        <div class="form-group full">
+                            <label for="f-servicio-tipo">Tipo de servicio</label>
+                            <select id="f-servicio-tipo">
+                                <option value="">Selecciona</option>
+                                <option value="Normal">Normal</option>
+                                <option value="Reciclaje">Reciclaje</option>
+                                <option value="Insumos">Insumos</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" id="servicio-empresa-wrapper" style="display:none;">
+                            <label for="f-servicio-empresa">Empresa / destino</label>
+                            <select id="f-servicio-empresa" style="display:none;">
+                                <option value="">Selecciona empresa</option>
+                                <option value="Ática">Ática</option>
+                                <option value="Co-Recicladora">Co-Recicladora</option>
+                            </select>
+                            <input type="text" id="f-servicio-empresa-text" style="display:none;" readonly value="Pepsico">
+                        </div>
+
+                        <div class="form-group full">
+                            <label for="f-canal">Canal *</label>
+                            <select id="f-canal">
+                                <option value="Sin canal">Sin canal</option>
+                                <option value="MQ">MQ</option>
+                                <option value="3PD">3PD</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group full">
+                            <label for="f-cedula">Cédula / documento conductor</label>
+                            <input type="text" id="f-cedula" placeholder="Número de documento" autocomplete="off">
+                        </div>
+
+                        <div class="form-group full">
+                            <label for="f-obs">Observaciones</label>
+                            <textarea id="f-obs" placeholder="Notas, referencias de carga, número de orden, etc."></textarea>
+                        </div>
+
+                    </div>
+
+                    <div class="form-footer">
+                        <button class="btn" id="btn-limpiar"><i class="ti ti-refresh"></i> Limpiar</button>
+                        <button class="btn btn-primary" id="btn-registrar"><i class="ti ti-login"></i> Registrar entrada</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- REGISTROS -->
+            <div id="view-registros" class="view">
+                <div class="toolbar">
+                    <div class="search-box">
+                        <i class="ti ti-search"></i>
+                        <input type="text" id="search-input" placeholder="Buscar por placa, conductor, muelle...">
+                    </div>
+                    <div class="filter-pills">
+                        <button class="pill active" data-filter="todos">Todos</button>
+                        <button class="pill" data-filter="en_patio">En patio</button>
+                        <button class="pill" data-filter="salio">Salidos</button>
+                        <button class="pill" data-filter="Cargue">Cargue</button>
+                        <button class="pill" data-filter="Descargue">Descargue</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Prioridad</th><th>Placa</th><th>Conductor</th><th>Ubicación</th><th>Tipo</th><th>Canal</th>
+                                <th>Ingreso</th><th>Salida</th><th>Estado</th><th>Programado</th><th>Servicio</th>
+                                <th>T. patio</th><th>T. muelle</th><th>Motivo patio</th><th>Operador</th><th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reg-table"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- EXPORTAR -->
+            <div id="view-exportar" class="view">
+                <div class="export-card">
+                    <h3>Exportar a Excel (.xlsx)</h3>
+                    <p style="color:var(--text-3); font-size:13px; margin:6px 0 14px;">Descarga un archivo Excel con los registros de esta operación.</p>
+                    <div class="export-row">
+                        <button class="btn btn-success" id="btn-export-todos"><i class="ti ti-download"></i> Exportar todos</button>
+                        <button class="btn" id="btn-export-hoy"><i class="ti ti-calendar-down"></i> Solo hoy</button>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+</div>
+
+<!-- MODAL: SALIDA -->
+<div class="modal-backdrop" id="modal-salida">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title"><i class="ti ti-logout"></i> Registrar salida</div>
+            <button class="modal-close" data-close="modal-salida"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-info-box" id="modal-salida-info"></div>
+        <div class="form-group"><label for="m-hora-salida">Hora de salida</label><input type="datetime-local" id="m-hora-salida"></div>
+        <div class="form-group" style="margin-top:12px"><label for="m-obs-salida">Observaciones</label><textarea id="m-obs-salida"></textarea></div>
+        <div class="modal-footer">
+            <button class="btn" data-close="modal-salida">Cancelar</button>
+            <button class="btn btn-primary" id="btn-confirmar-salida"><i class="ti ti-check"></i> Confirmar salida</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: EDITAR UBICACIÓN -->
+<div class="modal-backdrop" id="modal-editar">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title"><i class="ti ti-edit"></i> Editar ubicación / canal</div>
+            <button class="modal-close" data-close="modal-editar"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-info-box" id="modal-editar-info"></div>
+        <div class="form-group">
+            <label for="e-ubicacion">Ubicación</label>
+            <select id="e-ubicacion">
+                <option value="Muelle">Muelle</option>
+                <option value="Patio">Patio</option>
+            </select>
+            <div id="muelle-options-edit" style="display:none; margin-top:8px;">
+                <label>Número de muelle</label>
+                <select id="e-numeroMuelle"></select>
+            </div>
+        </div>
+        <div class="form-group full" style="margin-top:10px;">
+            <label for="e-canal">Canal</label>
+            <select id="e-canal">
+                <option value="Sin canal">Sin canal</option>
+                <option value="MQ">MQ</option>
+                <option value="3PD">3PD</option>
+            </select>
+        </div>
+        <div class="form-group full" style="margin-top:10px;">
+            <label for="e-obs-ubicacion">Observaciones / Motivo</label>
+            <textarea id="e-obs-ubicacion"></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" data-close="modal-editar">Cancelar</button>
+            <button class="btn btn-primary" id="btn-confirmar-edicion"><i class="ti ti-check"></i> Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: DETALLE -->
+<div class="modal-backdrop" id="modal-detalle">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title"><i class="ti ti-info-circle"></i> Detalle del vehículo</div>
+            <button class="modal-close" data-close="modal-detalle"><i class="ti ti-x"></i></button>
+        </div>
+        <div id="modal-detalle-body"></div>
+        <div class="modal-footer"><button class="btn" data-close="modal-detalle">Cerrar</button></div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script type="module" src="operador.js"></script>
+
+</body>
+</html>

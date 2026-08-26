@@ -1,2844 +1,357 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Control de Portería — Vehículos</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --blue-50: #E6F1FB; --blue-100: #B5D4F4; --blue-600: #185FA5; --blue-800: #0C447C;
-    --green-50: #EAF3DE; --green-600: #3B6D11; --green-800: #27500A;
-    --amber-50: #FAEEDA; --amber-600: #854F0B; --amber-800: #633806;
-    --red-50: #FCEBEB; --red-600: #A32D2D;
-    --gray-50: #F1EFE8; --gray-100: #D3D1C7; --gray-200: #B4B2A9;
-    --gray-400: #888780; --gray-600: #5F5E5A; --gray-800: #444441;
-    --teal-50: #E1F5EE; --teal-600: #0F6E56; --teal-800: #085041;
-    --surface: #ffffff;
-    --surface-2: #F7F7F5;
-    --surface-3: #F1EFE8;
-    --text-1: #1a1a18;
-    --text-2: #5F5E5A;
-    --text-3: #888780;
-    --border: rgba(0,0,0,0.10);
-    --border-md: rgba(0,0,0,0.18);
-    --radius-sm: 6px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
-    --radius-xl: 16px;
-    --sidebar-w: 240px;
-    --header-h: 60px;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.07);
-    --shadow-md: 0 4px 16px rgba(0,0,0,0.10);
-  }
-  html { font-size: 15px; }
-  body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: var(--surface-2);
-    color: var(--text-1);
-    line-height: 1.6;
-    min-height: 100vh;
-  }
-  .layout { display: flex; min-height: 100vh; }
-  .sidebar {
-    width: var(--sidebar-w);
-    background: var(--surface);
-    border-right: 0.5px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    position: fixed;
-    top: 0; left: 0; bottom: 0;
-    z-index: 50;
-  }
-  .sidebar-brand {
-    padding: 18px 20px 14px;
-    border-bottom: 0.5px solid var(--border);
-    display: flex; align-items: center; gap: 10px;
-  }
-  .brand-icon {
-    width: 36px; height: 36px; border-radius: var(--radius-md);
-    background: var(--blue-600); display: flex; align-items: center; justify-content: center;
-  }
-  .brand-icon i { font-size: 20px; color: #fff; }
-  .brand-text { line-height: 1.2; }
-  .brand-text strong { font-size: 14px; font-weight: 600; display: block; color: var(--text-1); }
-  .brand-text span { font-size: 11px; color: var(--text-3); }
-  .nav { padding: 12px 10px; flex: 1; }
-  .nav-label { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-3); font-weight: 600; padding: 0 10px; margin: 12px 0 4px; }
-  .nav-item {
-    display: flex; align-items: center; gap: 10px;
-    padding: 9px 10px; border-radius: var(--radius-md);
-    font-size: 13.5px; color: var(--text-2);
-    cursor: pointer; transition: all .15s; margin-bottom: 2px;
-    border: none; background: none; width: 100%; text-align: left;
-  }
-  .nav-item i { font-size: 17px; }
-  .nav-item:hover { background: var(--surface-2); color: var(--text-1); }
-  .nav-item.active { background: var(--blue-50); color: var(--blue-600); font-weight: 500; }
-  .nav-item.active i { color: var(--blue-600); }
-  .sidebar-footer {
-    padding: 14px 20px;
-    border-top: 0.5px solid var(--border);
-    font-size: 11px; color: var(--text-3);
-    display: flex; flex-direction: column; gap: 8px;
-  }
-  .sidebar-footer-row { display: flex; align-items: center; gap: 6px; }
-  .sidebar-footer-row i { font-size: 13px; }
-  .operator-chip {
-    display: flex; align-items: center; gap: 8px;
-    background: var(--surface-2); border: 0.5px solid var(--border);
-    border-radius: var(--radius-md); padding: 8px 10px;
-    cursor: pointer; transition: all .15s;
-  }
-  .operator-chip:hover { border-color: var(--blue-600); }
-  .operator-avatar {
-    width: 28px; height: 28px; border-radius: 50%;
-    background: var(--blue-600); color: #fff;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 600; flex-shrink: 0;
-  }
-  .operator-info { line-height: 1.25; overflow: hidden; }
-  .operator-info strong { font-size: 12.5px; color: var(--text-1); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .operator-info span { font-size: 10.5px; color: var(--text-3); }
-  .operator-chip i.ti-chevron-right { margin-left: auto; font-size: 14px; color: var(--text-3); }
-  .sync-badge {
-    display: flex; align-items: center; gap: 5px;
-    padding: 3px 10px; border-radius: 20px;
-    font-size: 11px; font-weight: 500;
-    background: var(--green-50); color: var(--green-600);
-    transition: all .3s;
-  }
-  .sync-badge.syncing { background: var(--amber-50); color: var(--amber-600); }
-  .sync-badge.error   { background: var(--red-50);   color: var(--red-600); }
-  .sync-badge i { font-size: 12px; }
-  .main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; }
-  .topbar {
-    height: var(--header-h);
-    background: var(--surface);
-    border-bottom: 0.5px solid var(--border);
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 28px;
-    position: sticky; top: 0; z-index: 40;
-  }
-  .topbar-left { display: flex; align-items: center; gap: 10px; }
-  .topbar-title { font-size: 15px; font-weight: 500; color: var(--text-1); }
-  .topbar-sub { font-size: 12px; color: var(--text-3); margin-top: 1px; }
-  .topbar-right { display: flex; align-items: center; gap: 14px; }
-  .topbar-operator {
-    display: flex; align-items: center; gap: 8px;
-    font-size: 12.5px; color: var(--text-2);
-    padding: 6px 12px; border-radius: 20px;
-    background: var(--blue-50); cursor: pointer; transition: all .15s;
-  }
-  .topbar-operator:hover { background: var(--blue-100); }
-  .topbar-operator i.ti-user-circle { font-size: 16px; color: var(--blue-600); }
-  .topbar-operator strong { color: var(--blue-600); font-weight: 600; }
-  .content { padding: 24px 28px; }
-  .setup-banner {
-    background: #FFF8E6; border: 1.5px solid #F5C842;
-    border-radius: var(--radius-lg); padding: 18px 22px;
-    margin-bottom: 24px; display: none;
-  }
-  .setup-banner.visible { display: block; }
-  .setup-banner h3 { font-size: 14px; font-weight: 600; color: #7A5C00; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
-  .setup-banner p { font-size: 13px; color: #7A5C00; line-height: 1.7; }
-  .setup-banner code { background: rgba(0,0,0,.07); padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 12.5px; }
-  .setup-banner ol { margin: 10px 0 0 18px; }
-  .setup-banner ol li { font-size: 13px; color: #7A5C00; margin-bottom: 4px; line-height: 1.6; }
-  .local-banner {
-    background: var(--blue-50); border: 1.5px solid var(--blue-100);
-    border-radius: var(--radius-lg); padding: 14px 18px;
-    margin-bottom: 20px; font-size: 13px; color: var(--blue-600);
-    display: flex; align-items: flex-start; gap: 10px;
-  }
-  .local-banner i { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-  .local-banner strong { display: block; font-weight: 600; margin-bottom: 2px; }
-  .view { display: none; }
-  .view.active { display: block; }
-  .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
-  .stat-card {
-    background: var(--surface); border: 0.5px solid var(--border);
-    border-radius: var(--radius-lg); padding: 14px 16px;
-    display: flex; align-items: flex-start; gap: 12px;
-  }
-  .stat-ico { width: 36px; height: 36px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .stat-ico i { font-size: 18px; }
-  .stat-ico.blue  { background: var(--blue-50);  } .stat-ico.blue  i { color: var(--blue-600);  }
-  .stat-ico.green { background: var(--green-50); } .stat-ico.green i { color: var(--green-600); }
-  .stat-ico.amber { background: var(--amber-50); } .stat-ico.amber i { color: var(--amber-600); }
-  .stat-ico.teal  { background: var(--teal-50);  } .stat-ico.teal  i { color: var(--teal-600);  }
-  .stat-val { font-size: 26px; font-weight: 600; line-height: 1; color: var(--text-1); }
-  .stat-lbl { font-size: 12px; color: var(--text-3); margin-top: 4px; }
-  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-wrap: nowrap; }
-  .section-title { font-size: 14px; font-weight: 500; color: var(--text-1); white-space: nowrap; }
-  .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; margin-bottom: 16px; }
-  .search-box {
-    display: flex; align-items: center; gap: 8px;
-    background: var(--surface); border: 0.5px solid var(--border-md);
-    border-radius: var(--radius-md); padding: 7px 12px; flex: 1; min-width: 200px;
-  }
-  .search-box i { font-size: 16px; color: var(--text-3); }
-  .search-box input { border: none; outline: none; background: transparent; font-size: 13.5px; color: var(--text-1); width: 100%; }
-  .search-box input::placeholder { color: var(--text-3); }
-  .filter-pills { display: flex; gap: 6px; flex-wrap: nowrap; }
-  .pill {
-    padding: 6px 14px; border-radius: 20px; font-size: 12.5px;
-    border: 0.5px solid var(--border-md); background: var(--surface);
-    color: var(--text-2); cursor: pointer; transition: all .15s; white-space: nowrap;
-  }
-  .pill:hover { border-color: var(--blue-600); color: var(--blue-600); }
-  .pill.active { background: var(--blue-600); color: #fff; border-color: var(--blue-600); }
-  .btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 8px 16px; border-radius: var(--radius-md);
-    font-size: 13px; font-weight: 500; cursor: pointer;
-    border: 0.5px solid var(--border-md); background: var(--surface);
-    color: var(--text-2); transition: all .15s; white-space: nowrap;
-  }
-  .btn i { font-size: 15px; }
-  .btn:hover { background: var(--surface-2); }
-  .btn-primary { background: var(--blue-600); color: #fff; border-color: var(--blue-600); }
-  .btn-primary:hover { background: var(--blue-800); border-color: var(--blue-800); }
-  .btn-success { background: var(--green-600); color: #fff; border-color: var(--green-600); }
-  .btn-success:hover { background: var(--green-800); }
-  .btn-danger { background: var(--red-600); color: #fff; border-color: var(--red-600); }
-  .btn-danger:hover { background: #7a2020; }
-  .btn-sm { padding: 5px 12px; font-size: 12px; }
-  .btn-sm i { font-size: 13px; }
-  .btn-icon { padding: 7px; }
-  .muelles-grid {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 26px;
-  }
-  .muelle-card {
-    background: var(--surface); border: 0.5px solid var(--border);
-    border-left: 4px solid var(--gray-200);
-    border-radius: var(--radius-lg); padding: 12px 14px;
-  }
-  .muelle-card.libre { border-left-color: var(--green-600); }
-  .muelle-card.ocupado { border-left-color: var(--amber-600); }
-  .muelle-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-  .muelle-card-num { font-size: 13.5px; font-weight: 600; color: var(--text-1); }
-  .muelle-card-status {
-    font-size: 10.5px; font-weight: 600; padding: 2px 9px; border-radius: 20px; white-space: nowrap;
-  }
-  .muelle-card-status.libre { background: var(--green-50); color: var(--green-600); }
-  .muelle-card-status.ocupado { background: var(--amber-50); color: var(--amber-600); }
-  .muelle-card-body { font-size: 12px; color: var(--text-2); line-height: 1.55; min-height: 34px; }
-  .muelle-card-placa { font-weight: 600; color: var(--text-1); font-size: 13px; }
-  .muelle-card-empty { color: var(--text-3); font-style: italic; }
-  @media (max-width: 1100px) { .muelles-grid { grid-template-columns: repeat(3, 1fr); } }
-  @media (max-width: 780px) { .muelles-grid { grid-template-columns: repeat(2, 1fr); } }
-  .table-wrap {
-    background: var(--surface); border: 0.5px solid var(--border);
-    border-radius: var(--radius-lg); overflow-x: auto;
-  }
-  table { min-width: 1100px; width: 100%; border-collapse: collapse; font-size: 13px; }
-  thead { background: var(--surface-2); }
-  th {
-    padding: 10px 14px; text-align: left;
-    font-size: 11px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: .6px; color: var(--text-3);
-    border-bottom: 0.5px solid var(--border);
-  }
-  td {
-    padding: 12px 14px; border-bottom: 0.5px solid var(--border);
-    color: var(--text-1); vertical-align: middle;
-  }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: var(--surface-2); }
-  .td-placa { font-weight: 600; font-size: 13.5px; letter-spacing: .5px; }
-  .td-actions { display: flex; gap: 6px; }
-  .badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; white-space: nowrap;
-  }
-  .badge i { font-size: 10px; }
-  .badge-en-patio  { background: var(--green-50); color: var(--green-600); }
-  .badge-en-muelle { background: var(--teal-50);  color: var(--teal-800); }
-  .badge-salio     { background: var(--gray-50);  color: var(--gray-600);  }
-  .badge-cargue    { background: var(--blue-50);  color: var(--blue-600);  }
-  .badge-descargue { background: var(--amber-50); color: var(--amber-600); }
-  .badge-amber     { background: var(--amber-50); color: var(--amber-800); font-weight: 600; }
-  .badge-amber i   { animation: pulse-amber 1.6s infinite; }
-  @keyframes pulse-amber { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
-  .badge-ambos     { background: #F0E7FA; color: #6B2FB3; }
-  .badge-operador  { background: var(--teal-50);  color: var(--teal-600);  }
-  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
-  .chart-card {
-    background: var(--surface); border: 0.5px solid var(--border);
-    border-radius: var(--radius-lg); padding: 16px 18px; box-shadow: var(--shadow-sm);
-  }
-  .chart-card.full { grid-column: 1 / -1; }
-  .chart-card-title { font-size: 13px; font-weight: 600; color: var(--text-1); margin-bottom: 4px; }
-  .chart-card-sub { font-size: 11.5px; color: var(--text-3); margin-bottom: 12px; }
-  .chart-canvas-wrap { position: relative; height: 260px; }
-  .chart-canvas-wrap.short { height: 210px; }
-  .estad-rango-custom { display: none; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-  .estad-rango-custom input[type="date"] {
-    border: 0.5px solid var(--border-md); border-radius: var(--radius-sm);
-    padding: 6px 10px; font-size: 12.5px; color: var(--text-1); background: var(--surface);
-  }
-  .estad-empty { grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--text-3); font-size: 13px; }
-  @media (max-width: 900px) {
-    .chart-grid { grid-template-columns: 1fr; }
-  }
-  .form-card {
-    background: var(--surface); border: 0.5px solid var(--border);
-    border-radius: var(--radius-lg); padding: 24px;
-  }
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .form-group { display: flex; flex-direction: column; gap: 6px; }
-  .form-group.full { grid-column: 1 / -1; }
-  label { font-size: 12px; font-weight: 500; color: var(--text-2); text-transform: uppercase; letter-spacing: .5px; }
-  input[type=text], input[type=datetime-local], select, textarea {
-    width: 100%; padding: 9px 12px;
-    border: 0.5px solid var(--border-md);
-    border-radius: var(--radius-md);
-    font-size: 14px; color: var(--text-1);
-    background: var(--surface);
-    transition: border-color .15s, box-shadow .15s;
-    font-family: inherit;
-    -webkit-appearance: none;
-    appearance: none;
-  }
-  input:focus, select:focus, textarea:focus {
-    outline: none;
-    border-color: var(--blue-600);
-    box-shadow: 0 0 0 3px rgba(24,95,165,.10);
-  }
-  input::placeholder, textarea::placeholder { color: var(--text-3); }
-  textarea { resize: vertical; min-height: 64px; }
-  .radio-row { display: flex; gap: 10px; flex-wrap: wrap; }
-  .radio-card {
-    flex: 1; min-width: 140px;
-    display: flex; align-items: center; gap: 10px;
-    padding: 12px 16px; border-radius: var(--radius-md);
-    border: 1.5px solid var(--border-md);
-    cursor: pointer; transition: all .15s; user-select: none;
-    font-size: 14px; color: var(--text-2);
-  }
-  .radio-card i { font-size: 18px; }
-  .radio-card input[type=checkbox] { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
-  .radio-card.sel-cargue    { border-color: var(--blue-600);  background: var(--blue-50);  color: var(--blue-600);  font-weight: 500; }
-  .radio-card.sel-descargue { border-color: var(--amber-600); background: var(--amber-50); color: var(--amber-600); font-weight: 500; }
-  .tipo-hint { font-size: 12px; color: var(--text-3); margin-top: 2px; }
-  .operator-row { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
-  .operator-card {
-    display: flex; align-items: center; gap: 12px;
-    padding: 13px 16px; border-radius: var(--radius-md);
-    border: 1.5px solid var(--border-md);
-    cursor: pointer; transition: all .15s; user-select: none;
-  }
-  .operator-card:hover { border-color: var(--blue-600); background: var(--blue-50); }
-  .operator-card.selected { border-color: var(--blue-600); background: var(--blue-50); }
-  .operator-card .op-av { width: 38px; height: 38px; border-radius: 50%; background: var(--blue-600); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; flex-shrink: 0; }
-  .operator-card-name { font-size: 14px; font-weight: 500; color: var(--text-1); }
-  .operator-card-role { font-size: 11.5px; color: var(--text-3); }
-  .operator-card .chk { margin-left: auto; font-size: 20px; color: var(--blue-600); opacity: 0; transition: opacity .15s; }
-  .operator-card.selected .chk { opacity: 1; }
-  .form-footer {
-    display: flex; align-items: center; justify-content: flex-end; gap: 10px;
-    margin-top: 20px; padding-top: 20px;
-    border-top: 0.5px solid var(--border);
-  }
-  .modal-backdrop {
-    display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,.36); z-index: 200;
-    align-items: center; justify-content: center;
-  }
-  .modal-backdrop.open { display: flex; }
-  .modal {
-    background: var(--surface); border-radius: var(--radius-xl);
-    padding: 28px; width: min(520px, 94vw);
-    max-height: min(90vh, 720px);
-    border: 0.5px solid var(--border);
-    box-shadow: var(--shadow-md);
-    animation: slideUp .18s ease;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  #modal-detalle-body {
-    overflow-y: auto;
-    max-height: calc(90vh - 220px);
-    padding-right: 6px;
-  }
-  @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
-  .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-  .modal-title { font-size: 16px; font-weight: 500; color: var(--text-1); display: flex; align-items: center; gap: 8px; }
-  .modal-title i { font-size: 18px; color: var(--blue-600); }
-  .modal-close { background: none; border: none; cursor: pointer; color: var(--text-3); font-size: 20px; padding: 2px; }
-  .modal-close:hover { color: var(--text-1); }
-  .modal-info-box {
-    background: var(--surface-2); border-radius: var(--radius-md);
-    padding: 14px 16px; margin-bottom: 18px;
-    font-size: 13px; color: var(--text-2); line-height: 1.7;
-  }
-  .modal-info-box strong { color: var(--text-1); font-size: 15px; }
-  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
-  .detail-row {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 0; border-bottom: 0.5px solid var(--border);
-    font-size: 13.5px;
-  }
-  .detail-row:last-child { border-bottom: none; }
-  .detail-row i { font-size: 16px; color: var(--text-3); width: 20px; flex-shrink: 0; }
-  .detail-lbl { color: var(--text-3); font-size: 12px; min-width: 110px; }
-  .detail-val { color: var(--text-1); font-weight: 500; }
-  .detail-section-title {
-    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px;
-    color: var(--text-3); margin: 18px 0 8px;
-  }
-  .historial-item {
-    display: flex; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid var(--border);
-  }
-  .historial-item:last-child { border-bottom: none; }
-  .historial-ico {
-    width: 26px; height: 26px; border-radius: 50%; background: var(--surface-3);
-    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  }
-  .historial-ico i { font-size: 13px; color: var(--blue-600); }
-  .historial-body { flex: 1; min-width: 0; }
-  .historial-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-  .historial-top strong { font-size: 13px; color: var(--text-1); }
-  .historial-fecha { font-size: 11px; color: var(--text-3); white-space: nowrap; }
-  .historial-op { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
-  .historial-op i { font-size: 11px; }
-  .historial-texto {
-    font-size: 12.5px; color: var(--text-2); margin-top: 4px;
-    background: var(--surface-3); border-radius: var(--radius-sm); padding: 6px 9px;
-  }
-  .toast {
-    position: fixed; bottom: 28px; right: 28px; z-index: 999;
-    padding: 12px 20px; border-radius: var(--radius-lg);
-    font-size: 13.5px; font-weight: 500; color: #fff;
-    box-shadow: var(--shadow-md);
-    opacity: 0; transform: translateY(10px);
-    transition: all .22s; pointer-events: none;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .toast i { font-size: 16px; }
-  .toast.show { opacity: 1; transform: none; }
-  .toast.green { background: var(--green-600); }
-  .toast.blue  { background: var(--blue-600);  }
-  .toast.red   { background: var(--red-600);   }
-  .toast.amber { background: var(--amber-600); }
-  .empty-state { text-align: center; padding: 52px 24px; color: var(--text-3); }
-  .empty-state i { font-size: 48px; display: block; margin-bottom: 12px; opacity: .35; }
-  .empty-state p { font-size: 14px; }
-  .export-card {
-    background: var(--surface); border: 0.5px solid var(--border);
-    border-radius: var(--radius-lg); padding: 20px 24px; margin-bottom: 16px;
-  }
-  .export-card h3 { font-size: 13.5px; font-weight: 500; color: var(--text-1); margin-bottom: 4px; }
-  .export-card p { font-size: 12.5px; color: var(--text-3); margin-bottom: 14px; line-height: 1.5; }
-  .export-row { display: flex; gap: 10px; flex-wrap: wrap; }
-  .danger-card {
-    background: var(--red-50); border: 0.5px solid #F09595;
-    border-radius: var(--radius-lg); padding: 20px 24px;
-  }
-  .danger-card h3 { font-size: 13.5px; font-weight: 500; color: var(--red-600); margin-bottom: 4px; }
-  .danger-card p { font-size: 12.5px; color: var(--red-600); opacity: .75; margin-bottom: 14px; line-height: 1.5; }
-  .gate-backdrop {
-    display: none; position: fixed; inset: 0;
-    background: rgba(26,26,24,.55); z-index: 300;
-    align-items: center; justify-content: center;
-    backdrop-filter: blur(2px);
-  }
-  .gate-backdrop.open { display: flex; }
-  .gate-card {
-    background: var(--surface); border-radius: var(--radius-xl);
-    padding: 32px; width: min(440px, 92vw);
-    box-shadow: var(--shadow-md);
-    animation: slideUp .2s ease;
-    text-align: center;
-  }
-  .gate-icon { width: 56px; height: 56px; border-radius: var(--radius-lg); background: var(--blue-50); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
-  .gate-icon i { font-size: 28px; color: var(--blue-600); }
-  .gate-card h2 { font-size: 18px; font-weight: 600; margin-bottom: 6px; color: var(--text-1); }
-  .gate-card p { font-size: 13px; color: var(--text-3); margin-bottom: 22px; }
-  .gate-card .operator-row { text-align: left; }
-  .gate-footer { margin-top: 22px; }
-  .gate-footer .btn { width: 100%; justify-content: center; }
-  /* Firebase config section */
-  .fb-config-card {
-    background: var(--surface); border: 1.5px dashed var(--border-md);
-    border-radius: var(--radius-lg); padding: 22px 24px; margin-bottom: 16px;
-  }
-  .fb-config-card h3 { font-size: 14px; font-weight: 600; color: var(--text-1); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-  .fb-config-card h3 i { color: var(--blue-600); }
-  .fb-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .fb-fields .form-group.full { grid-column: 1/-1; }
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-thumb { background: var(--gray-100); border-radius: 4px; }
-  @media (max-width: 900px) {
-    .main { margin-left: 0; }
-    .sidebar { transform: translateX(-100%); transition: transform .2s; }
-    .sidebar.open { transform: none; }
-    .menu-toggle { display: inline-flex !important; }
-    .stats-row { grid-template-columns: repeat(3, 1fr); }
-    .form-grid { grid-template-columns: 1fr; }
-    .form-group.full { grid-column: 1; }
-    .fb-fields { grid-template-columns: 1fr; }
-    .fb-fields .form-group.full { grid-column: 1; }
-    th:nth-child(5), td:nth-child(5),
-    th:nth-child(6), td:nth-child(6) { display: none; }
-  }
-  .menu-toggle {
-    display: none;
-    align-items: center; justify-content: center;
-    width: 34px; height: 34px;
-    border: 0.5px solid var(--border); border-radius: var(--radius-md);
-    background: var(--surface); color: var(--text-1);
-    font-size: 18px; cursor: pointer; flex-shrink: 0;
-  }
-  .sidebar-overlay {
-    display: none;
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,.4);
-    z-index: 40;
-  }
-  .sidebar-overlay.open { display: block; }
-  @media (max-width: 560px) {
-    .content { padding: 16px; }
-    .stats-row { grid-template-columns: 1fr 1fr; }
-    .topbar-operator .full-label { display: none; }
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta name="theme-color" content="#0f172a">
+    <meta name="description" content="Plataforma operacional Inlotrans">
+
+    <title>Inlotrans | Acceso</title>
+
+    <link rel="stylesheet" href="css/login.css">
 </head>
+
 <body>
 
-<div class="layout">
+    <main class="login-page">
 
-  <!-- SIDEBAR -->
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-brand">
-      <div class="brand-icon"><i class="ti ti-truck"></i></div>
-      <div class="brand-text">
-        <strong>Portería</strong>
-        <span>Control vehicular</span>
-      </div>
-    </div>
-    <nav class="nav">
-      <div class="nav-label">Principal</div>
-      <button class="nav-item active" onclick="showView('dashboard')">
-        <i class="ti ti-dashboard"></i> Dashboard
-      </button>
-      <button class="nav-item" onclick="showView('entrada')">
-        <i class="ti ti-login"></i> Registrar entrada
-      </button>
-      <button class="nav-item" onclick="showView('registros')">
-        <i class="ti ti-list-details"></i> Registros
-      </button>
-      <button class="nav-item" onclick="showView('estadisticas')">
-        <i class="ti ti-chart-histogram"></i> Estadísticas
-      </button>
-      <a class="nav-item" href="bodega-J4.html" style="text-decoration:none;">
-        <i class="ti ti-building-warehouse"></i> Bodega J4
-      </a>
-      <div class="nav-label">Herramientas</div>
-      <button class="nav-item" onclick="showView('exportar')">
-        <i class="ti ti-download"></i> Exportar datos
-      </button>
-      <button class="nav-item" onclick="showView('configurar')">
-        <i class="ti ti-settings"></i> Configurar Firebase
-      </button>
-    </nav>
-    <div class="sidebar-footer">
-      <div class="operator-chip" onclick="openGate()">
-        <div class="operator-avatar" id="op-avatar-sb">--</div>
-        <div class="operator-info">
-          <strong id="op-name-sb">Sin operador</strong>
-          <span>Cambiar operador</span>
-        </div>
-        <i class="ti ti-chevron-right"></i>
-      </div>
-      <div class="sidebar-footer-row">
-        <i class="ti ti-database"></i>
-        <span id="sidebar-count">0 registros</span>
-      </div>
-      <div class="sidebar-footer-row">
-        <div id="sync-indicator" class="sync-badge">
-          <i class="ti ti-device-floppy"></i> Local
-        </div>
-      </div>
-    </div>
-  </aside>
-  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+        <!-- Panel visual -->
+        <section class="login-showcase">
 
-  <!-- MAIN -->
-  <div class="main">
-    <header class="topbar">
-      <div class="topbar-left">
-        <button class="menu-toggle" id="btn-menu-toggle" onclick="toggleSidebar()" aria-label="Abrir menú">
-          <i class="ti ti-menu-2"></i>
-        </button>
-        <div>
-          <div class="topbar-title" id="topbar-title">Dashboard</div>
-          <div class="topbar-sub" id="topbar-date"></div>
-        </div>
-      </div>
-      <div class="topbar-right">
-        <div class="topbar-operator" onclick="openGate()">
-          <i class="ti ti-user-circle"></i>
-          <span class="full-label">Turno: <strong id="op-name-top">Sin operador</strong></span>
-        </div>
-        <div id="sync-top" class="sync-badge">
-          <i class="ti ti-device-floppy"></i>
-          <span>Local</span>
-        </div>
-      </div>
-    </header>
+            <div class="showcase-overlay"></div>
 
-    <main class="content">
+            <div class="showcase-content">
 
-      <!-- DASHBOARD -->
-      <div id="view-dashboard" class="view active">
-        <div id="local-mode-banner" class="local-banner" style="display:none">
-          <i class="ti ti-info-circle"></i>
-          <div>
-            <strong>Modo local activo</strong>
-            Los datos se guardan en este navegador. Para sincronizar entre dispositivos, configura Firebase en <button onclick="showView('configurar')" style="background:none;border:none;color:var(--blue-600);cursor:pointer;font-weight:600;text-decoration:underline;padding:0">Configurar Firebase</button>.
-          </div>
-        </div>
-        <div id="alerta-patio-banner" class="local-banner" style="display:none; background:#FFF4E5; border-color:#F6C27A; color:#7A5118;">
-          <i class="ti ti-alert-triangle"></i>
-          <div>
-            <strong id="alerta-patio-titulo">Vehículos con más de 4 horas en patio</strong>
-            <span id="alerta-patio-detalle"></span>
-          </div>
-        </div>
-        <div class="stats-row">
-          <div class="stat-card">
-            <div class="stat-ico blue"><i class="ti ti-truck"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="s-total">0</div>
-              <div class="stat-lbl">Total turno</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico green"><i class="ti ti-building-warehouse"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="s-patio">0</div>
-              <div class="stat-lbl">En patio</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico teal"><i class="ti ti-Door"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="s-muelle">0</div>
-              <div class="stat-lbl">En muelle</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico teal"><i class="ti ti-clock"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="s-tiempo-patio">0 min</div>
-              <div class="stat-lbl">Tiempo promedio en patio</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico teal"><i class="ti ti-clock"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="s-tiempo-muelle">0 min</div>
-              <div class="stat-lbl">Tiempo promedio en muelle</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico amber"><i class="ti ti-logout"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="s-salidas">0</div>
-              <div class="stat-lbl">Salidas turno</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico teal"><i class="ti ti-package-import"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="s-cargue">0</div>
-              <div class="stat-lbl">Cargues turno</div>
-            </div>
-          </div>
-        </div>
-        <div class="section-header">
-          <div class="section-title">Muelles (1 a 8)</div>
-          <div class="toolbar" style="margin-bottom:0; gap:8px;">
-            <span style="font-size:12px; color:var(--text-3);" id="muelles-resumen"></span>
-          </div>
-        </div>
-        <div id="muelles-grid" class="muelles-grid"></div>
+                <div class="brand brand-showcase">
+                    <div class="brand-mark">
+                        <span class="brand-mark-line"></span>
+                        <span class="brand-mark-line"></span>
+                        <span class="brand-mark-line"></span>
+                    </div>
 
-        <div class="section-header">
-          <div class="section-title">Vehículos en patio ahora</div>
-          <div class="toolbar" style="margin-bottom:0; gap:8px;">
-            <button class="btn btn-sm" onclick="showView('registros')">
-              <i class="ti ti-arrow-right"></i> Ver todos
-            </button>
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Prioridad</th>
-                <th>Placa</th>
-                <th>Conductor</th>
-                <th>Tipo</th>
-                <th>Ingreso</th>
-                <th>Operador</th>
-                <th>Acción</th>
-              </tr>
-            </thead>
-            <tbody id="dash-table"></tbody>
-          </table>
-        </div>
-      </div>
+                    <div class="brand-name">
+                        INLO<span>TRANS</span>
+                    </div>
+                </div>
 
-      <!-- ENTRADA -->
-      <div id="view-entrada" class="view">
-        <div class="form-card">
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="f-conductor">Conductor *</label>
-              <input type="text" id="f-conductor" placeholder="Nombre completo del conductor" autocomplete="off">
+                <div class="showcase-copy">
+                    <span class="eyebrow">PLATAFORMA OPERACIONAL PARA CONTROL Y SEGUIMIENTO DE VEHICULOS</span>
+
+                    <h1>
+                        CVI
+                        <strong></strong>
+                    </h1>
+
+                    <p>
+                        Gestión operacional, seguimiento de vehículos
+                        y análisis de información en un solo lugar.
+                    </p>
+                </div>
+
+                <div class="showcase-footer">
+                    <div class="status-indicator">
+                        <span class="status-dot"></span>
+                        <span>Sistema operacional</span>
+                    </div>
+
+                    <span class="showcase-version">DANMU :)</span>
+                </div>
+
             </div>
-            <div class="form-group">
-              <label for="f-placa">Placa del vehículo *</label>
-              <input type="text" id="f-placa" placeholder="Ej: ABC-123" autocomplete="off">
-            </div>
-            <div class="form-group">
-              <label for="f-hora">Hora de ingreso *</label>
-              <input type="datetime-local" id="f-hora">
-            </div>
-            <div class="form-group">
-              <label for="f-ubicacion">Ubicación *</label>
-              <select id="f-ubicacion" onchange="cambiarUbicacion()">
-                <option value="">Selecciona</option>
-                <option value="Muelle">Muelle</option>
-                <option value="Patio">Patio</option>
-              </select>
-                <div id="muelle-options" style="display:none">
 
-                    <label>Número de muelle</label>
+        </section>
 
-                    <select id="f-numeroMuelle">
-                        <option>1</option>
-                        <option>2</option>
-                        <option>3</option>
-                        <option>4</option>
-                        <option>5</option>
-                        <option>6</option>
-                        <option>7</option>
-                        <option>8</option>
-                    </select>
 
-                    <label>Bahía</label>
+        <!-- Panel de login -->
+        <section class="login-panel">
 
-                    <input type="text" id="f-bahia" value="A" readonly disabled style="background:var(--surface-3); color:var(--text-2); cursor:not-allowed;">
+            <div class="login-container">
+
+                <!-- Marca para móvil -->
+                <div class="brand brand-mobile">
+                    <div class="brand-mark">
+                        <span class="brand-mark-line"></span>
+                        <span class="brand-mark-line"></span>
+                        <span class="brand-mark-line"></span>
+                    </div>
+
+                    <div class="brand-name">
+                        INLO<span>TRANS</span>
+                    </div>
+                </div>
+
+
+                <div class="login-header">
+
+                    <span class="login-eyebrow">
+                        ACCESO A LA PLATAFORMA
+                    </span>
+
+                    <h2>Bienvenido</h2>
+
+                    <p>
+                        Ingresa tus credenciales para continuar.
+                    </p>
 
                 </div>
-            </div>
-            <div class="form-group full">
-              <label>Tipo de operación * <span style="text-transform:none;font-weight:400;color:var(--text-3)">(puedes elegir ambas)</span></label>
-              <div class="radio-row" id="radio-tipo">
-                <label class="radio-card sel-cargue" id="rc-cargue">
-                  <input type="checkbox" name="tipo" value="Cargue" checked>
-                  <i class="ti ti-package-import"></i> Cargue
-                </label>
-                <label class="radio-card" id="rc-descargue">
-                  <input type="checkbox" name="tipo" value="Descargue">
-                  <i class="ti ti-package-export"></i> Descargue
-                </label>
-              </div>
-              <div class="tipo-hint">Selecciona Cargue, Descargue, o ambos si el vehículo hará las dos operaciones.</div>
-            </div>
-            <div class="form-group full">
-              <label for="f-programado">Vehículo programado *</label>
-              <select id="f-programado" onchange="cambiarProgramado()">
-                <option value="">Selecciona</option>
-                <option value="No programado">No programado</option>
-                <option value="Programado">Programado</option>
-              </select>
-            </div>
-            <div class="form-group" id="programacion-wrapper" style="display:none;">
-              <label for="f-hora-programacion">Hora de programación</label>
-              <input type="time" id="f-hora-programacion">
-            </div>
-            <div class="form-group full">
-              <label for="f-servicio-tipo">Tipo de servicio</label>
-              <select id="f-servicio-tipo" onchange="cambiarServicioTipo()">
-                <option value="">Selecciona</option>
-                <option value="Normal">Normal</option>
-                <option value="Reciclaje">Reciclaje</option>
-                <option value="Insumos">Insumos</option>
-              </select>
-            </div>
-            <div class="form-group" id="servicio-empresa-wrapper" style="display:none;">
-              <label for="f-servicio-empresa">Empresa / destino</label>
-              <select id="f-servicio-empresa" style="display:none;">
-                <option value="">Selecciona empresa</option>
-                <option value="Ática">Ática</option>
-                <option value="Co-Recicladora">Co-Recicladora</option>
-              </select>
-              <input type="text" id="f-servicio-empresa-text" style="display:none;" readonly value="Pepsico">
-            </div>
-            <div class="form-group full">
-              <label for="f-canal">Canal *</label>
-              <select id="f-canal">
-                <option value="Sin canal">Sin canal</option>
-                <option value="MQ">MQ</option>
-                <option value="3PD">3PD</option>
-              </select>
-            </div>
-            <div class="form-group full">
-              <label for="f-cedula">Cédula / documento conductor</label>
-              <input type="text" id="f-cedula" placeholder="Número de documento" autocomplete="off">
-            </div>
-            <div class="form-group full">
-              <label for="f-obs">Observaciones</label>
-              <textarea id="f-obs" placeholder="Notas, referencias de carga, número de orden, etc."></textarea>
-            </div>
-          </div>
-          <div class="form-footer">
-            <button class="btn" onclick="limpiarForm()"><i class="ti ti-refresh"></i> Limpiar</button>
-            <button class="btn btn-primary" onclick="registrarEntrada()"><i class="ti ti-login"></i> Registrar entrada</button>
-          </div>
-        </div>
-      </div>
 
-      <!-- REGISTROS -->
-      <div id="view-registros" class="view">
-        <div class="toolbar">
-          <div class="search-box">
-            <i class="ti ti-search"></i>
-            <input type="text" id="search-input" placeholder="Buscar por placa, conductor, muelle...">
-          </div>
-          <div class="filter-pills">
-            <button class="pill active" onclick="setFilter('todos',this)">Todos</button>
-            <button class="pill" onclick="setFilter('en_patio',this)">En patio</button>
-            <button class="pill" onclick="setFilter('salio',this)">Salidos</button>
-            <button class="pill" onclick="setFilter('Cargue',this)">Cargue</button>
-            <button class="pill" onclick="setFilter('Descargue',this)">Descargue</button>
-            <button class="pill" onclick="setFilter('Ambos',this)">Ambos</button>
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Prioridad</th>
-                <th>Placa</th>
-                <th>Conductor</th>
-                <th>Muelle</th>
-                <th>Tipo</th>
-                <th>Canal</th>
-                <th>Ingreso</th>
-                <th>Salida</th>
-                <th>Estado</th>
-                <th>Programado</th>
-                <th>Hora prog.</th>
-                <th>Servicio</th>
-                <th>Tiempo patio</th>
-                <th>Tiempo muelle</th>
-                <th>Motivo en patio</th>
-                <th>Operador</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="reg-table"></tbody>
-          </table>
-        </div>
-      </div>
 
-      <!-- ESTADÍSTICAS -->
-      <div id="view-estadisticas" class="view">
-        <div class="toolbar" style="justify-content: space-between; gap: 12px;">
-          <div class="filter-pills">
-            <button class="pill active" onclick="setPeriodoEstadisticas('hoy', this)">Hoy</button>
-            <button class="pill" onclick="setPeriodoEstadisticas('3dias', this)">Últimos 3 días</button>
-            <button class="pill" onclick="setPeriodoEstadisticas('semana', this)">Última semana</button>
-            <button class="pill" onclick="setPeriodoEstadisticas('mes', this)">Último mes</button>
-            <button class="pill" onclick="setPeriodoEstadisticas('todo', this)">Todo</button>
-            <button class="pill" onclick="setPeriodoEstadisticas('personalizado', this)">Personalizado</button>
-          </div>
-          <a class="btn btn-primary" href="estadisticas.html"><i class="ti ti-chart-histogram"></i> Ver documento de estadísticas</a>
-        </div>
-        <div id="estad-rango-custom" class="estad-rango-custom">
-          <label style="font-size:12.5px; color:var(--text-2);">Desde
-            <input type="date" id="estad-desde">
-          </label>
-          <label style="font-size:12.5px; color:var(--text-2);">Hasta
-            <input type="date" id="estad-hasta">
-          </label>
-          <button class="btn btn-sm btn-primary" onclick="renderEstadisticas()"><i class="ti ti-filter"></i> Aplicar</button>
-        </div>
+                <form id="loginForm" class="login-form" novalidate>
 
-        <div class="stats-row">
-          <div class="stat-card">
-            <div class="stat-ico blue"><i class="ti ti-truck"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="es-total">0</div>
-              <div class="stat-lbl">Entradas en el periodo</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico amber"><i class="ti ti-logout"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="es-salidas">0</div>
-              <div class="stat-lbl">Salidas en el periodo</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico teal"><i class="ti ti-clock-hour-4"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="es-promedio">0 min</div>
-              <div class="stat-lbl">Tiempo promedio en patio</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico green"><i class="ti ti-package-import"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="es-cargue-pct">0%</div>
-              <div class="stat-lbl">Con cargue</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-ico blue"><i class="ti ti-calendar-stats"></i></div>
-            <div class="stat-body">
-              <div class="stat-val" id="es-pico">—</div>
-              <div class="stat-lbl">Día con más movimiento</div>
-            </div>
-          </div>
-        </div>
+                    <!-- Correo -->
+                    <div class="form-field">
 
-        <div class="chart-grid" id="estad-chart-grid">
-          <div class="chart-card full">
-            <div class="chart-card-title">Entradas y salidas por día</div>
-            <div class="chart-card-sub">Volumen diario de vehículos dentro del periodo seleccionado</div>
-            <div class="chart-canvas-wrap"><canvas id="chart-entradas-dia"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-card-title">Tipo de operación</div>
-            <div class="chart-card-sub">Cargue, descargue o ambos</div>
-            <div class="chart-canvas-wrap short"><canvas id="chart-tipo"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-card-title">Vehículos por operador</div>
-            <div class="chart-card-sub">Entradas registradas por cada operador</div>
-            <div class="chart-canvas-wrap short"><canvas id="chart-operador"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-card-title">Tiempo promedio en patio por día</div>
-            <div class="chart-card-sub">Minutos promedio entre entrada y salida</div>
-            <div class="chart-canvas-wrap short"><canvas id="chart-tiempo-patio"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-card-title">Vehículos por canal</div>
-            <div class="chart-card-sub">Distribución por canal (MQ / 3PD)</div>
-            <div class="chart-canvas-wrap short"><canvas id="chart-canal"></canvas></div>
-          </div>
-        </div>
-      </div>
+                        <label for="email">
+                            Correo electrónico
+                        </label>
 
-      <!-- EXPORTAR -->
-      <div id="view-exportar" class="view">
-        <div class="export-card">
-          <h3><i class="ti ti-file-spreadsheet" style="font-size:15px;vertical-align:-2px;margin-right:6px;color:#3B6D11"></i>Exportar a Excel (.xlsx)</h3>
-          <p>Descarga todos los registros en un archivo Excel. Incluye placa, conductor, muelle, tipo, horas, duración, operadores y observaciones.</p>
-          <div class="export-row">
-            <button class="btn btn-success" onclick="exportExcel()"><i class="ti ti-download"></i> Exportar todos</button>
-            <button class="btn" onclick="exportExcelHoy()"><i class="ti ti-calendar-down"></i> Solo hoy</button>
-          </div>
-        </div>
-        <div class="export-card">
-          <h3><i class="ti ti-file-code" style="font-size:15px;vertical-align:-2px;margin-right:6px;color:#185FA5"></i>Exportar a JSON</h3>
-          <p>Copia de seguridad completa en formato JSON para importar en otro sistema.</p>
-          <div class="export-row">
-            <button class="btn btn-primary" onclick="exportJSON()"><i class="ti ti-download"></i> Descargar JSON</button>
-          </div>
-        </div>
-        <div class="export-card">
-          <h3><i class="ti ti-file-upload" style="font-size:15px;vertical-align:-2px;margin-right:6px;color:#854F0B"></i>Importar desde JSON</h3>
-          <p>Carga un archivo JSON exportado previamente. Los registros con el mismo ID no se duplicarán.</p>
-          <div class="export-row">
-            <input type="file" id="import-file" accept=".json" style="display:none">
-            <button class="btn" onclick="document.getElementById('import-file').click()"><i class="ti ti-upload"></i> Seleccionar JSON</button>
-          </div>
-        </div>
-        <div class="danger-card">
-          <h3><i class="ti ti-alert-triangle" style="font-size:15px;vertical-align:-2px;margin-right:6px"></i>Zona de peligro</h3>
-          <p>Elimina permanentemente todos los registros. Esta acción no se puede deshacer.</p>
-          <button class="btn btn-danger" onclick="borrarTodo()"><i class="ti ti-trash"></i> Borrar todos los registros</button>
-        </div>
-      </div>
+                        <div class="input-wrapper">
 
-      <!-- CONFIGURAR FIREBASE -->
-      <div id="view-configurar" class="view">
-        <div class="fb-config-card">
-          <h3><i class="ti ti-brand-firebase"></i> Configuración de Firebase (opcional)</h3>
-          <p style="font-size:13px;color:var(--text-3);margin-bottom:16px;line-height:1.7">
-            Sin Firebase la app funciona en modo <strong>local</strong> (datos en este navegador). Para sincronizar en tiempo real entre varios PCs, ingresa los datos de tu proyecto en <a href="https://console.firebase.google.com" target="_blank" style="color:var(--blue-600)">console.firebase.google.com</a> y haz clic en <strong>Conectar</strong>.
-          </p>
-          <div class="fb-fields">
-            <div class="form-group">
-              <label>API Key</label>
-              <input type="text" id="fb-apiKey" placeholder="AIzaSy...">
+                            <svg
+                                class="input-icon"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.8"
+                                aria-hidden="true"
+                            >
+                                <rect
+                                    x="3"
+                                    y="5"
+                                    width="18"
+                                    height="14"
+                                    rx="2"
+                                ></rect>
+
+                                <path d="m3 7 9 6 9-6"></path>
+                            </svg>
+
+                            <input
+                                type="email"
+                                id="email"
+                                name="email"
+                                autocomplete="username"
+                                placeholder="correo@empresa.com"
+                                required
+                            >
+
+                        </div>
+
+                        <span
+                            class="field-error"
+                            id="emailError"
+                            aria-live="polite"
+                        ></span>
+
+                    </div>
+
+
+                    <!-- Contraseña -->
+                    <div class="form-field">
+
+                        <div class="label-row">
+
+                            <label for="password">
+                                Contraseña
+                            </label>
+
+                            <button
+                                type="button"
+                                class="forgot-password"
+                                id="forgotPassword"
+                            >
+                                ¿Olvidaste tu contraseña?
+                            </button>
+
+                        </div>
+
+                        <div class="input-wrapper">
+
+                            <svg
+                                class="input-icon"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.8"
+                                aria-hidden="true"
+                            >
+                                <rect
+                                    x="4"
+                                    y="10"
+                                    width="16"
+                                    height="11"
+                                    rx="2"
+                                ></rect>
+
+                                <path
+                                    d="M8 10V7a4 4 0 0 1 8 0v3"
+                                ></path>
+                            </svg>
+
+                            <input
+                                type="password"
+                                id="password"
+                                name="password"
+                                autocomplete="current-password"
+                                placeholder="Ingresa tu contraseña"
+                                required
+                            >
+
+                            <button
+                                type="button"
+                                class="password-toggle"
+                                id="passwordToggle"
+                                aria-label="Mostrar contraseña"
+                            >
+
+                                <svg
+                                    id="eyeOpen"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.8"
+                                    aria-hidden="true"
+                                >
+                                    <path
+                                        d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"
+                                    ></path>
+
+                                    <circle
+                                        cx="12"
+                                        cy="12"
+                                        r="2.5"
+                                    ></circle>
+                                </svg>
+
+                                <svg
+                                    id="eyeClosed"
+                                    class="hidden"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.8"
+                                    aria-hidden="true"
+                                >
+                                    <path
+                                        d="m3 3 18 18"
+                                    ></path>
+
+                                    <path
+                                        d="M10.6 6.2A9.8 9.8 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-3.1 3.8"
+                                    ></path>
+
+                                    <path
+                                        d="M6.2 6.3C3.5 8.2 2 12 2 12s3.5 6 10 6c1.7 0 3.1-.4 4.3-1"
+                                    ></path>
+
+                                    <path
+                                        d="M9.9 9.9a3 3 0 0 0 4.2 4.2"
+                                    ></path>
+                                </svg>
+
+                            </button>
+
+                        </div>
+
+                        <span
+                            class="field-error"
+                            id="passwordError"
+                            aria-live="polite"
+                        ></span>
+
+                    </div>
+
+
+                    <!-- Recordarme -->
+                    <div class="form-options">
+
+                        <label class="checkbox-label">
+
+                            <input
+                                type="checkbox"
+                                id="remember"
+                                name="remember"
+                            >
+
+                            <span class="custom-checkbox"></span>
+
+                            <span>Recordar sesión</span>
+
+                        </label>
+
+                    </div>
+
+
+                    <!-- Error general -->
+                    <div
+                        class="login-message"
+                        id="loginMessage"
+                        role="alert"
+                        aria-live="polite"
+                    ></div>
+
+
+                    <!-- Botón -->
+                    <button
+                        type="submit"
+                        class="login-button"
+                        id="loginButton"
+                    >
+
+                        <span class="button-content">
+
+                            <span class="button-text">
+                                Iniciar sesión
+                            </span>
+
+                            <svg
+                                class="button-arrow"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                aria-hidden="true"
+                            >
+                                <path d="M5 12h14"></path>
+                                <path d="m13 6 6 6-6 6"></path>
+                            </svg>
+
+                        </span>
+
+                        <span class="button-loader">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </span>
+
+                    </button>
+
+                </form>
+
+
+                <div class="login-footer">
+
+                    <span>
+                        Acceso autorizado para usuarios y clientes de Inlotrans 
+                    </span>
+
+                    <span class="footer-divider"></span>
+
+                    <span>
+                        © <span id="currentYear"></span> Inlotrans
+                    </span>
+
+                </div>
+
             </div>
-            <div class="form-group">
-              <label>Auth Domain</label>
-              <input type="text" id="fb-authDomain" placeholder="mi-proyecto.firebaseapp.com">
-            </div>
-            <div class="form-group full">
-              <label>Database URL</label>
-              <input type="text" id="fb-databaseURL" placeholder="https://mi-proyecto-default-rtdb.firebaseio.com">
-            </div>
-            <div class="form-group">
-              <label>Project ID</label>
-              <input type="text" id="fb-projectId" placeholder="mi-proyecto">
-            </div>
-            <div class="form-group">
-              <label>App ID</label>
-              <input type="text" id="fb-appId" placeholder="1:123456:web:abc...">
-            </div>
-          </div>
-          <div class="form-footer">
-            <button class="btn" onclick="limpiarFbConfig()"><i class="ti ti-trash"></i> Limpiar config</button>
-            <button class="btn btn-primary" onclick="conectarFirebase()"><i class="ti ti-cloud-upload"></i> Conectar Firebase</button>
-          </div>
-        </div>
-        <div class="export-card">
-          <h3>¿Cómo obtener los datos de Firebase?</h3>
-          <p>
-            1. Ve a <strong>console.firebase.google.com</strong> → crea un proyecto gratis (plan Spark).<br>
-            2. Abre <strong>Realtime Database</strong> → Crear base de datos → modo de prueba.<br>
-            3. En <strong>Configuración del proyecto → Tus apps</strong>, registra una app web.<br>
-            4. Copia los valores del objeto <code style="background:var(--surface-2);padding:1px 5px;border-radius:4px;font-family:monospace">firebaseConfig</code> y pégalos arriba.
-          </p>
-        </div>
-      </div>
+
+        </section>
 
     </main>
-  </div>
-</div>
 
-<!-- MODAL SALIDA -->
-<div class="modal-backdrop" id="modal-salida">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title"><i class="ti ti-logout"></i> Registrar salida</div>
-      <button class="modal-close" onclick="closeModal('modal-salida')"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="modal-info-box" id="modal-salida-info"></div>
-    <div class="form-group">
-      <label for="m-hora-salida">Hora de salida</label>
-      <input type="datetime-local" id="m-hora-salida">
-    </div>
-    <div class="form-group" style="margin-top:12px">
-      <label for="m-obs-salida">Observaciones de salida</label>
-      <textarea id="m-obs-salida" placeholder="Notas al momento de la salida (opcional)..."></textarea>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-salida')">Cancelar</button>
-      <button class="btn btn-primary" onclick="confirmarSalida()"><i class="ti ti-check"></i> Confirmar salida</button>
-    </div>
-  </div>
-</div>
 
-<!-- MODAL EDITAR UBICACIÓN -->
-<div class="modal-backdrop" id="modal-editar">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title"><i class="ti ti-edit"></i> Editar ubicación</div>
-      <button class="modal-close" onclick="closeModal('modal-editar')"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="modal-info-box" id="modal-editar-info"></div>
-    <div class="form-group">
-      <label for="e-ubicacion">Ubicación *</label>
-      <select id="e-ubicacion" onchange="cambiarUbicacionEdit()">
-        <option value="Muelle">Muelle</option>
-        <option value="Patio">Patio</option>
-      </select>
-      <div id="muelle-options-edit" style="display:none">
-        <label>Número de muelle</label>
-        <select id="e-numeroMuelle">
-          <option>1</option>
-          <option>2</option>
-          <option>3</option>
-          <option>4</option>    
-          <option>5</option>
-          <option>6</option>  
-          <option>7</option>
-          <option>8</option>
-        </select>
-        <label>Bahía</label>
-        <input type="text" id="e-bahia" value="A" readonly disabled style="background:var(--surface-3); color:var(--text-2); cursor:not-allowed;">
-      </div>
-    </div>
-    <div class="form-group full">
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:400; text-transform:none;">
-        <input type="checkbox" id="e-tipo-cambio" onchange="toggleTipoEdit()" style="width:16px; height:16px; cursor:pointer;">
-        ¿Cambió el tipo de operación? <span style="font-weight:400;color:var(--text-3)">(opcional)</span>
-      </label>
-      <div id="tipo-edit-wrapper" style="display:none; margin-top:10px;">
-        <div class="radio-row" id="radio-tipo-edit">
-          <label class="radio-card sel-cargue" id="e-rc-cargue">
-            <input type="checkbox" name="e-tipo" value="Cargue" onchange="syncTipoUIEdit()" checked>
-            <i class="ti ti-package-import"></i> Cargue
-          </label>
-          <label class="radio-card" id="e-rc-descargue">
-            <input type="checkbox" name="e-tipo" value="Descargue" onchange="syncTipoUIEdit()">
-            <i class="ti ti-package-export"></i> Descargue
-          </label>
-        </div>
-        <div class="tipo-hint">Selecciona Cargue, Descargue, o ambos si el tipo de operación cambió.</div>
-      </div>
-    </div>
-    <div class="form-group full">
-      <label for="e-canal" id="e-canal-label">Canal</label>
-      <select id="e-canal" onchange="syncCanalEdit()">
-        <option value="Sin canal">Sin canal</option>
-        <option value="MQ">MQ</option>
-        <option value="3PD">3PD</option>
-      </select>
-      <div class="tipo-hint" id="e-canal-hint" style="display:none">Este vehículo llegó sin canal asignado: selecciona MQ o 3PD para guardar.</div>
-    </div>
-    <div class="form-group full">
-      <label for="e-obs-ubicacion">Observaciones de ubicación</label>
-      <textarea id="e-obs-ubicacion" placeholder="Descripción o motivo del cambio de ubicación"></textarea>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-editar')">Cancelar</button>
-      <button class="btn btn-primary" onclick="confirmarEdicionUbicacion()"><i class="ti ti-check"></i> Guardar cambios</button>
-    </div>
-  </div>
-</div>
+    <script type="module" src="js/login.js"></script>
 
-<!-- MODAL DETALLE -->
-<div class="modal-backdrop" id="modal-detalle">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title"><i class="ti ti-info-circle"></i> Detalle del vehículo</div>
-      <button class="modal-close" onclick="closeModal('modal-detalle')"><i class="ti ti-x"></i></button>
-    </div>
-    <div id="modal-detalle-body"></div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-detalle')">Cerrar</button>
-    </div>
-  </div>
-</div>
-
-<!-- GATE OPERADOR -->
-<div class="gate-backdrop" id="gate-operador">
-  <div class="gate-card">
-    <div class="gate-icon"><i class="ti ti-id-badge-2"></i></div>
-    <h2>¿Quién está en turno?</h2>
-    <p>Selecciona tu nombre para identificar quién registra los movimientos de hoy.</p>
-    <div class="operator-row" id="operator-list"></div>
-    <label style="display:flex; align-items:flex-start; gap:8px; margin-top:14px; font-size:12.5px; color:var(--text-2); text-align:left; cursor:pointer;">
-      <input type="checkbox" id="gate-nuevo-turno" checked style="margin-top:2px;">
-      <span>Es un cambio de turno: reinicia los contadores del día. Los vehículos que sigan en patio o muelle (sin salida registrada) continúan igual en el turno nuevo.</span>
-    </label>
-    <div class="gate-footer">
-      <button class="btn btn-primary" id="gate-continue-btn" onclick="confirmarOperador()" disabled>
-        <i class="ti ti-check"></i> Continuar
-      </button>
-    </div>
-  </div>
-</div>
-
-<!-- TOAST -->
-<div class="toast" id="toast"></div>
-
-<!-- ══════════════════════════════════════════════════
-     SCRIPTS — todo en un único bloque normal (no module)
-     para evitar problemas de scope entre módulos ES
-════════════════════════════════════════════════════ -->
-<script>
-/* ══════════ ESTADO GLOBAL ══════════ */
-var records         = [];
-var currentFilter   = 'todos';
-var currentDashboardView = 'todos';
-var selectedId      = null;
-var currentOperator = null;
-var firebaseActive  = false;
-var _fbSave, _fbDelete, _fbDeleteAll; // funciones Firebase inyectadas dinámicamente
-
-var OP_KEY       = 'porteria_op_v1';
-var RECORDS_KEY  = 'porteria_records_v1';
-var FB_CFG_KEY   = 'porteria_fb_cfg_v1';
-var TURNO_KEY    = 'porteria_turno_v1';
-
-var turnoActual  = null; // { operador, inicio }
-
-var OPERADORES = [
-  'Luis Milanes',
-  'Gerardo García',
-  'Tatiana Marentes',
-  'Seguridad',
-];
-
-/* ══════════ STORAGE LOCAL ══════════ */
-function loadLocal() {
-  try {
-    var raw = localStorage.getItem(RECORDS_KEY);
-    if (raw) {
-      var parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        records = parsed;
-        records.sort(function(a,b){ return new Date(b.horaEntrada) - new Date(a.horaEntrada); });
-      }
-    }
-  } catch(e) { records = []; }
-}
-function saveLocal() {
-  try { localStorage.setItem(RECORDS_KEY, JSON.stringify(records)); } catch(e) {}
-}
-
-/* ══════════ TURNOS ══════════ */
-function loadTurno() {
-  try {
-    var raw = localStorage.getItem(TURNO_KEY);
-    if (raw) {
-      var parsed = JSON.parse(raw);
-      if (parsed && parsed.inicio) { turnoActual = parsed; return; }
-    }
-  } catch(e) {}
-  // Sin turno guardado: se crea uno que "abarca" todo lo histórico,
-  // para no perder de vista contadores de datos ya existentes.
-  turnoActual = { operador: currentOperator, inicio: '1970-01-01T00:00' };
-  saveTurno();
-}
-function saveTurno() {
-  try { localStorage.setItem(TURNO_KEY, JSON.stringify(turnoActual)); } catch(e) {}
-}
-// Inicia un turno nuevo: reinicia los contadores del turno (entradas, salidas, cargues),
-// pero NO afecta a los vehículos que sigan en patio/muelle (sin salida registrada):
-// esos se siguen mostrando y contando igual, porque pasan al turno siguiente hasta que salgan.
-function nuevoTurno(operador) {
-  turnoActual = { operador: operador || currentOperator, inicio: nowLocal() };
-  saveTurno();
-
-  // Marcar continuidad en el historial de los vehículos que siguen sin salir,
-  // para que su información se traslade explícitamente al nuevo turno.
-  var activos = records.filter(function(r){ return !r.horaSalida; });
-  if (activos.length) {
-    var op = operador || currentOperator || null;
-    activos.forEach(function(rec){
-      var updated = Object.assign({}, rec, {
-        historial: agregarHistorial(rec, { fecha: turnoActual.inicio, tipo: 'turno', operador: op, texto: 'Continuación de turno' })
-      });
-      var idx = records.findIndex(function(x){ return x.id === rec.id; });
-      if (idx !== -1) records[idx] = updated;
-    });
-    // Si hay Firebase activo, sincronizamos los registros actualizados; si no, guardamos localmente.
-    if (firebaseActive && _fbSave) {
-      setSyncStatus('syncing');
-      Promise.all(activos.map(function(rec){
-        var up = records.find(function(x){ return x.id === rec.id; });
-        return _fbSave(up);
-      })).then(function(){
-        setSyncStatus('ok');
-        saveLocal();
-        refreshActiveView();
-      }).catch(function(){
-        setSyncStatus('error');
-        saveLocal();
-        refreshActiveView();
-      });
-    } else {
-      saveLocal();
-    }
-  }
-
-  refreshActiveView();
-  var enCurso = activos.length;
-  toast(
-    'Turno iniciado' + (enCurso ? ' — ' + enCurso + ' vehículo(s) en patio/muelle continúan en este turno' : ''),
-    'green', 'ti-id-badge-2'
-  );
-}
-
-/* ══════════ FIREBASE (cargado dinámicamente) ══════════ */
-function conectarFirebase() {
-  var cfg = {
-    apiKey:        document.getElementById('fb-apiKey').value.trim(),
-    authDomain:    document.getElementById('fb-authDomain').value.trim(),
-    databaseURL:   document.getElementById('fb-databaseURL').value.trim(),
-    projectId:     document.getElementById('fb-projectId').value.trim(),
-    appId:         document.getElementById('fb-appId').value.trim()
-  };
-  if (!cfg.apiKey || !cfg.databaseURL) {
-    toast('Completa al menos API Key y Database URL', 'red', 'ti-alert-circle');
-    return;
-  }
-  try { localStorage.setItem(FB_CFG_KEY, JSON.stringify(cfg)); } catch(e) {}
-  iniciarFirebase(cfg);
-}
-
-function iniciarFirebase(cfg) {
-  // Cargar SDK de Firebase dinámicamente como módulo ES
-  var script = document.createElement('script');
-  script.type = 'module';
-  script.textContent = [
-    'import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";',
-    'import { getDatabase, ref, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";',
-    'try {',
-    '  var app = initializeApp(' + JSON.stringify(cfg) + ', "porteria-" + Date.now());',
-    '  var db  = getDatabase(app);',
-    '  var regRef = ref(db, "porteria/registros");',
-    '  window._fbSave = function(rec) { return set(ref(db,"porteria/registros/"+rec.id), rec); };',
-    '  window._fbDelete = function(id) { return remove(ref(db,"porteria/registros/"+id)); };',
-    '  window._fbDeleteAll = function() { return remove(ref(db,"porteria/registros")); };',
-    '  onValue(regRef, function(snap) {',
-    '    var data = snap.val();',
-    '    var list = data ? Object.values(data) : [];',
-    '    list.sort(function(a,b){ return new Date(b.horaEntrada)-new Date(a.horaEntrada); });',
-    '    window._fbOnData(list);',
-    '  });',
-    '  window._fbReady = true;',
-    '} catch(e) { console.error("Firebase init error:", e); window._fbError = e.message; }'
-  ].join('\n');
-  document.head.appendChild(script);
-
-  // Esperar a que Firebase esté listo
-  var tries = 0;
-  var check = setInterval(function() {
-    tries++;
-    if (window._fbReady) {
-      clearInterval(check);
-      firebaseActive = true;
-      _fbSave      = window._fbSave;
-      _fbDelete    = window._fbDelete;
-      _fbDeleteAll = window._fbDeleteAll;
-      setSyncStatus('ok');
-      toast('¡Firebase conectado! Datos en tiempo real activos.', 'green', 'ti-cloud-check');
-      document.getElementById('local-mode-banner').style.display = 'none';
-    } else if (window._fbError) {
-      clearInterval(check);
-      toast('Error Firebase: ' + window._fbError, 'red', 'ti-cloud-off');
-    } else if (tries > 30) {
-      clearInterval(check);
-      toast('Tiempo de espera agotado al conectar Firebase', 'amber', 'ti-alert-triangle');
-    }
-  }, 300);
-}
-
-/* Callback que Firebase llama cuando hay cambios en tiempo real */
-window._fbOnData = function(list) {
-  records = list;
-  saveLocal(); // respaldo local
-  updateSidebarCount();
-  refreshActiveView();
-};
-
-/* ══════════ SYNC UI ══════════ */
-function setSyncStatus(status) {
-  var labels = { ok: 'Firebase activo', syncing: 'Guardando…', error: 'Sin Firebase', local: 'Local' };
-  var icons  = { ok: 'ti-cloud-check', syncing: 'ti-cloud-upload', error: 'ti-cloud-off', local: 'ti-device-floppy' };
-  ['sync-indicator','sync-top'].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.className = 'sync-badge' + (status === 'error' ? ' error' : status === 'syncing' ? ' syncing' : '');
-    el.innerHTML = '<i class="ti ' + icons[status] + '"></i> ' + labels[status];
-  });
-}
-
-/* ══════════ HELPERS ══════════ */
-function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
-function nowLocal() {
-  var now = new Date();
-  var off = now.getTimezoneOffset() * 60000;
-  return new Date(now - off).toISOString().slice(0,16);
-}
-function today() {
-  var now = new Date();
-  var off = now.getTimezoneOffset() * 60000;
-  return new Date(now - off).toISOString().slice(0,10);
-}
-// Valida que una fecha (string 'YYYY-MM-DD' o datetime-local) esté entre ayer y hoy,
-// es decir, no permite fechas futuras ni fechas de hace más de un día.
-function fechaDentroDeRango(valor) {
-  if (!valor) return false;
-  var fechaStr = valor.slice(0, 10);
-  var hoy = new Date(today() + 'T00:00:00');
-  var fecha = new Date(fechaStr + 'T00:00:00');
-  var ayer = new Date(hoy);
-  ayer.setDate(ayer.getDate() - 1);
-  return fecha >= ayer && fecha <= hoy;
-}
-function fmtDt(s) {
-  if (!s) return '—';
-  return new Date(s).toLocaleString('es-CO', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-}
-function getDestino(r) {
-  // 'destino' es el campo actual; 'muelle' se mantiene por compatibilidad con registros antiguos
-  return r.destino || r.muelle || '—';
-}
-function filterByOperator(list) {
-  if (!Array.isArray(list)) return [];
-  if (!currentOperator) return list;
-  // Los vehículos que aún están activos (sin salida registrada) deben seguir
-  // siendo visibles para cualquier operador de turno, sin importar quién los
-  // recibió originalmente — el cambio de operador no debe "perder" vehículos
-  // que siguen en patio o muelle. Solo los registros ya cerrados (con salida)
-  // se filtran por el operador que los recibió, para las vistas históricas.
-  return list.filter(function(r){ return !r.horaSalida || r.operadorEntrada === currentOperator; });
-}
-function formatDuration(minutes) {
-  if (minutes == null || isNaN(minutes)) return '—';
-  minutes = Math.round(minutes);
-  if (minutes < 0) return '—';
-  var horas = Math.floor(minutes / 60);
-  var mins = minutes % 60;
-  return horas > 0 ? horas + 'h ' + mins + 'min' : mins + ' min';
-}
-function getLocationDurations(r) {
-  var hist = getHistorial(r).slice().sort(function(a,b){ return new Date(a.fecha || 0) - new Date(b.fecha || 0); });
-  var patio = 0, muelle = 0;
-  var lastLoc = null, lastTime = null;
-  hist.forEach(function(item) {
-    var fecha = new Date(item.fecha || 0);
-    if (item.tipo === 'entrada') {
-      lastLoc = (item.ubicacion || '').indexOf('Patio') === 0 ? 'Patio' : (item.ubicacion || '').indexOf('Muelle') === 0 ? 'Muelle' : null;
-      lastTime = fecha;
-      return;
-    }
-    if (item.tipo === 'ubicacion') {
-      if (lastLoc && lastTime) {
-        var diff = (fecha - lastTime) / 60000;
-        if (diff > 0) {
-          if (lastLoc === 'Patio') patio += diff;
-          else if (lastLoc === 'Muelle') muelle += diff;
-        }
-      }
-      lastLoc = (item.ubicacion || '').indexOf('Patio') === 0 ? 'Patio' : (item.ubicacion || '').indexOf('Muelle') === 0 ? 'Muelle' : lastLoc;
-      lastTime = fecha;
-      return;
-    }
-    if (item.tipo === 'salida') {
-      if (lastLoc && lastTime) {
-        var diff = (fecha - lastTime) / 60000;
-        if (diff > 0) {
-          if (lastLoc === 'Patio') patio += diff;
-          else if (lastLoc === 'Muelle') muelle += diff;
-        }
-      }
-      lastLoc = null;
-      lastTime = null;
-    }
-  });
-  if (!r.horaSalida && lastLoc && lastTime) {
-    var diff = (new Date() - lastTime) / 60000;
-    if (diff > 0) {
-      if (lastLoc === 'Patio') patio += diff;
-      else if (lastLoc === 'Muelle') muelle += diff;
-    }
-  }
-  return { patio: Math.round(patio), muelle: Math.round(muelle) };
-}
-function minutosEnPatio(r) {
-  if (!r || !r.horaEntrada || r.horaSalida) return 0;
-  var diff = (new Date() - new Date(r.horaEntrada)) / 60000;
-  return diff < 0 ? 0 : Math.round(diff);
-}
-function requiereObservacionLargaEstadia(r) {
-  return r && !r.horaSalida && r.ubicacion === 'Patio' && minutosEnPatio(r) >= 240;
-}
-
-/* ══════════ PRIORIDAD POR TIEMPO DE ESPERA ══════════ */
-// Mientras más tiempo lleve un vehículo activo (sin salida), mayor su prioridad.
-function minutosEsperando(r) {
-  if (!r || !r.horaEntrada || r.horaSalida) return 0;
-  var diff = (new Date() - new Date(r.horaEntrada)) / 60000;
-  return diff < 0 ? 0 : diff;
-}
-// Ordena una lista de registros: primero los activos (sin salida), de mayor a menor
-// tiempo de espera; luego los que ya salieron, del más reciente al más antiguo.
-function ordenarPorPrioridad(list) {
-  return list.slice().sort(function(a, b) {
-    var aActivo = !a.horaSalida, bActivo = !b.horaSalida;
-    if (aActivo && !bActivo) return -1;
-    if (!aActivo && bActivo) return 1;
-    if (aActivo && bActivo) return minutosEsperando(b) - minutosEsperando(a);
-    return new Date(b.horaSalida || 0) - new Date(a.horaSalida || 0);
-  });
-}
-// Nivel de urgencia según el tiempo de espera, usado para colorear el badge de prioridad.
-function nivelPrioridad(minutos) {
-  if (minutos >= 240) return 'alta';
-  if (minutos >= 120) return 'media';
-  return 'normal';
-}
-// Motivo por el cual un vehículo activo permanece en patio (aún no pasa a muelle).
-// Se muestra directamente en la tabla de Registros para tener control visible sin abrir el detalle.
-function celdaMotivoPatio(r) {
-  if (r.horaSalida || r.ubicacion !== 'Patio') return '<span style="color:var(--text-3); font-size:12px;">—</span>';
-  if (!r.obsUbicacion) {
-    return '<span style="color:var(--amber-600); font-size:12px; cursor:pointer; text-decoration:underline;" title="Clic para registrar el motivo" onclick="openModalEditar(\'' + r.id + '\')">Sin registrar</span>';
-  }
-  var texto = r.obsUbicacion;
-  var corto = texto.length > 55 ? texto.slice(0, 55) + '…' : texto;
-  var tip   = texto.replace(/"/g, '&quot;');
-  return '<span title="' + tip + '" style="font-size:12px; color:var(--text-2);">' + corto + '</span>';
-}
-function badgePrioridad(r, rank) {
-  if (r.horaSalida) return '<span class="badge badge-salio">—</span>';
-  var min = minutosEsperando(r);
-  var nivel = nivelPrioridad(min);
-  var clase = nivel === 'alta' ? 'badge-amber' : (nivel === 'media' ? 'badge-descargue' : 'badge-en-patio');
-  var horas = Math.floor(min / 60), mins = Math.round(min % 60);
-  var tiempoTxt = horas > 0 ? horas + 'h ' + mins + 'min' : mins + 'min';
-  return '<span class="badge ' + clase + '" title="Esperando hace ' + tiempoTxt + '">' +
-    '<i class="ti ti-flag-3"></i> #' + rank + ' · ' + tiempoTxt +
-  '</span>';
-}
-/* ══════════ HISTORIAL DE OBSERVACIONES Y ACTUALIZACIONES ══════════ */
-// Agrega una entrada nueva al historial de un registro sin perder las anteriores.
-function agregarHistorial(rec, entrada) {
-  var hist = Array.isArray(rec.historial) ? rec.historial.slice() : [];
-  hist.push(entrada);
-  return hist;
-}
-// Devuelve el historial de un registro. Si es un registro antiguo (creado antes de
-// esta función) que no tiene historial guardado, lo reconstruye con los campos sueltos
-// que ya existían (obs, obsUbicacion, obsSalida) para no perder esa información.
-function getHistorial(r) {
-  if (Array.isArray(r.historial) && r.historial.length) return r.historial;
-  var h = [];
-  if (r.horaEntrada) h.push({ fecha: r.horaEntrada, tipo: 'entrada', operador: r.operadorEntrada, ubicacion: getDestino(r), texto: r.obs || '' });
-  if (r.obsUbicacion) h.push({ fecha: r.horaEntrada, tipo: 'ubicacion', operador: r.operadorEntrada, ubicacion: getDestino(r), texto: r.obsUbicacion });
-  if (r.horaSalida) h.push({ fecha: r.horaSalida, tipo: 'salida', operador: r.operadorSalida, texto: r.obsSalida || '' });
-  return h;
-}
-function iconoHistorial(tipo) {
-  return tipo === 'entrada' ? 'ti-login' : tipo === 'salida' ? 'ti-logout' : tipo === 'operacion' ? 'ti-transfer-in' : tipo === 'canal' ? 'ti-route' : 'ti-edit';
-}
-function tituloHistorial(item) {
-  if (item.tipo === 'entrada') return 'Entrada registrada' + (item.ubicacion ? ' — ' + item.ubicacion : '');
-  if (item.tipo === 'salida')  return 'Salida registrada';
-  if (item.tipo === 'ubicacion') {
-    return item.ubicacionAnterior && item.ubicacionAnterior !== item.ubicacion
-      ? 'Ubicación actualizada: ' + item.ubicacionAnterior + ' → ' + item.ubicacion
-      : 'Ubicación confirmada' + (item.ubicacion ? ' — ' + item.ubicacion : '');
-  }
-  if (item.tipo === 'operacion') {
-    return item.tipoAnterior && item.tipoAnterior !== item.tipoNuevo
-      ? 'Tipo de operación actualizado: ' + item.tipoAnterior + ' → ' + item.tipoNuevo
-      : 'Tipo de operación confirmado' + (item.tipoNuevo ? ' — ' + item.tipoNuevo : '');
-  }
-  if (item.tipo === 'canal') {
-    return item.canalAnterior && item.canalAnterior !== item.canalNuevo
-      ? 'Canal actualizado: ' + item.canalAnterior + ' → ' + item.canalNuevo
-      : 'Canal confirmado' + (item.canalNuevo ? ' — ' + item.canalNuevo : '');
-  }
-  return 'Actualización';
-}
-// Arma el HTML del bloque de historial para el modal de detalle, del más reciente al más antiguo.
-function renderHistorialHtml(r) {
-  var hist = getHistorial(r).slice().sort(function(a, b) { return new Date(b.fecha || 0) - new Date(a.fecha || 0); });
-  if (!hist.length) return '<p style="color:var(--text-3); font-size:12.5px;">Sin observaciones ni actualizaciones registradas.</p>';
-  return hist.map(function(item) {
-    return '<div class="historial-item">' +
-      '<div class="historial-ico"><i class="ti ' + iconoHistorial(item.tipo) + '"></i></div>' +
-      '<div class="historial-body">' +
-        '<div class="historial-top">' +
-          '<strong>' + tituloHistorial(item) + '</strong>' +
-          '<span class="historial-fecha">' + fmtDt(item.fecha) + '</span>' +
-        '</div>' +
-        '<div class="historial-op"><i class="ti ti-user"></i> ' + (item.operador || '—') + '</div>' +
-        (item.texto ? '<div class="historial-texto">' + item.texto + '</div>' : '') +
-      '</div>' +
-    '</div>';
-  }).join('');
-}
-function duracion(entrada, salida) {
-  if (!entrada || !salida) return '—';
-  var diff = (new Date(salida) - new Date(entrada)) / 60000;
-  if (diff < 0) return '—';
-  var h = Math.floor(diff / 60), m = Math.round(diff % 60);
-  return h === 0 ? m + ' min' : h + 'h ' + m + 'min';
-}
-function updateSidebarCount() {
-  var el = document.getElementById('sidebar-count');
-  if (el) el.textContent = records.length + ' registro' + (records.length !== 1 ? 's' : '');
-}
-function refreshActiveView() {
-  // IMPORTANTE: se refrescan SIEMPRE las tres vistas (Dashboard, Registros, Estadísticas),
-  // sin importar cuál esté visible en este momento. Antes solo se re-renderizaba la vista
-  // activa, así que si una entrada/salida llegaba mientras el usuario estaba en otra pestaña,
-  // esa vista se quedaba con datos viejos hasta que el usuario la abriera. Además, dentro de
-  // una misma vista (Dashboard) las tarjetas superiores (s-total, s-patio, s-muelle, etc.) y
-  // la grilla de muelles se pintan ahora siempre en la misma pasada, para que nunca se vea
-  // una actualizada y la otra no.
-  renderDashboard();
-  renderRegistros();
-  renderEstadisticas();
-  refreshMuelleSelectsSiAbiertos();
-}
-
-// Si el formulario de "Nueva entrada" o el modal "Editar ubicación" están abiertos
-// con "Muelle" seleccionado, refresca la lista de muelles libres cada vez que llegan
-// datos nuevos (Firebase en tiempo real o el ciclo de refresco local), para que un
-// muelle recién liberado aparezca como opción sin tener que recargar la página.
-function refreshMuelleSelectsSiAbiertos() {
-  var viewEntrada = document.getElementById('view-entrada');
-  if (viewEntrada && viewEntrada.classList.contains('active')) {
-    var ubicacionForm = document.getElementById('f-ubicacion');
-    if (ubicacionForm && ubicacionForm.value === 'Muelle') {
-      poblarSelectMuelles(document.getElementById('f-numeroMuelle'), null);
-    }
-  }
-  var modalEditar = document.getElementById('modal-editar');
-  if (modalEditar && modalEditar.classList.contains('open')) {
-    var ubicacionEdit = document.getElementById('e-ubicacion');
-    if (ubicacionEdit && ubicacionEdit.value === 'Muelle') {
-      var rec = records.find(function(x){ return x.id === selectedId; });
-      var muelleActual = (rec && rec.ubicacion === 'Muelle') ? rec.numeroMuelle : null;
-      poblarSelectMuelles(document.getElementById('e-numeroMuelle'), muelleActual);
-    }
-  }
-}
-
-/* ══════════ TOAST ══════════ */
-function toast(msg, type, icon) {
-  type = type || 'blue'; icon = icon || 'ti-check';
-  var t = document.getElementById('toast');
-  t.innerHTML = '<i class="ti ' + icon + '"></i>' + msg;
-  t.className = 'toast show ' + type;
-  clearTimeout(t._to);
-  t._to = setTimeout(function(){ t.className = 'toast'; }, 2800);
-}
-
-/* ══════════ OPERADOR ══════════ */
-function initials(name) {
-  return name.split(' ').map(function(p){ return p[0]; }).slice(0,2).join('').toUpperCase();
-}
-function renderOperatorList(selected) {
-  document.getElementById('operator-list').innerHTML = OPERADORES.map(function(name) {
-    return '<div class="operator-card ' + (name === selected ? 'selected' : '') + '" onclick="selectOperator(\'' + name + '\')">' +
-      '<div class="op-av">' + initials(name) + '</div>' +
-      '<div><div class="operator-card-name">' + name + '</div><div class="operator-card-role">Operador de turno</div></div>' +
-      '<i class="ti ti-circle-check chk"></i>' +
-    '</div>';
-  }).join('');
-}
-function selectOperator(name) {
-  currentOperator = name;
-  renderOperatorList(name);
-  document.getElementById('gate-continue-btn').disabled = false;
-}
-function confirmarOperador() {
-  if (!currentOperator) return;
-  var esNuevoTurno = document.getElementById('gate-nuevo-turno').checked;
-  try { localStorage.setItem(OP_KEY, currentOperator); } catch(e) {}
-  updateOperatorUI();
-  document.getElementById('gate-operador').classList.remove('open');
-  if (esNuevoTurno) {
-    nuevoTurno(currentOperator); // reinicia contadores del turno; muestra su propio toast
-  } else {
-    toast('Operador actualizado — ' + currentOperator, 'green', 'ti-id-badge-2');
-  }
-}
-function openGate() {
-  renderOperatorList(currentOperator);
-  document.getElementById('gate-continue-btn').disabled = !currentOperator;
-  var chk = document.getElementById('gate-nuevo-turno');
-  if (chk) chk.checked = true; // por defecto se asume cambio de turno
-  document.getElementById('gate-operador').classList.add('open');
-}
-function updateOperatorUI() {
-  var name = currentOperator || 'Sin operador';
-  var ini  = currentOperator ? initials(currentOperator) : '--';
-  document.getElementById('op-name-sb').textContent   = name;
-  document.getElementById('op-name-top').textContent  = name;
-  document.getElementById('op-avatar-sb').textContent = ini;
-}
-
-/* ══════════ NAVEGACIÓN ══════════ */
-var titles = {
-  dashboard:  'Dashboard',
-  entrada:    'Registrar entrada',
-  registros:  'Registros de vehículos',
-  estadisticas: 'Estadísticas',
-  exportar:   'Exportar / Importar datos',
-  configurar: 'Configurar Firebase'
-};
-function showView(v) {
-  document.querySelectorAll('.view').forEach(function(el){ el.classList.remove('active'); });
-  document.querySelectorAll('.nav-item').forEach(function(el){ el.classList.remove('active'); });
-  document.getElementById('view-' + v).classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(function(el) {
-    if (el.getAttribute('onclick') && el.getAttribute('onclick').indexOf("'" + v + "'") !== -1)
-      el.classList.add('active');
-  });
-  document.getElementById('topbar-title').textContent = titles[v] || v;
-  if (v === 'registros') renderRegistros();
-  if (v === 'dashboard')  renderDashboard();
-  if (v === 'estadisticas') renderEstadisticas();
-  closeSidebar(); // en móvil, al elegir una sección se cierra el menú
-}
-
-/* ══════════ SIDEBAR MÓVIL ══════════ */
-function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('open');
-  document.getElementById('sidebar-overlay').classList.toggle('open');
-}
-function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sidebar-overlay').classList.remove('open');
-}
-
-/* ══════════ TIPO OPERACIÓN (checkbox cards, permite Cargue + Descargue) ══════════ */
-// Nota: NO se hace toggle manual del checked aquí. El <label> ya envuelve el
-// <input>, así que el navegador se encarga de marcarlo/desmarcarlo al hacer
-// clic en cualquier parte de la tarjeta. Manipular "checked" a mano en un
-// onclick del label duplica el evento (una vez por JS, otra por el propio
-// navegador) y ambos cambios se cancelan, dejando el checkbox "atascado".
-// Por eso solo escuchamos "change" para refrescar los estilos.
-function syncTipoUI() {
-  var chkCargue    = document.querySelector('input[name=tipo][value=Cargue]');
-  var chkDescargue = document.querySelector('input[name=tipo][value=Descargue]');
-  document.getElementById('rc-cargue').className    = 'radio-card' + (chkCargue.checked    ? ' sel-cargue'    : '');
-  document.getElementById('rc-descargue').className = 'radio-card' + (chkDescargue.checked ? ' sel-descargue' : '');
-}
-function getTipoSeleccionado() {
-  var seleccionados = Array.prototype.slice.call(document.querySelectorAll('input[name=tipo]:checked')).map(function(i){ return i.value; });
-  if (seleccionados.length === 2) return 'Ambos';
-  return seleccionados[0] || null;
-}
-
-/* ══════════ TIPO OPERACIÓN — versión del modal Editar ubicación ══════════ */
-// Checkboxes independientes (name="e-tipo") para no interferir con el formulario
-// de registro de entrada, que usa name="tipo" sobre los mismos valores.
-// El cambio de tipo es OPCIONAL: solo se aplica si se marca "¿Cambió el tipo de operación?".
-function toggleTipoEdit() {
-  var activo = document.getElementById('e-tipo-cambio').checked;
-  document.getElementById('tipo-edit-wrapper').style.display = activo ? 'block' : 'none';
-}
-function syncTipoUIEdit() {
-  var chkCargue    = document.querySelector('input[name=e-tipo][value=Cargue]');
-  var chkDescargue = document.querySelector('input[name=e-tipo][value=Descargue]');
-  document.getElementById('e-rc-cargue').className    = 'radio-card' + (chkCargue.checked    ? ' sel-cargue'    : '');
-  document.getElementById('e-rc-descargue').className = 'radio-card' + (chkDescargue.checked ? ' sel-descargue' : '');
-}
-function getTipoSeleccionadoEdit() {
-  var seleccionados = Array.prototype.slice.call(document.querySelectorAll('input[name=e-tipo]:checked')).map(function(i){ return i.value; });
-  if (seleccionados.length === 2) return 'Ambos';
-  return seleccionados[0] || null;
-}
-
-/* ══════════ CANAL — editable en el modal Editar ubicación ══════════ */
-// Algunos vehículos llegan sin saber a qué canal van; el canal queda "Sin canal"
-// hasta que se defina. Mientras esté en "Sin canal", el campo es obligatorio
-// (no se puede guardar la edición sin resolverlo).
-function syncCanalEdit() {
-  var valor = document.getElementById('e-canal').value;
-  var lbl = document.getElementById('e-canal-label');
-  var hint = document.getElementById('e-canal-hint');
-  var sinCanal = valor === 'Sin canal';
-  lbl.textContent = 'Canal' + (sinCanal ? ' *' : '');
-  hint.style.display = sinCanal ? 'block' : 'none';
-}
-
-function cambiarProgramado() {
-  var programado = document.getElementById('f-programado').value;
-  var wrapper = document.getElementById('programacion-wrapper');
-  wrapper.style.display = programado === 'Programado' ? 'block' : 'none';
-}
-function cambiarServicioTipo() {
-  var servicioTipo = document.getElementById('f-servicio-tipo').value;
-  var wrapper = document.getElementById('servicio-empresa-wrapper');
-  var empresaSelect = document.getElementById('f-servicio-empresa');
-  var empresaText = document.getElementById('f-servicio-empresa-text');
-  if (servicioTipo === 'Reciclaje') {
-    wrapper.style.display = 'block';
-    empresaSelect.style.display = 'block';
-    empresaText.style.display = 'none';
-    empresaSelect.value = '';
-  } else if (servicioTipo === 'Insumos') {
-    wrapper.style.display = 'block';
-    empresaSelect.style.display = 'none';
-    empresaText.style.display = 'block';
-    empresaText.value = 'Pepsico';
-  } else {
-    wrapper.style.display = 'none';
-    empresaSelect.style.display = 'none';
-    empresaText.style.display = 'none';
-  }
-}
-
-function computeDestino(ubicacion, numeroMuelle, bahia) {
-  if (ubicacion === "Patio") return "Patio";
-  return "Muelle " + numeroMuelle + " - Bahía " + bahia;
-}
-function cambiarUbicacion() {
-
-    const ubicacion = document.getElementById("f-ubicacion").value;
-
-    document.getElementById("muelle-options").style.display =
-        ubicacion === "Muelle"
-            ? "block"
-            : "none";
-
-    if (ubicacion === "Muelle") {
-        var libres = poblarSelectMuelles(document.getElementById('f-numeroMuelle'), null);
-        if (!libres) toast('No hay muelles libres en este momento', 'red', 'ti-alert-circle');
-    }
-}
-
-/* ══════════ REGISTRAR ENTRADA ══════════ */
-function registrarEntrada() {
-  if (!currentOperator) { openGate(); toast('Selecciona el operador de turno', 'amber', 'ti-id-badge-2'); return; }
-
-  var conductor = document.getElementById('f-conductor').value.trim();
-  var placa     = document.getElementById('f-placa').value.trim().toUpperCase();
-  var hora      = document.getElementById('f-hora').value;
-  var ubicacion = document.getElementById('f-ubicacion').value.trim();
-  var numeroMuelle = document.getElementById('f-numeroMuelle').value;
-  var bahia = 'A'; // Única bahía disponible por muelle (J3)
-  var canal     = document.getElementById('f-canal').value;
-  var tipo      = getTipoSeleccionado();
-  var programado = document.getElementById('f-programado').value;
-  var horaProgramacionInput = document.getElementById('f-hora-programacion').value;
-  var horaProgramacion = horaProgramacionInput ? (today() + 'T' + horaProgramacionInput) : '';
-  var servicioTipo = document.getElementById('f-servicio-tipo').value;
-  var servicioEmpresa = servicioTipo === 'Reciclaje'
-    ? document.getElementById('f-servicio-empresa').value
-    : servicioTipo === 'Insumos'
-      ? document.getElementById('f-servicio-empresa-text').value
-      : '';
-  var cedula    = document.getElementById('f-cedula').value.trim();
-  var obs       = document.getElementById('f-obs').value.trim();
-  if (!hora)        { toast('Selecciona la hora de ingreso', 'red', 'ti-alert-circle'); return; }
-  if (!fechaDentroDeRango(hora)) {
-    toast('La fecha de ingreso no puede ser futura ni anterior a ayer', 'red', 'ti-alert-circle'); return;
-  }
-  if (!placa)       { toast('Ingresa la placa del vehículo', 'red', 'ti-alert-circle'); return; }
-  if (!ubicacion)   { toast('Ingresa la ubicación',       'red', 'ti-alert-circle'); return; }
-  if (ubicacion === 'Muelle' && !numeroMuelle) { toast('No hay muelles libres para asignar en este momento', 'red', 'ti-alert-circle'); return; }
-  if (!canal)       { toast('Selecciona el canal',        'red', 'ti-alert-circle'); return; }
-  if (!tipo)        { toast('Selecciona al menos un tipo de operación (Cargue y/o Descargue)', 'red', 'ti-alert-circle'); return; }
-  if (!programado)  { toast('Selecciona si el vehículo está programado o no', 'red', 'ti-alert-circle'); return; }
-  if (programado === 'Programado' && !horaProgramacion) {
-    toast('Ingresa hora de programación', 'red', 'ti-alert-circle'); return;
-  }
-  if (servicioTipo === 'Reciclaje' && !servicioEmpresa) {
-    toast('Selecciona la empresa de reciclaje', 'red', 'ti-alert-circle'); return;
-  }
-  var destinoCompleto = computeDestino(ubicacion, numeroMuelle, bahia);
-  var rec = {
-      id: uid(),
-      conductor: conductor,
-      placa: placa,
-
-      horaEntrada: hora,
-      programado: programado === 'Programado',
-      horaProgramacion: horaProgramacion || '',
-
-      ubicacion: ubicacion,
-      numeroMuelle: numeroMuelle,
-      bahia: bahia,
-      canal: canal,
-
-      destino: destinoCompleto,
-
-      tipo: tipo,
-
-      cedula: cedula,
-      obs: obs,
-
-      servicioTipo: servicioTipo || 'Normal',
-      servicioEmpresa: servicioEmpresa,
-
-      horaSalida: null,
-      obsSalida: '',
-
-      fecha: hora.slice(0,10),
-
-      operadorEntrada: currentOperator,
-      operadorSalida: null,
-
-      historial: [{
-        fecha: hora,
-        tipo: 'entrada',
-        operador: currentOperator,
-        ubicacion: destinoCompleto,
-        texto: obs || ''
-      }]
-  };
-  console.log('Registrar entrada:', rec);
-  if (firebaseActive && _fbSave) {
-    setSyncStatus('syncing');
-    _fbSave(rec)
-      .then(function() {
-        setSyncStatus('ok');
-        toast('Entrada registrada — ' + placa, 'green', 'ti-truck');
-        limpiarForm();
-        showView('dashboard');
-      })
-      .catch(function() {
-        setSyncStatus('error');
-        toast('Error al guardar en Firebase', 'red', 'ti-x');
-      });
-  } else {
-    // Modo local
-    records.unshift(rec);
-    saveLocal();
-    updateSidebarCount();
-    toast('Entrada registrada — ' + placa + ' (local)', 'green', 'ti-truck');
-    limpiarForm();
-    showView('dashboard');
-  }
-}
-
-function limpiarForm() {
-  ['f-conductor','f-placa','f-ubicacion','f-numeroMuelle','f-canal','f-cedula','f-obs','f-programado','f-hora-programacion','f-servicio-tipo'].forEach(function(id){
-    document.getElementById(id).value = '';
-  });
-  document.getElementById('f-bahia').value = 'A';
-  document.getElementById('f-servicio-empresa').value = '';
-  document.getElementById('f-servicio-empresa-text').value = 'Pepsico';
-  document.getElementById('programacion-wrapper').style.display = 'none';
-  document.getElementById('servicio-empresa-wrapper').style.display = 'none';
-  document.getElementById('f-canal').value = 'Sin canal';
-  document.getElementById('f-hora').value = nowLocal();
-  document.querySelector('input[name=tipo][value=Cargue]').checked = true;
-  document.querySelector('input[name=tipo][value=Descargue]').checked = false;
-  syncTipoUI();
-  cambiarServicioTipo();
-}
-
-/* ══════════ DASHBOARD ══════════ */
-function tipoBadgeClass(tipo) {
-  return tipo === 'Cargue' ? 'badge-cargue' : tipo === 'Descargue' ? 'badge-descargue' : 'badge-ambos';
-}
-function tipoIcon(tipo) {
-  return tipo === 'Cargue' ? 'ti-package-import' : tipo === 'Descargue' ? 'ti-package-export' : 'ti-transfer-in';
-}
-function getStateLabel(r) {
-  if (r.horaSalida) return 'Salió';
-  if (r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0) return 'En muelle';
-  return 'En patio';
-}
-function getStateBadgeClass(r) {
-  if (r.horaSalida) return 'badge-salio';
-  return getStateLabel(r) === 'En muelle' ? 'badge-en-muelle' : 'badge-en-patio';
-}
-function getStateIcon(r) {
-  if (r.horaSalida) return 'ti-check';
-  return getStateLabel(r) === 'En muelle' ? 'ti-door' : 'ti-building-warehouse';
-}
-function puedeDespachar(r) {
-  if (!r) return false;
-  return r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0 || (r.destino || '').indexOf('Muelle') !== -1;
-}
-function getDashboardRecords() {
-  // Solo los vehículos activos que están en Patio (los de Muelle se muestran en la grilla de muelles)
-  var base = filterByOperator(records);
-  var enPatio = base.filter(function(r){
-    return !r.horaSalida && r.ubicacion !== 'Muelle' && (r.destino || '').indexOf('Muelle') !== 0;
-  });
-  return ordenarPorPrioridad(enPatio);
-}
-// Devuelve, para cada muelle del 1 al 8, el vehículo activo que lo ocupa (o null si está libre)
-function getMuellesOcupacion() {
-  var base = filterByOperator(records);
-  var enMuelle = base.filter(function(r){
-    return !r.horaSalida && (r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0);
-  });
-  var ocupacion = {};
-  for (var n = 1; n <= 8; n++) {
-    ocupacion[n] = enMuelle.find(function(r){ return String(r.numeroMuelle) === String(n); }) || null;
-  }
-  return ocupacion;
-}
-// Llena un <select> de número de muelle solo con los muelles libres.
-// Si se pasa muelleActual (edición de un vehículo ya asignado a un muelle),
-// ese muelle también se incluye aunque esté "ocupado", porque lo ocupa el propio vehículo.
-// Devuelve la cantidad de opciones disponibles.
-function poblarSelectMuelles(selectEl, muelleActual) {
-  if (!selectEl) return 0;
-  var ocupacion = getMuellesOcupacion();
-  var valorPrevio = selectEl.value;
-  var html = '';
-  var libres = 0;
-  for (var n = 1; n <= 8; n++) {
-    var ocupante = ocupacion[n];
-    var esElActual = muelleActual != null && String(n) === String(muelleActual);
-    if (!ocupante || esElActual) {
-      libres++;
-      html += '<option value="' + n + '">' + n + (esElActual ? ' (actual)' : '') + '</option>';
-    }
-  }
-  selectEl.innerHTML = html || '<option value="" disabled selected>No hay muelles libres</option>';
-  if (valorPrevio && selectEl.querySelector('option[value="' + valorPrevio + '"]')) {
-    selectEl.value = valorPrevio;
-  } else if (muelleActual != null && selectEl.querySelector('option[value="' + muelleActual + '"]')) {
-    selectEl.value = muelleActual;
-  }
-  return libres;
-}
-function renderMuellesGrid() {
-  var ocupacion = getMuellesOcupacion();
-  var grid = document.getElementById('muelles-grid');
-  var ocupados = 0;
-  var html = '';
-  for (var n = 1; n <= 8; n++) {
-    var r = ocupacion[n];
-    if (r) {
-      ocupados++;
-      var min = minutosEsperando(r);
-      var horas = Math.floor(min / 60), mins = Math.round(min % 60);
-      var tiempoTxt = horas > 0 ? horas + 'h ' + mins + 'min' : mins + 'min';
-      html += '<div class="muelle-card ocupado">' +
-        '<div class="muelle-card-top">' +
-          '<span class="muelle-card-num">Muelle ' + n + '</span>' +
-          '<span class="muelle-card-status ocupado">Ocupado</span>' +
-        '</div>' +
-        '<div class="muelle-card-body">' +
-          '<div class="muelle-card-placa">' + r.placa + '</div>' +
-          r.conductor + '<br>' +
-          '<span class="badge ' + tipoBadgeClass(r.tipo) + '" style="margin-top:4px;"><i class="ti ' + tipoIcon(r.tipo) + '"></i>' + r.tipo + '</span>' +
-          ' · ' + tiempoTxt +
-        '</div>' +
-      '</div>';
-    } else {
-      html += '<div class="muelle-card libre">' +
-        '<div class="muelle-card-top">' +
-          '<span class="muelle-card-num">Muelle ' + n + '</span>' +
-          '<span class="muelle-card-status libre">Libre</span>' +
-        '</div>' +
-        '<div class="muelle-card-body muelle-card-empty">Disponible</div>' +
-      '</div>';
-    }
-  }
-  grid.innerHTML = html;
-  var resumen = document.getElementById('muelles-resumen');
-  if (resumen) resumen.textContent = ocupados + ' de 8 ocupados · ' + (8 - ocupados) + ' libres';
-}
-function renderDashboard() {
-  if (!turnoActual) loadTurno();
-  var inicioTurno = new Date(turnoActual.inicio);
-  var visibles = filterByOperator(records);
-
-  // Contadores que SÍ se reinician con el cambio de turno (entradas/salidas/cargues del turno actual)
-  // Incluye los vehículos que siguen activos (sin horaSalida) aunque su horaEntrada sea anterior al inicio del turno,
-  // para que "pasen" al nuevo turno con toda su información.
-  var entradasTurno = visibles.filter(function(r){
-    if (!r.horaEntrada) return false;
-    var he = new Date(r.horaEntrada);
-    if (he >= inicioTurno) return true; // ingresó durante este turno
-    // si ingresó antes pero sigue activo, contar como entrada del turno actual (continuación)
-    return !r.horaSalida;
-  });
-  var salidasTurno  = visibles.filter(function(r){ return r.horaSalida  && new Date(r.horaSalida)  >= inicioTurno; });
-
-  document.getElementById('s-total').textContent   = entradasTurno.length;
-  document.getElementById('s-salidas').textContent = salidasTurno.length;
-  document.getElementById('s-cargue').textContent  = entradasTurno.filter(function(r){ return r.tipo === 'Cargue' || r.tipo === 'Ambos'; }).length;
-
-  // Patio/muelle NO se reinician: cualquier vehículo sin salida sigue contando aunque cambie el turno
-  document.getElementById('s-patio').textContent   = visibles.filter(function(r){ return !r.horaSalida && r.ubicacion !== 'Muelle'; }).length;
-  document.getElementById('s-muelle').textContent  = visibles.filter(function(r){ return !r.horaSalida && (r.ubicacion === 'Muelle' || (r.destino || '').indexOf('Muelle') === 0); }).length;
-
-  var turnoDuracion = entradasTurno.reduce(function(acc, r) {
-    var d = getLocationDurations(r);
-    if (d.patio > 0) { acc.patioTotal += d.patio; acc.patioCount++; }
-    if (d.muelle > 0) { acc.muelleTotal += d.muelle; acc.muelleCount++; }
-    return acc;
-  }, { patioTotal: 0, patioCount: 0, muelleTotal: 0, muelleCount: 0 });
-  var promedioPatio  = turnoDuracion.patioCount  ? turnoDuracion.patioTotal  / turnoDuracion.patioCount  : 0;
-  var promedioMuelle = turnoDuracion.muelleCount ? turnoDuracion.muelleTotal / turnoDuracion.muelleCount : 0;
-  document.getElementById('s-tiempo-patio').textContent = formatDuration(promedioPatio);
-  document.getElementById('s-tiempo-muelle').textContent = formatDuration(promedioMuelle);
-
-  // Alerta de vehículos con más de 4 horas en patio (sobre activos del operador)
-  var vehiculosLargaEstadia = visibles.filter(function(r){ return requiereObservacionLargaEstadia(r); });
-  var bannerAlerta = document.getElementById('alerta-patio-banner');
-  if (vehiculosLargaEstadia.length) {
-    document.getElementById('alerta-patio-titulo').textContent =
-      (vehiculosLargaEstadia.length === 1 ? '1 vehículo lleva' : vehiculosLargaEstadia.length + ' vehículos llevan') + ' más de 4 horas en patio';
-    document.getElementById('alerta-patio-detalle').textContent =
-      vehiculosLargaEstadia.map(function(r){ return r.placa; }).join(', ') + ' — registra el motivo desde "Editar ubicación".';
-    bannerAlerta.style.display = 'flex';
-  } else {
-    bannerAlerta.style.display = 'none';
-  }
-
-  renderMuellesGrid();
-
-  var dashboardRecords = getDashboardRecords();
-  var tbody   = document.getElementById('dash-table');
-  if (!dashboardRecords.length) {
-    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-mood-happy"></i><p>No hay vehículos en patio actualmente</p></div></td></tr>';
-    return;
-  }
-  tbody.innerHTML = dashboardRecords.map(function(r, idx) {
-    return '<tr>' +
-      '<td>' + badgePrioridad(r, idx + 1) + '</td>' +
-      '<td class="td-placa">' + r.placa + '</td>' +
-      '<td>' + r.conductor + '</td>' +
-      '<td><span class="badge ' + tipoBadgeClass(r.tipo) + '">' +
-        '<i class="ti ' + tipoIcon(r.tipo) + '"></i>' + r.tipo +
-      '</span></td>' +
-      '<td>' + fmtDt(r.horaEntrada) + '</td>' +
-      '<td><span class="badge badge-operador"><i class="ti ti-user"></i>' + (r.operadorEntrada || '—') + '</span></td>' +
-      '<td class="td-actions">' +
-        (!r.horaSalida && puedeDespachar(r) ? '<button class="btn btn-sm btn-primary" onclick="openModalSalida(\'' + r.id + '\')"><i class="ti ti-logout"></i> Salida</button>' : '') +
-        (!r.horaSalida && !puedeDespachar(r) ? '<button class="btn btn-sm" disabled title="Debe pasar por muelle antes de despachar"><i class="ti ti-logout"></i></button>' : '') +
-        '<button class="btn btn-sm" onclick="openModalEditar(\'' + r.id + '\')" title="Editar ubicación"><i class="ti ti-edit"></i></button>' +
-        '<button class="btn btn-sm" onclick="openDetalle(\'' + r.id + '\')"><i class="ti ti-eye"></i></button>' +
-      '</td>' +
-    '</tr>';
-  }).join('');
-}
-
-/* ══════════ REGISTROS ══════════ */
-function setFilter(f, btn) {
-  currentFilter = f;
-  document.querySelectorAll('.pill').forEach(function(b){ b.classList.remove('active'); });
-  btn.classList.add('active');
-  renderRegistros();
-}
-function getFiltered() {
-  var q = (document.getElementById('search-input') ? document.getElementById('search-input').value : '').toLowerCase();
-  var base = filterByOperator(records);
-  var filtrados = base.filter(function(r) {
-    var mf =
-      currentFilter === 'todos'    ? true :
-      currentFilter === 'en_patio' ? !r.horaSalida :
-      currentFilter === 'salio'    ? !!r.horaSalida :
-      currentFilter === 'Cargue'    ? (r.tipo === 'Cargue'    || r.tipo === 'Ambos') :
-      currentFilter === 'Descargue' ? (r.tipo === 'Descargue' || r.tipo === 'Ambos') :
-      currentFilter === 'Ambos'     ? r.tipo === 'Ambos' :
-      true;
-    var ms = !q || [r.placa, r.conductor, getDestino(r), r.canal, r.cedula, r.obs, r.obsUbicacion, r.operadorEntrada, r.operadorSalida, r.servicioTipo, r.servicioEmpresa, r.programado ? 'Programado' : 'No programado']
-      .concat(getHistorial(r).map(function(h){ return h.texto; }))
-      .some(function(f){ return (f||'').toLowerCase().indexOf(q) !== -1; });
-    return mf && ms;
-  });
-  return ordenarPorPrioridad(filtrados);
-}
-function renderRegistros() {
-  var filtered = getFiltered();
-  var tbody    = document.getElementById('reg-table');
-  if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="17"><div class="empty-state"><i class="ti ti-file-off"></i><p>No hay registros que coincidan</p></div></td></tr>';
-    return;
-  }
-  var rankActivo = 0;
-  tbody.innerHTML = filtered.map(function(r) {
-    var alertaLarga = requiereObservacionLargaEstadia(r);
-    var numObs = getHistorial(r).filter(function(h){ return h.texto; }).length;
-    if (!r.horaSalida) rankActivo++;
-    var durations = getLocationDurations(r);
-    return '<tr>' +
-      '<td>' + badgePrioridad(r, rankActivo) + '</td>' +
-      '<td class="td-placa">' + r.placa +
-        (numObs ? ' <span class="badge badge-operador" style="cursor:pointer;" title="Ver observaciones e historial" onclick="openDetalle(\'' + r.id + '\')"><i class="ti ti-notes"></i> ' + numObs + '</span>' : '') +
-      '</td>' +
-      '<td>' + r.conductor + '</td>' +
-      '<td>' + getDestino(r) + '</td>' +
-      '<td><span class="badge ' + tipoBadgeClass(r.tipo) + '">' + r.tipo + '</span></td>' +
-      '<td>' + (r.canal || '—') + '</td>' +
-      '<td>' + fmtDt(r.horaEntrada) + '</td>' +
-      '<td>' + fmtDt(r.horaSalida) + '</td>' +
-      '<td><span class="badge ' + getStateBadgeClass(r) + '">' +
-        '<i class="ti ' + getStateIcon(r) + '"></i>' +
-        getStateLabel(r) +
-      '</span>' +
-      (alertaLarga ? ' <span class="badge badge-amber" style="margin-left:6px;"><i class="ti ti-alert-circle"></i> >4h patio</span>' : '') +
-      '</td>' +
-      '<td>' + (r.programado ? 'Sí' : 'No') + '</td>' +
-      '<td>' + (r.horaProgramacion ? fmtDt(r.horaProgramacion) : '—') + '</td>' +
-      '<td>' + (r.servicioTipo ? (r.servicioTipo + (r.servicioEmpresa ? ' / ' + r.servicioEmpresa : '')) : 'Normal') + '</td>' +
-      '<td>' + formatDuration(durations.patio) + '</td>' +
-      '<td>' + formatDuration(durations.muelle) + '</td>' +
-      '<td>' + celdaMotivoPatio(r) + '</td>' +
-      '<td><span class="badge badge-operador"><i class="ti ti-user"></i>' + (r.operadorEntrada||'—') + '</span></td>' +
-      '<td class="td-actions">' +
-        (!r.horaSalida && puedeDespachar(r) ? '<button class="btn btn-sm btn-primary" onclick="openModalSalida(\'' + r.id + '\')"><i class="ti ti-logout"></i></button>' : '') +
-        (!r.horaSalida && !puedeDespachar(r) ? '<button class="btn btn-sm" disabled title="Debe pasar por muelle antes de despachar"><i class="ti ti-logout"></i></button>' : '') +
-        (!r.horaSalida ? '<button class="btn btn-sm" onclick="openModalEditar(\'' + r.id + '\')" title="Editar ubicación"><i class="ti ti-edit"></i></button>' : '') +
-        '<button class="btn btn-sm" onclick="openDetalle(\'' + r.id + '\')"><i class="ti ti-eye"></i></button>' +
-        '<button class="btn btn-sm" style="color:var(--red-600);border-color:#F09595" onclick="eliminar(\'' + r.id + '\')"><i class="ti ti-trash"></i></button>' +
-      '</td>' +
-    '</tr>';
-  }).join('');
-}
-
-/* ══════════ MODAL SALIDA ══════════ */
-function openModalSalida(id) {
-  if (!currentOperator) { openGate(); toast('Selecciona el operador de turno', 'amber', 'ti-id-badge-2'); return; }
-  var r = records.find(function(x){ return x.id === id; });
-  if (!puedeDespachar(r)) {
-    toast('Este vehículo aún no ha pasado por muelle; no se puede despachar', 'amber', 'ti-alert-circle');
-    return;
-  }
-  selectedId = id;
-  document.getElementById('modal-salida-info').innerHTML =
-    '<strong>' + r.placa + '</strong> — ' + r.conductor + '<br>' +
-    'Muelle: <strong>' + getDestino(r) + '</strong> &nbsp;·&nbsp;' +
-    '<span class="badge ' + tipoBadgeClass(r.tipo) + '" style="vertical-align:middle">' + r.tipo + '</span><br>' +
-    'Ingresó: ' + fmtDt(r.horaEntrada) + ' &nbsp;·&nbsp; Registró: ' + (r.operadorEntrada||'—');
-  document.getElementById('m-hora-salida').value = nowLocal();
-  document.getElementById('m-obs-salida').value  = '';
-  document.getElementById('modal-salida').classList.add('open');
-}
-
-function confirmarSalida() {
-  var hs  = document.getElementById('m-hora-salida').value;
-  var obs = document.getElementById('m-obs-salida').value.trim();
-  if (!hs) { toast('Selecciona la hora de salida', 'red', 'ti-alert-circle'); return; }
-
-  var rec = records.find(function(x){ return x.id === selectedId; });
-  if (!puedeDespachar(rec)) {
-    toast('Este vehículo aún no ha pasado por muelle; no se puede despachar', 'amber', 'ti-alert-circle');
-    return;
-  }
-  if (!rec) return;
-  var updated = Object.assign({}, rec, {
-    horaSalida: hs, obsSalida: obs, operadorSalida: currentOperator,
-    historial: agregarHistorial(rec, { fecha: hs, tipo: 'salida', operador: currentOperator, texto: obs || '' })
-  });
-
-  if (firebaseActive && _fbSave) {
-    setSyncStatus('syncing');
-    _fbSave(updated)
-      .then(function() {
-        setSyncStatus('ok');
-        closeModal('modal-salida');
-        toast('Salida registrada — ' + updated.placa, 'green', 'ti-logout');
-      })
-      .catch(function() {
-        setSyncStatus('error');
-        toast('Error al guardar en Firebase', 'red', 'ti-x');
-      });
-  } else {
-    var idx = records.findIndex(function(x){ return x.id === selectedId; });
-    if (idx !== -1) records[idx] = updated;
-    saveLocal();
-    refreshActiveView();
-    closeModal('modal-salida');
-    toast('Salida registrada — ' + updated.placa + ' (local)', 'green', 'ti-logout');
-  }
-}
-
-/* ══════════ MODAL EDITAR UBICACIÓN (Patio → Muelle sin crear nuevo registro) ══════════ */
-function cambiarUbicacionEdit() {
-  var ubicacion = document.getElementById('e-ubicacion').value;
-  document.getElementById('muelle-options-edit').style.display = ubicacion === 'Muelle' ? 'block' : 'none';
-  if (ubicacion === 'Muelle') {
-    var rec = records.find(function(x){ return x.id === selectedId; });
-    var muelleActual = (rec && rec.ubicacion === 'Muelle') ? rec.numeroMuelle : null;
-    var libres = poblarSelectMuelles(document.getElementById('e-numeroMuelle'), muelleActual);
-    if (!libres) toast('No hay muelles libres en este momento', 'red', 'ti-alert-circle');
-  }
-  var lbl = document.querySelector('label[for="e-obs-ubicacion"]');
-  var txt = document.getElementById('e-obs-ubicacion');
-  if (ubicacion === 'Patio') {
-    if (lbl) lbl.textContent = '¿Por qué continúa en patio?' + (lbl.textContent.indexOf('*') !== -1 ? ' *' : '');
-    if (txt) txt.placeholder = 'Ej: sin bahía disponible, esperando documentación, pendiente de descargue en otro vehículo...';
-  } else {
-    if (lbl) lbl.textContent = 'Observaciones de ubicación';
-    if (txt) txt.placeholder = 'Descripción o motivo del cambio de ubicación';
-  }
-}
-function openModalEditar(id) {
-  selectedId = id;
-  var r = records.find(function(x){ return x.id === id; });
-  if (!r) return;
-  var longParked = requiereObservacionLargaEstadia(r);
-  document.getElementById('modal-editar-info').innerHTML =
-    (longParked ? '<div class="modal-info-box" style="background:#FFF4E5;color:#7A5118;border-color:#F6C27A; margin-bottom:12px;">' +
-      '<strong>Atención:</strong> Este vehículo lleva más de 4 horas en patio. Ingresa el motivo en las observaciones de ubicación.' +
-    '</div>' : '') +
-    '<strong>' + r.placa + '</strong> — ' + r.conductor + '<br>' +
-    'Ubicación actual: <strong>' + getDestino(r) + '</strong> · Operación actual: <strong>' + (r.tipo || '—') + '</strong>';
-  document.getElementById('e-ubicacion').value = r.ubicacion === 'Muelle' ? 'Muelle' : 'Patio';
-  document.getElementById('e-numeroMuelle').value = r.numeroMuelle || '1';
-  document.getElementById('e-bahia').value = r.bahia || 'A';
-  document.getElementById('e-obs-ubicacion').value = r.obsUbicacion || '';
-  document.querySelector('input[name=e-tipo][value=Cargue]').checked    = (r.tipo === 'Cargue'    || r.tipo === 'Ambos');
-  document.querySelector('input[name=e-tipo][value=Descargue]').checked = (r.tipo === 'Descargue' || r.tipo === 'Ambos');
-  syncTipoUIEdit();
-  document.getElementById('e-tipo-cambio').checked = false;
-  toggleTipoEdit();
-  document.getElementById('e-canal').value = r.canal || 'Sin canal';
-  syncCanalEdit();
-  var lblObsUbic = document.querySelector('label[for="e-obs-ubicacion"]');
-  if (lblObsUbic) lblObsUbic.textContent = 'Observaciones de ubicación' + (longParked ? ' *' : '');
-  cambiarUbicacionEdit();
-  document.getElementById('modal-editar').classList.add('open');
-}
-function confirmarEdicionUbicacion() {
-  var ubicacion    = document.getElementById('e-ubicacion').value;
-  var numeroMuelle = document.getElementById('e-numeroMuelle').value;
-  var bahia        = 'A'; // Única bahía disponible por muelle (J3)
-  var destinoCompleto = computeDestino(ubicacion, numeroMuelle, bahia);
-  var cambioTipo = document.getElementById('e-tipo-cambio').checked;
-  var tipo = null;
-  if (cambioTipo) {
-    tipo = getTipoSeleccionadoEdit();
-    if (!tipo) { toast('Selecciona Cargue y/o Descargue, o desmarca "¿Cambió el tipo de operación?"', 'red', 'ti-alert-circle'); return; }
-  }
-  var canal = document.getElementById('e-canal').value;
-  if (canal === 'Sin canal') { toast('Selecciona el canal (MQ o 3PD) antes de guardar', 'red', 'ti-alert-circle'); return; }
-  if (ubicacion === 'Muelle' && !numeroMuelle) { toast('No hay muelles libres para asignar en este momento', 'red', 'ti-alert-circle'); return; }
-
-  var rec = records.find(function(x){ return x.id === selectedId; });
-  if (!rec) return;
-  var obsUbicacion = document.getElementById('e-obs-ubicacion').value.trim();
-  if (requiereObservacionLargaEstadia(rec) && !obsUbicacion) {
-    toast('Describe por qué el vehículo lleva más de 4 horas en patio', 'red', 'ti-alert-circle');
-    return;
-  }
-  var historial = agregarHistorial(rec, {
-    fecha: nowLocal(),
-    tipo: 'ubicacion',
-    operador: currentOperator,
-    ubicacionAnterior: getDestino(rec),
-    ubicacion: destinoCompleto,
-    texto: obsUbicacion || ''
-  });
-  if (cambioTipo && rec.tipo !== tipo) {
-    historial = agregarHistorial({ historial: historial }, {
-      fecha: nowLocal(),
-      tipo: 'operacion',
-      operador: currentOperator,
-      tipoAnterior: rec.tipo || '—',
-      tipoNuevo: tipo,
-      texto: ''
-    });
-  }
-  if (canal !== (rec.canal || 'Sin canal')) {
-    historial = agregarHistorial({ historial: historial }, {
-      fecha: nowLocal(),
-      tipo: 'canal',
-      operador: currentOperator,
-      canalAnterior: rec.canal || 'Sin canal',
-      canalNuevo: canal,
-      texto: ''
-    });
-  }
-  var updated = Object.assign({}, rec, {
-    ubicacion: ubicacion,
-    numeroMuelle: numeroMuelle,
-    bahia: bahia,
-    destino: destinoCompleto,
-    tipo: cambioTipo ? tipo : rec.tipo,
-    canal: canal,
-    obsUbicacion: obsUbicacion || rec.obsUbicacion || '',
-    historial: historial
-  });
-
-  if (firebaseActive && _fbSave) {
-    setSyncStatus('syncing');
-    _fbSave(updated)
-      .then(function() {
-        setSyncStatus('ok');
-        closeModal('modal-editar');
-        toast('Ubicación actualizada — ' + updated.placa, 'green', 'ti-edit');
-      })
-      .catch(function() {
-        setSyncStatus('error');
-        toast('Error al guardar en Firebase', 'red', 'ti-x');
-      });
-  } else {
-    var idx = records.findIndex(function(x){ return x.id === selectedId; });
-    if (idx !== -1) records[idx] = updated;
-    saveLocal();
-    refreshActiveView();
-    closeModal('modal-editar');
-    toast('Ubicación actualizada — ' + updated.placa + ' (local)', 'green', 'ti-edit');
-  }
-}
-
-/* ══════════ MODAL DETALLE ══════════ */
-function openDetalle(id) {
-  var r = records.find(function(x){ return x.id === id; });
-  var rows = [
-    ['ti-truck',            'Placa',           '<strong style="font-size:16px;letter-spacing:.5px">' + r.placa + '</strong>'],
-    ['ti-user',             'Conductor',        r.conductor],
-    ['ti-id',               'Documento',        r.cedula || '—'],
-    ['ti-building-warehouse','Muelle',          getDestino(r)],
-    ['ti-map-pin',          'Ubicación',        r.ubicacion || '—'],
-    ['ti-notes',            'Canal',            r.canal || '—'],
-    ['ti-notes',            'Programado',       r.programado ? 'Sí' : 'No'],
-    ['ti-clock',            'Hora programación', r.horaProgramacion ? fmtDt(r.horaProgramacion) : '—'],
-    ['ti-notes',            'Servicio',         r.servicioTipo ? (r.servicioTipo + (r.servicioEmpresa ? ' / ' + r.servicioEmpresa : '')) : 'Normal'],
-    ['ti-clock',            'Tiempo patio',     formatDuration(getLocationDurations(r).patio)],
-    ['ti-clock',            'Tiempo muelle',    formatDuration(getLocationDurations(r).muelle)],
-    ['ti-notes',            'Obs. ubicación',   r.obsUbicacion || '—'],
-    ['ti-package-import',   'Tipo',            '<span class="badge ' + tipoBadgeClass(r.tipo) + '">' + r.tipo + '</span>'],
-    ['ti-login',            'Hora entrada',     fmtDt(r.horaEntrada)],
-    ['ti-user-check',       'Op. entrada',      r.operadorEntrada || '—'],
-    ['ti-logout',           'Hora salida',      fmtDt(r.horaSalida)],
-    ['ti-user-check',       'Op. salida',       r.operadorSalida  || '—'],
-    ['ti-clock',            'Tiempo en patio',  duracion(r.horaEntrada, r.horaSalida)],
-    ['ti-notes',            'Obs. entrada',     r.obs       || '—'],
-    ['ti-notes',            'Obs. salida',      r.obsSalida || '—'],
-  ];
-  document.getElementById('modal-detalle-body').innerHTML = rows.map(function(row) {
-    return '<div class="detail-row">' +
-      '<i class="ti ' + row[0] + '"></i>' +
-      '<span class="detail-lbl">' + row[1] + '</span>' +
-      '<span class="detail-val">' + row[2] + '</span>' +
-    '</div>';
-  }).join('') +
-  '<div class="detail-section-title">Historial de observaciones y actualizaciones</div>' +
-  renderHistorialHtml(r);
-  document.getElementById('modal-detalle').classList.add('open');
-}
-function closeModal(id) {
-  document.getElementById(id).classList.remove('open');
-  selectedId = null;
-}
-
-/* ══════════ ELIMINAR ══════════ */
-function eliminar(id) {
-  if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
-  if (firebaseActive && _fbDelete) {
-    setSyncStatus('syncing');
-    _fbDelete(id)
-      .then(function(){ setSyncStatus('ok'); toast('Registro eliminado', 'amber', 'ti-trash'); })
-      .catch(function(){ setSyncStatus('error'); toast('Error al eliminar', 'red', 'ti-x'); });
-  } else {
-    records = records.filter(function(r){ return r.id !== id; });
-    saveLocal();
-    updateSidebarCount();
-    refreshActiveView();
-    toast('Registro eliminado', 'amber', 'ti-trash');
-  }
-}
-
-/* ══════════ EXPORTAR ══════════ */
-function buildExcelData(data) {
-  return data.map(function(r) {
-    return {
-      'Placa': r.placa,
-      'Conductor': r.conductor,
-      'Cédula': r.cedula || '',
-      'Ubicación': r.ubicacion,
-      'Muelle': r.numeroMuelle || '',
-      'Bahía': r.bahia || '',
-      'Tipo': r.tipo,
-      'Canal': r.canal || '',
-      'Programado': r.programado ? 'Sí' : 'No',
-      'Hora programación': fmtDt(r.horaProgramacion),
-      'Servicio': r.servicioTipo ? (r.servicioTipo + (r.servicioEmpresa ? ' / ' + r.servicioEmpresa : '')) : 'Normal',
-      'Duración patio': formatDuration(getLocationDurations(r).patio),
-      'Duración muelle': formatDuration(getLocationDurations(r).muelle),
-      'Hora entrada': fmtDt(r.horaEntrada),
-      'Operador entrada': r.operadorEntrada || '',
-      'Hora salida': fmtDt(r.horaSalida),
-      'Operador salida': r.operadorSalida || '',
-      'Tiempo en patio': duracion(r.horaEntrada, r.horaSalida),
-      'Estado': getStateLabel(r),
-      'Obs. entrada': r.obs || '',
-      'Obs. ubicación': r.obsUbicacion || '',
-      'Obs. salida': r.obsSalida || '',
-      'Historial completo': getHistorial(r).map(function(h){
-        return fmtDt(h.fecha) + ' (' + (h.operador || '—') + '): ' + tituloHistorial(h) + (h.texto ? ' — ' + h.texto : '');
-      }).join(' | '),
-      'Fecha': r.fecha
-    };
-  });
-}
-function exportExcel() {
-  if (!records.length) { toast('No hay registros para exportar', 'amber', 'ti-alert-circle'); return; }
-  var ws = XLSX.utils.json_to_sheet(buildExcelData(records));
-  ws['!cols'] = [14,22,16,12,10,10,10,10,10,16,18,18,18,18,18,18,16,12,18,18,18,38,12,12].map(function(w){ return {wch:w}; });
-  var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Registros');
-  XLSX.writeFile(wb, 'porteria_' + today() + '.xlsx');
-  toast('Excel descargado', 'green', 'ti-download');
-}
-function exportExcelHoy() {
-  var hoy = records.filter(function(r){ return r.fecha === today(); });
-  if (!hoy.length) { toast('No hay registros de hoy', 'amber', 'ti-alert-circle'); return; }
-  var ws = XLSX.utils.json_to_sheet(buildExcelData(hoy));
-  ws['!cols'] = [14,22,16,12,10,10,10,10,10,16,18,18,18,18,18,18,16,12,18,18,18,38,12,12,12,12,12].map(function(w){ return {wch:w}; });
-  var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Hoy');
-  XLSX.writeFile(wb, 'porteria_hoy_' + today() + '.xlsx');
-  toast('Excel de hoy descargado', 'green', 'ti-download');
-}
-function exportJSON() {
-  if (!records.length) { toast('No hay registros', 'amber', 'ti-alert-circle'); return; }
-  var blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'porteria_backup_' + today() + '.json';
-  a.click();
-  toast('JSON descargado', 'blue', 'ti-download');
-}
-
-document.getElementById('import-file').addEventListener('change', function(e) {
-  var file = e.target.files[0]; if (!file) return;
-  var reader = new FileReader();
-  reader.onload = function(ev) {
-    try {
-      var imported = JSON.parse(ev.target.result);
-      if (!Array.isArray(imported)) { toast('Archivo JSON inválido', 'red', 'ti-x'); return; }
-      var existingIds = new Set(records.map(function(r){ return r.id; }));
-      var nuevos = imported.filter(function(r){ return !existingIds.has(r.id); });
-      if (!nuevos.length) { toast('No hay registros nuevos para importar', 'amber', 'ti-alert-circle'); return; }
-      if (firebaseActive && _fbSave) {
-        setSyncStatus('syncing');
-        Promise.all(nuevos.map(function(r){ return _fbSave(r); }))
-          .then(function(){ setSyncStatus('ok'); toast(nuevos.length + ' registro(s) importado(s)', 'green', 'ti-upload'); })
-          .catch(function(){ setSyncStatus('error'); toast('Error al importar', 'red', 'ti-x'); });
-      } else {
-        nuevos.forEach(function(r){ records.push(r); });
-        records.sort(function(a,b){ return new Date(b.horaEntrada)-new Date(a.horaEntrada); });
-        saveLocal();
-        updateSidebarCount();
-        refreshActiveView();
-        toast(nuevos.length + ' registro(s) importado(s) (local)', 'green', 'ti-upload');
-      }
-    } catch(err) { toast('Error al leer el archivo', 'red', 'ti-x'); }
-  };
-  reader.readAsText(file);
-  e.target.value = '';
-});
-
-/* ══════════ BORRAR TODO ══════════ */
-function borrarTodo() {
-  if (!confirm('¿Eliminar TODOS los registros? Esta acción no se puede deshacer.')) return;
-  if (!confirm('Confirmación final: se borrarán todos los datos.')) return;
-  if (firebaseActive && _fbDeleteAll) {
-    setSyncStatus('syncing');
-    _fbDeleteAll()
-      .then(function(){ setSyncStatus('ok'); toast('Todos los registros eliminados', 'red', 'ti-trash'); })
-      .catch(function(){ setSyncStatus('error'); toast('Error al borrar', 'red', 'ti-x'); });
-  } else {
-    records = [];
-    saveLocal();
-    updateSidebarCount();
-    refreshActiveView();
-    toast('Todos los registros eliminados', 'red', 'ti-trash');
-  }
-}
-
-/* ══════════ CONFIG FIREBASE ══════════ */
-function limpiarFbConfig() {
-  ['fb-apiKey','fb-authDomain','fb-databaseURL','fb-projectId','fb-appId'].forEach(function(id){
-    document.getElementById(id).value = '';
-  });
-  try { localStorage.removeItem(FB_CFG_KEY); } catch(e) {}
-  toast('Configuración Firebase limpiada', 'amber', 'ti-trash');
-}
-
-function cargarFbConfigGuardada() {
-  try {
-    var raw = localStorage.getItem(FB_CFG_KEY);
-    if (!raw) return;
-    var cfg = JSON.parse(raw);
-    if (cfg.apiKey)      document.getElementById('fb-apiKey').value      = cfg.apiKey;
-    if (cfg.authDomain)  document.getElementById('fb-authDomain').value  = cfg.authDomain;
-    if (cfg.databaseURL) document.getElementById('fb-databaseURL').value = cfg.databaseURL;
-    if (cfg.projectId)   document.getElementById('fb-projectId').value   = cfg.projectId;
-    if (cfg.appId)       document.getElementById('fb-appId').value       = cfg.appId;
-    // Reconectar automáticamente si hay config guardada
-    if (cfg.apiKey && cfg.databaseURL) {
-      toast('Reconectando Firebase…', 'blue', 'ti-cloud-upload');
-      iniciarFirebase(cfg);
-    }
-  } catch(e) {}
-}
-
-/* ══════════ ESTADÍSTICAS ══════════ */
-var estadPeriodoActual = 'hoy';
-var estadCharts = {};
-var ESTAD_COLORS = {
-  azul: '#185FA5', azulClaro: '#B5D4F4', verde: '#3B6D11', verdeClaro: '#EAF3DE',
-  ambar: '#854F0B', ambarClaro: '#FAEEDA', teal: '#0F6E56', tealClaro: '#E1F5EE', gris: '#888780'
-};
-
-function setPeriodoEstadisticas(p, btn) {
-  estadPeriodoActual = p;
-  document.querySelectorAll('#view-estadisticas .filter-pills .pill').forEach(function(el){ el.classList.remove('active'); });
-  if (btn) btn.classList.add('active');
-  var custom = document.getElementById('estad-rango-custom');
-  if (p === 'personalizado') {
-    custom.style.display = 'flex';
-    if (!document.getElementById('estad-hasta').value) {
-      document.getElementById('estad-hasta').value = today();
-      document.getElementById('estad-desde').value = today();
-    }
-    return; // esperar a que el usuario pulse "Aplicar"
-  }
-  custom.style.display = 'none';
-  renderEstadisticas();
-}
-
-// Devuelve {desde, hasta} como objetos Date que delimitan el periodo elegido.
-function getRangoEstadisticas() {
-  var hasta = new Date(); hasta.setHours(23,59,59,999);
-  var desde = new Date(); desde.setHours(0,0,0,0);
-  if (estadPeriodoActual === '3dias') {
-    desde.setDate(desde.getDate() - 2);
-  } else if (estadPeriodoActual === 'semana') {
-    desde.setDate(desde.getDate() - 6);
-  } else if (estadPeriodoActual === 'mes') {
-    desde.setDate(desde.getDate() - 29);
-  } else if (estadPeriodoActual === 'todo') {
-    desde = records.length
-      ? new Date(records.reduce(function(min, r){ return r.horaEntrada && r.horaEntrada < min ? r.horaEntrada : min; }, today() + 'T23:59'))
-      : new Date(0);
-    desde.setHours(0,0,0,0);
-  } else if (estadPeriodoActual === 'personalizado') {
-    var dIn = document.getElementById('estad-desde').value;
-    var hIn = document.getElementById('estad-hasta').value;
-    desde = dIn ? new Date(dIn + 'T00:00:00') : new Date(0);
-    hasta = hIn ? new Date(hIn + 'T23:59:59') : hasta;
-  }
-  return { desde: desde, hasta: hasta };
-}
-
-function getRecordsEnRango(rango) {
-  return records.filter(function(r) {
-    if (!r.horaEntrada) return false;
-    var d = new Date(r.horaEntrada);
-    return d >= rango.desde && d <= rango.hasta;
-  });
-}
-
-// Genera la lista de días (YYYY-MM-DD) entre desde y hasta, tope de 60 para no saturar los gráficos.
-function buildDayBuckets(desde, hasta) {
-  var dias = [];
-  var cur = new Date(desde); cur.setHours(0,0,0,0);
-  var fin = new Date(hasta); fin.setHours(0,0,0,0);
-  var iter = 0;
-  while (cur <= fin && iter < 60) {
-    dias.push(cur.toISOString().slice(0,10));
-    cur.setDate(cur.getDate() + 1);
-    iter++;
-  }
-  return dias.length ? dias : [today()];
-}
-function fmtDiaCorto(s) {
-  return new Date(s + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit' });
-}
-
-function renderChart(canvasId, config) {
-  var ctx = document.getElementById(canvasId);
-  if (!ctx || typeof Chart === 'undefined') return;
-  if (estadCharts[canvasId]) estadCharts[canvasId].destroy();
-  estadCharts[canvasId] = new Chart(ctx, config);
-}
-
-function renderEstadisticas() {
-  if (typeof Chart === 'undefined') {
-    // Chart.js aún no cargó (p. ej. justo al abrir la app). Antes esto cortaba TODA la
-    // función con un return temprano, así que ni las tarjetas (es-total, es-salidas, etc.)
-    // ni las gráficas se actualizaban. Ahora reintentamos automáticamente en cuanto el
-    // script de Chart.js termine de cargar, sin depender de que el usuario haga clic en algo.
-    var scriptChart = document.querySelector('script[src*="chart.js"]');
-    if (scriptChart && !scriptChart._retryEstadisticasBound) {
-      scriptChart._retryEstadisticasBound = true;
-      scriptChart.addEventListener('load', renderEstadisticas);
-    }
-    return;
-  }
-  var rango = getRangoEstadisticas();
-  var recs = getRecordsEnRango(rango);
-  // Las estadísticas deben mostrar el total histórico del periodo seleccionado,
-  // no solo los registros del operador que está actualmente en turno.
-  var dias = buildDayBuckets(rango.desde, rango.hasta);
-
-  // ── Tarjetas resumen ──
-  var totalEntradas = recs.length;
-  var totalSalidas = recs.filter(function(r){ return !!r.horaSalida; }).length;
-  var tiempos = recs.filter(function(r){ return r.horaSalida; }).map(function(r){
-    return (new Date(r.horaSalida) - new Date(r.horaEntrada)) / 60000;
-  });
-  var promedioMin = tiempos.length ? Math.round(tiempos.reduce(function(a,b){ return a+b; }, 0) / tiempos.length) : 0;
-  var cargues = recs.filter(function(r){ return r.tipo === 'Cargue' || r.tipo === 'Ambos'; }).length;
-
-  document.getElementById('es-total').textContent = totalEntradas;
-  document.getElementById('es-salidas').textContent = totalSalidas;
-  document.getElementById('es-promedio').textContent = promedioMin >= 60
-    ? Math.floor(promedioMin/60) + 'h ' + (promedioMin%60) + 'min' : promedioMin + ' min';
-  document.getElementById('es-cargue-pct').textContent = totalEntradas ? Math.round(cargues/totalEntradas*100) + '%' : '0%';
-
-  var porDiaCount = dias.map(function(dStr){
-    return recs.filter(function(r){ return r.horaEntrada.slice(0,10) === dStr; }).length;
-  });
-  var picoIdx = porDiaCount.reduce(function(best, v, i, arr){ return v > arr[best] ? i : best; }, 0);
-  document.getElementById('es-pico').textContent = porDiaCount[picoIdx] > 0
-    ? fmtDiaCorto(dias[picoIdx]) + ' (' + porDiaCount[picoIdx] + ')' : '—';
-
-  var grid = document.getElementById('estad-chart-grid');
-  if (!totalEntradas) {
-    grid.style.opacity = '0.45';
-  } else {
-    grid.style.opacity = '1';
-  }
-
-  // ── Entradas y salidas por día ──
-  var salidasPorDia = dias.map(function(dStr){
-    return recs.filter(function(r){ return r.horaSalida && r.horaSalida.slice(0,10) === dStr; }).length;
-  });
-  renderChart('chart-entradas-dia', {
-    type: 'bar',
-    data: {
-      labels: dias.map(fmtDiaCorto),
-      datasets: [
-        { label: 'Entradas', data: porDiaCount, backgroundColor: ESTAD_COLORS.azul, borderRadius: 4 },
-        { label: 'Salidas', data: salidasPorDia, backgroundColor: ESTAD_COLORS.verde, borderRadius: 4 }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
-      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
-    }
-  });
-
-  // ── Tipo de operación ──
-  var soloCargue = recs.filter(function(r){ return r.tipo === 'Cargue'; }).length;
-  var soloDescargue = recs.filter(function(r){ return r.tipo === 'Descargue'; }).length;
-  var ambos = recs.filter(function(r){ return r.tipo === 'Ambos'; }).length;
-  renderChart('chart-tipo', {
-    type: 'doughnut',
-    data: {
-      labels: ['Cargue', 'Descargue', 'Ambos'],
-      datasets: [{ data: [soloCargue, soloDescargue, ambos], backgroundColor: [ESTAD_COLORS.azul, ESTAD_COLORS.ambar, ESTAD_COLORS.teal] }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } }
-    }
-  });
-
-  // ── Por operador ──
-  var chartOperadorContainer = document.getElementById('chart-operador').closest('.chart-card');
-  if (currentOperator) {
-    if (chartOperadorContainer) chartOperadorContainer.style.display = 'none';
-  } else {
-    if (chartOperadorContainer) chartOperadorContainer.style.display = 'block';
-    var porOperador = {};
-    recs.forEach(function(r){ var op = r.operadorEntrada || '—'; porOperador[op] = (porOperador[op]||0) + 1; });
-    var opLabels = Object.keys(porOperador).sort(function(a,b){ return porOperador[b]-porOperador[a]; });
-    renderChart('chart-operador', {
-      type: 'bar',
-      data: {
-        labels: opLabels,
-        datasets: [{ label: 'Vehículos atendidos', data: opLabels.map(function(k){ return porOperador[k]; }), backgroundColor: ESTAD_COLORS.teal, borderRadius: 4 }]
-      },
-      options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
-      }
-    });
-  }
-
-  // ── Tiempo promedio en patio por día ──
-  var tiempoPorDia = dias.map(function(dStr){
-    var recsDia = recs.filter(function(r){ return r.horaSalida && r.horaEntrada.slice(0,10) === dStr; });
-    if (!recsDia.length) return 0;
-    var tot = recsDia.reduce(function(a,r){ return a + (new Date(r.horaSalida)-new Date(r.horaEntrada))/60000; }, 0);
-    return Math.round(tot / recsDia.length);
-  });
-  renderChart('chart-tiempo-patio', {
-    type: 'line',
-    data: {
-      labels: dias.map(fmtDiaCorto),
-      datasets: [{
-        label: 'Minutos promedio', data: tiempoPorDia,
-        borderColor: ESTAD_COLORS.ambar, backgroundColor: 'rgba(133,79,11,0.15)', fill: true, tension: .3, pointRadius: 3
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } }
-    }
-  });
-
-  // ── Por canal ──
-  var porCanal = {};
-  recs.forEach(function(r){ var c = r.canal || '—'; porCanal[c] = (porCanal[c]||0) + 1; });
-  var canalLabels = Object.keys(porCanal);
-  renderChart('chart-canal', {
-    type: 'bar',
-    data: {
-      labels: canalLabels,
-      datasets: [{ label: 'Vehículos', data: canalLabels.map(function(k){ return porCanal[k]; }), backgroundColor: ESTAD_COLORS.azulClaro, borderRadius: 4 }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
-    }
-  });
-}
-
-/* ══════════ INIT ══════════ */
-(function init() {
-  // Fecha en topbar
-  var d = new Date();
-  document.getElementById('topbar-date').textContent = d.toLocaleDateString('es-CO', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-  });
-
-  // Hora actual en formulario
-  document.getElementById('f-hora').value = nowLocal();
-
-  // Restringe el selector de fecha/hora de ingreso: no permite fechas futuras
-  // ni anteriores a ayer (límite inferior = ayer 00:00, límite superior = hoy 23:59)
-  (function limitarFechaIngreso() {
-    var ayer = new Date(today() + 'T00:00:00');
-    ayer.setDate(ayer.getDate() - 1);
-    var ayerStr = ayer.toISOString().slice(0,10);
-    var fHora = document.getElementById('f-hora');
-    fHora.min = ayerStr + 'T00:00';
-    fHora.max = today() + 'T23:59';
-  })();
-
-  // Cargar operador guardado
-  try { currentOperator = localStorage.getItem(OP_KEY) || null; } catch(e) {}
-  updateOperatorUI();
-  if (!currentOperator) openGate();
-
-  // Cargar turno actual (contadores del día) y registros locales
-  loadTurno();
-  loadLocal();
-  updateSidebarCount();
-  renderDashboard();
-
-  // Mostrar banner modo local si no hay Firebase
-  document.getElementById('local-mode-banner').style.display = 'flex';
-  setSyncStatus('local');
-
-  // Intentar reconectar Firebase si hay config guardada
-  cargarFbConfigGuardada();
-
-  // Cerrar modales al clic fuera
-  document.querySelectorAll('.modal-backdrop').forEach(function(bd) {
-    bd.addEventListener('click', function(e) {
-      if (e.target === bd) bd.classList.remove('open');
-    });
-  });
-
-  // Búsqueda en tiempo real
-  document.getElementById('search-input').addEventListener('input', renderRegistros);
-
-  // Tarjetas Cargue/Descargue: refrescar estilos cuando el checkbox cambia
-  document.querySelectorAll('input[name=tipo]').forEach(function(chk) {
-    chk.addEventListener('change', syncTipoUI);
-  });
-  syncTipoUI();
-
-  // Revisar cada minuto si algún vehículo superó las 4 horas en patio,
-  // para que la alerta aparezca sola sin esperar a otra acción del usuario.
-  setInterval(refreshActiveView, 15000);
-})();
-</script>
 </body>
 </html>

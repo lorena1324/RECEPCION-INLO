@@ -1,0 +1,123 @@
+/* =========================================================
+   INLOTRANS
+   Layout: sidebar, topbar, contenido principal
+
+   Igual estructura que bodega-J4.html, con dos ajustes:
+     - El "operator-chip" ya no es clicable para "cambiar de
+       operador" (eso era el gate manual). Ahora el operador
+       es quien inició sesión — se muestra su nombre desde el
+       perfil de Firestore, sin selector.
+     - Se quitó el banner de "modo local" (ya no existe modo
+       local silencioso, ver shared/services/vehiculos.js).
+   ========================================================= */
+
+.layout { display: flex; min-height: 100vh; }
+
+.sidebar {
+    width: var(--sidebar-w);
+    background: var(--surface);
+    border-right: 0.5px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 50;
+}
+.sidebar-brand {
+    padding: 18px 20px 14px;
+    border-bottom: 0.5px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+}
+.brand-icon {
+    width: 36px; height: 36px; border-radius: var(--radius-md);
+    background: var(--blue-600); display: flex; align-items: center; justify-content: center;
+}
+.brand-icon i { font-size: 20px; color: #fff; }
+.brand-text { line-height: 1.2; }
+.brand-text strong { font-size: 14px; font-weight: 600; display: block; color: var(--text-1); }
+.brand-text span { font-size: 11px; color: var(--text-3); }
+
+.nav { padding: 12px 10px; flex: 1; }
+.nav-label { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-3); font-weight: 600; padding: 0 10px; margin: 12px 0 4px; }
+.nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px; border-radius: var(--radius-md);
+    font-size: 13.5px; color: var(--text-2);
+    cursor: pointer; transition: all .15s; margin-bottom: 2px;
+    border: none; background: none; width: 100%; text-align: left;
+}
+.nav-item i { font-size: 17px; }
+.nav-item:hover { background: var(--surface-2); color: var(--text-1); }
+.nav-item.active { background: var(--blue-50); color: var(--blue-600); font-weight: 500; }
+.nav-item.active i { color: var(--blue-600); }
+.nav-item.disabled { opacity: .45; cursor: not-allowed; }
+
+.sidebar-footer {
+    padding: 14px 20px;
+    border-top: 0.5px solid var(--border);
+    font-size: 11px; color: var(--text-3);
+    display: flex; flex-direction: column; gap: 8px;
+}
+.sidebar-footer-row { display: flex; align-items: center; gap: 6px; }
+.sidebar-footer-row i { font-size: 13px; }
+
+.operator-chip {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface-2); border: 0.5px solid var(--border);
+    border-radius: var(--radius-md); padding: 8px 10px;
+}
+.operator-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--blue-600); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; flex-shrink: 0;
+}
+.operator-info { line-height: 1.25; overflow: hidden; }
+.operator-info strong { font-size: 12.5px; color: var(--text-1); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.operator-info span { font-size: 10.5px; color: var(--text-3); }
+
+.main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; }
+
+.topbar {
+    height: var(--header-h);
+    background: var(--surface);
+    border-bottom: 0.5px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px;
+    position: sticky; top: 0; z-index: 40;
+}
+.topbar-left { display: flex; align-items: center; gap: 10px; }
+.topbar-title { font-size: 15px; font-weight: 500; color: var(--text-1); }
+.topbar-sub { font-size: 12px; color: var(--text-3); margin-top: 1px; }
+.topbar-right { display: flex; align-items: center; gap: 14px; }
+.topbar-operator {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12.5px; color: var(--text-2);
+    padding: 6px 12px; border-radius: 20px;
+    background: var(--blue-50);
+}
+.topbar-operator i.ti-user-circle { font-size: 16px; color: var(--blue-600); }
+.topbar-operator strong { color: var(--blue-600); font-weight: 600; }
+
+.menu-toggle {
+    display: none; background: none; border: none; cursor: pointer;
+    font-size: 20px; color: var(--text-2); padding: 4px;
+}
+.sidebar-overlay { display: none; }
+
+.content { padding: 24px 28px; }
+
+.view { display: none; }
+.view.active { display: block; }
+
+@media (max-width: 900px) {
+    .sidebar { transform: translateX(-100%); transition: transform .2s; }
+    .sidebar.open { transform: none; }
+    .main { margin-left: 0; }
+    .menu-toggle { display: block; }
+    .sidebar-overlay {
+        display: block; position: fixed; inset: 0; background: rgba(0,0,0,.35);
+        z-index: 45; opacity: 0; pointer-events: none; transition: opacity .2s;
+    }
+    .sidebar-overlay.visible { opacity: 1; pointer-events: auto; }
+}
