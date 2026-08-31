@@ -92,6 +92,54 @@ function initials(name) {
     return (name || '').split(' ').map(function (p) { return p[0]; }).slice(0, 2).join('').toUpperCase();
 }
 
+
+/* =========================================================
+   ENTRADA DE HORA EN 24H (sin am/pm)
+
+   Los <input type="datetime-local"/time> nativos muestran
+   am/pm o 24h según el sistema operativo del dispositivo, algo
+   que no se puede forzar desde la página. Por eso las horas se
+   capturan con campos numéricos separados de Hora (0-23) y
+   Minuto (0-59) — así el formato de entrada queda garantizado
+   sin depender del navegador.
+   ========================================================= */
+
+function dosDigitos(valor, max) {
+    if (valor === '' || valor === null || valor === undefined) return null;
+    var n = parseInt(valor, 10);
+    if (isNaN(n)) return null;
+    n = Math.max(0, Math.min(max, n));
+    return (n < 10 ? '0' : '') + n;
+}
+
+function leerFechaHora(fechaId, horaId, minId) {
+    var fecha = document.getElementById(fechaId).value;
+    var hh = dosDigitos(document.getElementById(horaId).value, 23);
+    var mm = dosDigitos(document.getElementById(minId).value, 59);
+    if (!fecha || hh === null || mm === null) return '';
+    return fecha + 'T' + hh + ':' + mm;
+}
+
+function escribirFechaHora(fechaId, horaId, minId, valorISO) {
+    var partes = (valorISO || '').split('T');
+    document.getElementById(fechaId).value = partes[0] || '';
+    var hm = (partes[1] || '').split(':');
+    document.getElementById(horaId).value = hm[0] !== undefined ? parseInt(hm[0], 10) : '';
+    document.getElementById(minId).value = hm[1] !== undefined ? parseInt(hm[1], 10) : '';
+}
+
+function leerHora(horaId, minId) {
+    var hh = dosDigitos(document.getElementById(horaId).value, 23);
+    var mm = dosDigitos(document.getElementById(minId).value, 59);
+    if (hh === null || mm === null) return '';
+    return hh + ':' + mm;
+}
+
+function limpiarHora(horaId, minId) {
+    document.getElementById(horaId).value = '';
+    document.getElementById(minId).value = '';
+}
+
 // guard.js no expone una función de logout, así que la armamos aquí
 // con las mismas piezas que usa internamente (auth.js + session.js).
 function salir() {
@@ -389,15 +437,17 @@ function cambiarServicioTipo() {
 
 function limpiarForm() {
 
-    ['f-conductor', 'f-placa', 'f-ubicacion', 'f-numeroMuelle', 'f-cedula', 'f-obs', 'f-programado', 'f-hora-programacion', 'f-servicio-tipo']
+    ['f-conductor', 'f-placa', 'f-ubicacion', 'f-numeroMuelle', 'f-cedula', 'f-obs', 'f-programado', 'f-servicio-tipo']
         .forEach(function (id) { document.getElementById(id).value = ''; });
+
+    limpiarHora('f-hora-programacion-h', 'f-hora-programacion-m');
 
     document.getElementById('f-servicio-empresa').value = '';
     document.getElementById('f-servicio-empresa-text').value = '[CLIENTE_J4]';
     document.getElementById('programacion-wrapper').style.display = 'none';
     document.getElementById('servicio-empresa-wrapper').style.display = 'none';
     document.getElementById('f-canal').value = 'Sin canal';
-    document.getElementById('f-hora').value = nowLocal();
+    escribirFechaHora('f-fecha-ingreso', 'f-hora-h', 'f-hora-m', nowLocal());
     document.getElementById('muelle-options').style.display = 'none';
 
     document.querySelector('input[name=tipo][value=Cargue]').checked = true;
@@ -411,13 +461,13 @@ async function registrarEntrada() {
 
     var conductor = document.getElementById('f-conductor').value.trim();
     var placa = document.getElementById('f-placa').value.trim().toUpperCase();
-    var hora = document.getElementById('f-hora').value;
+    var hora = leerFechaHora('f-fecha-ingreso', 'f-hora-h', 'f-hora-m');
     var ubicacion = document.getElementById('f-ubicacion').value;
     var numeroMuelle = document.getElementById('f-numeroMuelle').value;
     var canal = document.getElementById('f-canal').value;
     var tipo = getTipoSeleccionado();
     var programado = document.getElementById('f-programado').value;
-    var horaProgramacionInput = document.getElementById('f-hora-programacion').value;
+    var horaProgramacionInput = leerHora('f-hora-programacion-h', 'f-hora-programacion-m');
     var horaProgramacion = horaProgramacionInput ? (today() + 'T' + horaProgramacionInput) : '';
     var servicioTipo = document.getElementById('f-servicio-tipo').value;
     var servicioEmpresa = servicioTipo === 'Reciclaje' ? document.getElementById('f-servicio-empresa').value
@@ -491,7 +541,7 @@ function openModalSalida(id) {
     if (!rec) return;
 
     document.getElementById('modal-salida-info').innerHTML = '<strong>' + rec.placa + '</strong> — ' + rec.conductor + mensajeAvanceBloqueado(rec);
-    document.getElementById('m-hora-salida').value = nowLocal();
+    escribirFechaHora('m-fecha-salida', 'm-hora-salida-h', 'm-hora-salida-m', nowLocal());
     document.getElementById('m-obs-salida').value = '';
     document.getElementById('modal-salida').classList.add('open');
 }
@@ -505,7 +555,7 @@ async function confirmarSalida() {
         return;
     }
 
-    var horaSalida = document.getElementById('m-hora-salida').value;
+    var horaSalida = leerFechaHora('m-fecha-salida', 'm-hora-salida-h', 'm-hora-salida-m');
     if (!horaSalida) { toast('Selecciona la hora de salida', 'red', 'ti-alert-circle'); return; }
 
     var obsSalida = document.getElementById('m-obs-salida').value.trim();
@@ -751,11 +801,11 @@ function iniciarPagina(perfil) {
     var d = new Date();
     document.getElementById('topbar-date').textContent = d.toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-    document.getElementById('f-hora').value = nowLocal();
+    escribirFechaHora('f-fecha-ingreso', 'f-hora-h', 'f-hora-m', nowLocal());
     var ayer = new Date(today() + 'T00:00:00');
     ayer.setDate(ayer.getDate() - 1);
-    document.getElementById('f-hora').min = ayer.toISOString().slice(0, 10) + 'T00:00';
-    document.getElementById('f-hora').max = today() + 'T23:59';
+    document.getElementById('f-fecha-ingreso').min = ayer.toISOString().slice(0, 10);
+    document.getElementById('f-fecha-ingreso').max = today();
 
     unsubscribeRegistros = suscribirseARegistros(OPERACION, function (data, error) {
         if (error) { setSyncStatus('error'); return; }

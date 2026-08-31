@@ -160,8 +160,12 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="f-hora">Hora de ingreso *</label>
-                            <input type="datetime-local" id="f-hora">
+                            <label for="f-fecha-ingreso">Hora de ingreso (24h) *</label>
+                            <div style="display:flex;gap:6px;">
+                                <input type="date" id="f-fecha-ingreso" style="flex:1;">
+                                <input type="number" id="f-hora-h" min="0" max="23" placeholder="HH" style="width:64px;">
+                                <input type="number" id="f-hora-m" min="0" max="59" placeholder="MM" style="width:64px;">
+                            </div>
                         </div>
 
                         <div class="form-group">
@@ -202,8 +206,11 @@
                         </div>
 
                         <div class="form-group" id="programacion-wrapper" style="display:none;">
-                            <label for="f-hora-programacion">Hora de programación</label>
-                            <input type="time" id="f-hora-programacion">
+                            <label>Hora de programación (24h)</label>
+                            <div style="display:flex;gap:6px;">
+                                <input type="number" id="f-hora-programacion-h" min="0" max="23" placeholder="HH" style="width:64px;">
+                                <input type="number" id="f-hora-programacion-m" min="0" max="59" placeholder="MM" style="width:64px;">
+                            </div>
                         </div>
 
                         <div class="form-group full">
@@ -307,7 +314,14 @@
             <button class="modal-close" data-close="modal-salida"><i class="ti ti-x"></i></button>
         </div>
         <div class="modal-info-box" id="modal-salida-info"></div>
-        <div class="form-group"><label for="m-hora-salida">Hora de salida</label><input type="datetime-local" id="m-hora-salida"></div>
+        <div class="form-group">
+            <label>Hora de salida (24h)</label>
+            <div style="display:flex;gap:6px;">
+                <input type="date" id="m-fecha-salida" style="flex:1;">
+                <input type="number" id="m-hora-salida-h" min="0" max="23" placeholder="HH" style="width:64px;">
+                <input type="number" id="m-hora-salida-m" min="0" max="59" placeholder="MM" style="width:64px;">
+            </div>
+        </div>
         <div class="form-group" style="margin-top:12px"><label for="m-obs-salida">Observaciones</label><textarea id="m-obs-salida"></textarea></div>
         <div class="modal-footer">
             <button class="btn" data-close="modal-salida">Cancelar</button>
