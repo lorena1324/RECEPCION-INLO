@@ -402,6 +402,21 @@ function getAvanceTipoEfectivo(r) {
 }
 
 function renderAvance(r) {
+  if (!requiereAvanceCompleto(r)) {
+    const aviso = `<div style="font-size:11.5px;color:#854F0B;"><i class="ti ti-alert-triangle"></i> Sin avance registrado (vehículo anterior a esta función) — puede salir sin restricción de %. Fija su avance para que la regla del 100%/75% empiece a aplicar.</div>`;
+
+    const botones = (r.tipo === "Cargue" || r.tipo === "Descargue")
+      ? `<button class="btn btn-sm btn-primary" data-avance-tipo="${r.id}:${r.tipo}">Fijar avance en 0% (${r.tipo})</button>`
+      : `<button class="btn btn-sm btn-primary" data-avance-tipo="${r.id}:Cargue">Cargue</button>
+         <button class="btn btn-sm btn-primary" data-avance-tipo="${r.id}:Descargue">Descargue</button>`;
+
+    return `
+      <div class="avance-box">
+        ${aviso}
+        <div class="avance-selector-btns" style="margin-top:6px;">${botones}</div>
+      </div>`;
+  }
+
   const avanceTipo = getAvanceTipoEfectivo(r);
 
   if (!avanceTipo) {
@@ -507,6 +522,7 @@ function openModalNovedades(id) {
     <div class="detail-row"><span class="detail-lbl">Conductor:</span><span class="detail-val">${escapar(rec.conductor || "—")}</span></div>
     <div class="detail-row"><span class="detail-lbl">Ubicación:</span><span class="detail-val">${escapar(getDestino(rec))}</span></div>
     <div class="detail-row"><span class="detail-lbl">Ingreso:</span><span class="detail-val">${formatearFecha(rec.horaEntrada)}</span></div>
+    <div class="detail-row"><span class="detail-lbl">Programado:</span><span class="detail-val">${rec.programado && rec.horaProgramacion ? formatearFecha(rec.horaProgramacion) : "No"}</span></div>
     ${seccionAutorizacion(rec)}
     <div class="detail-section-title">Novedades</div>${histHtml}`;
 
@@ -641,7 +657,7 @@ function renderRegistros() {
   tbody.innerHTML = filtrados.map((r) => {
     if (!r.horaSalida) activeRank++;
     return filaRegistro(r, activeRank);
-  }).join("") || filaVacia(16);
+  }).join("") || filaVacia(17);
 }
 
 /* =========================================================
@@ -657,6 +673,14 @@ function prioridadRegistro(r, rank) {
   const min = minutosEsperando(r);
   const clase = min >= 240 ? "badge-amber" : min >= 120 ? "badge-descargue" : "badge-en-patio";
   return `<span class="badge ${clase}"><i class="ti ti-flag-3"></i> #${rank} · ${formatearMinutos(min)}</span>`;
+}
+
+function badgeEstado(r) {
+  if (r.horaSalida) return '<span class="badge badge-salio">Salió</span>';
+  if (!requiereAvanceCompleto(r)) {
+    return '<span class="badge badge-amber" title="Sin avance registrado — puede salir sin restricción de %"><i class="ti ti-alert-triangle"></i> Activo</span>';
+  }
+  return '<span class="badge badge-en-patio">Activo</span>';
 }
 
 function celdaMotivoPatio(r) {
@@ -678,8 +702,9 @@ function filaRegistro(r, rank) {
       <td><span class="badge badge-canal">${escapar(r.canal || "—")}</span></td>
       <td>${formatearFecha(r.horaEntrada)}</td>
       <td>${r.horaSalida ? formatearFecha(r.horaSalida) : "—"}</td>
-      <td>${!r.horaSalida ? '<span class="badge badge-en-patio">Activo</span>' : '<span class="badge badge-salio">Salió</span>'}</td>
+      <td>${badgeEstado(r)}</td>
       <td>${r.programado ? "Programado" : "No programado"}</td>
+      <td>${r.programado && r.horaProgramacion ? formatearFecha(r.horaProgramacion) : "—"}</td>
       <td>${escapar(r.servicioTipo || "Normal")}</td>
       <td>${formatearMinutos(dur.patio)}</td>
       <td>${formatearMinutos(dur.muelle)}</td>

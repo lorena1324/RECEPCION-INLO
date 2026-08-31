@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inlotrans | Backfill de avance</title>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/layout.css">
+    <link rel="stylesheet" href="../css/components.css">
+
+    <style>
+        .backfill-wrap { max-width: 920px; margin: 32px auto; padding: 0 20px 60px; }
+        .backfill-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        .backfill-header h1 { font-size: 20px; font-weight: 600; color: var(--text-1); margin: 0; }
+        .backfill-actions { display: flex; gap: 8px; margin: 16px 0 20px; }
+        #log-resultado { margin-top: 14px; max-height: 260px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+
+<div class="backfill-wrap">
+
+    <div class="backfill-header">
+        <div>
+            <h1><i class="ti ti-tool"></i> Backfill: avance de cargue/descargue</h1>
+            <div style="color:var(--text-3);font-size:12.5px;margin-top:4px;">Conectado como <strong id="nombre-usuario">—</strong></div>
+        </div>
+        <button class="btn btn-sm" id="btn-salir"><i class="ti ti-logout"></i> Salir</button>
+    </div>
+
+    <div class="export-card">
+        <p style="font-size:13.5px;color:var(--text-2);margin:0 0 8px;">
+            La regla de "no salir sin completar el avance" (100% en descargue, mínimo 75% + autorización en cargue)
+            solo aplica a vehículos que tienen el campo <code>avancePorcentaje</code> en su registro. Los vehículos
+            que ya estaban activos en el sistema <strong>antes</strong> de que esa regla se implementara nunca
+            recibieron ese campo, así que hoy pueden salir sin ninguna restricción de porcentaje.
+        </p>
+        <p style="font-size:13.5px;color:var(--text-2);margin:0;">
+            Esta herramienta busca los vehículos <strong>activos</strong> (sin hora de salida) que están en esa
+            situación y les fija el avance en <strong>0%</strong> — el mismo punto de partida que recibe cualquier
+            vehículo nuevo — para que la regla empiece a aplicarles. Queda registrado en el historial de cada
+            vehículo quién y cuándo hizo el ajuste.
+        </p>
+    </div>
+
+    <div class="backfill-actions">
+        <button class="btn btn-primary" id="btn-escanear"><i class="ti ti-search"></i> Escanear vehículos activos</button>
+        <button class="btn btn-success" id="btn-aplicar" disabled>Aplicar backfill</button>
+    </div>
+
+    <div id="resultado-info"></div>
+
+    <div class="table-wrap" style="margin-top:14px;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Operación</th>
+                    <th>Placa</th>
+                    <th>Conductor</th>
+                    <th>Tipo</th>
+                    <th>Entrada</th>
+                    <th>Quedará en</th>
+                </tr>
+            </thead>
+            <tbody id="tabla-pendientes">
+                <tr><td colspan="6" class="empty-state">Sin escanear todavía.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="log-resultado"></div>
+
+</div>
+
+<script type="module" src="backfill-avance.js"></script>
+</body>
+</html>

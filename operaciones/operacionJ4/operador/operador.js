@@ -33,6 +33,7 @@ import {
     getRegistrosEnMuelle,
     getRegistrosEnPatio,
     puedeRegistrarSalida,
+    requiereAvanceCompleto,
     agregarOperacionFaltante
 } from "../../../shared/services/vehiculos.js";
 
@@ -94,6 +95,23 @@ function initials(name) {
 
 
 /* =========================================================
+   SANEAMIENTO DE CAMPOS DE TEXTO
+
+   Igual que con la hora: se filtra en cada tecla ('input'), no
+   solo al guardar, para que el campo nunca llegue a mostrar un
+   valor que no tiene sentido para lo que representa.
+   ========================================================= */
+
+function filtrarSoloDigitos(e) {
+    e.target.value = e.target.value.replace(/[^0-9]/g, '');
+}
+
+function filtrarSoloLetras(e) {
+    e.target.value = e.target.value.replace(/[^A-Za-zÁÉÍÓÚÑÜáéíóúñü\s'.-]/g, '');
+}
+
+
+/* =========================================================
    ENTRADA DE HORA EN 24H (sin am/pm)
 
    Los <input type="datetime-local"/time> nativos muestran
@@ -107,9 +125,25 @@ function initials(name) {
 function dosDigitos(valor, max) {
     if (valor === '' || valor === null || valor === undefined) return null;
     var n = parseInt(valor, 10);
-    if (isNaN(n)) return null;
-    n = Math.max(0, Math.min(max, n));
+    if (isNaN(n) || n < 0 || n > max) return null;
     return (n < 10 ? '0' : '') + n;
+}
+
+function horaFueraDeRango(horaId, minId) {
+    var hRaw = document.getElementById(horaId).value;
+    var mRaw = document.getElementById(minId).value;
+    return (hRaw !== '' && dosDigitos(hRaw, 23) === null) || (mRaw !== '' && dosDigitos(mRaw, 59) === null);
+}
+
+// Se aplica en cada tecla (evento 'input'): además del min/max del HTML
+// (que no bloquea lo que se escribe a mano), esto impide que el campo
+// llegue a mostrar un valor fuera de rango — corrige en el momento, no
+// después de guardar, así el operador ve exactamente lo que va a quedar.
+function limitarHora(e, max) {
+    var v = e.target.value.replace(/[^0-9]/g, '').slice(0, 2);
+    var n = v === '' ? null : parseInt(v, 10);
+    if (n !== null && n > max) v = String(max);
+    e.target.value = v;
 }
 
 function leerFechaHora(fechaId, horaId, minId) {
@@ -279,6 +313,14 @@ function badgePrioridad(r, rank) {
     return '<span class="badge ' + clase + '"><i class="ti ti-flag-3"></i> #' + rank + ' · ' + formatDuration(min) + '</span>';
 }
 
+function badgeEstado(r) {
+    if (r.horaSalida) return '<span class="badge badge-salio">Salió</span>';
+    if (!requiereAvanceCompleto(r)) {
+        return '<span class="badge badge-amber" title="Sin avance registrado — puede salir sin restricción de %"><i class="ti ti-alert-triangle"></i> Activo</span>';
+    }
+    return '<span class="badge badge-en-patio">Activo</span>';
+}
+
 function celdaMotivoPatio(r) {
     if (r.horaSalida || r.ubicacion !== 'Patio') return '<span style="color:var(--text-3);">—</span>';
     if (!r.obsUbicacion) return '<span style="color:var(--amber-600);cursor:pointer;text-decoration:underline;" data-editar="' + r.id + '">Sin registrar</span>';
@@ -322,7 +364,7 @@ function renderRegistros() {
     var tbody = document.getElementById('reg-table');
 
     if (!list.length) {
-        tbody.innerHTML = '<tr><td colspan="16" class="empty-state">Sin registros con estos filtros.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="17" class="empty-state">Sin registros con estos filtros.</td></tr>';
         return;
     }
 
@@ -341,8 +383,9 @@ function renderRegistros() {
             '<td>' + (r.canal || '—') + '</td>' +
             '<td>' + fmtDt(r.horaEntrada) + '</td>' +
             '<td>' + fmtDt(r.horaSalida) + '</td>' +
-            '<td>' + (!r.horaSalida ? '<span class="badge badge-en-patio">Activo</span>' : '<span class="badge badge-salio">Salió</span>') + '</td>' +
-            '<td>' + (r.programado || 'No') + '</td>' +
+            '<td>' + badgeEstado(r) + '</td>' +
+            '<td>' + (r.programado ? 'Sí' : 'No') + '</td>' +
+            '<td>' + (r.programado && r.horaProgramacion ? fmtDt(r.horaProgramacion) : '—') + '</td>' +
             '<td>' + (r.servicioTipo || 'Normal') + '</td>' +
             '<td>' + formatDuration(dur.patio) + '</td>' +
             '<td>' + formatDuration(dur.muelle) + '</td>' +
@@ -476,13 +519,17 @@ async function registrarEntrada() {
     var obs = document.getElementById('f-obs').value.trim();
 
     if (!conductor) { toast('Ingresa el nombre del conductor', 'red', 'ti-alert-circle'); return; }
+    if (!/^[A-Za-zÁÉÍÓÚÑÜáéíóúñü\s'.-]+$/.test(conductor)) { toast('El nombre del conductor solo puede tener letras', 'red', 'ti-alert-circle'); return; }
+    if (cedula && !/^[0-9]+$/.test(cedula)) { toast('La cédula solo puede tener números', 'red', 'ti-alert-circle'); return; }
     if (!placa) { toast('Ingresa la placa del vehículo', 'red', 'ti-alert-circle'); return; }
+    if (horaFueraDeRango('f-hora-h', 'f-hora-m')) { toast('La hora de ingreso no es válida (horas 0-23, minutos 0-59)', 'red', 'ti-alert-circle'); return; }
     if (!hora) { toast('Selecciona la hora de ingreso', 'red', 'ti-alert-circle'); return; }
     if (!fechaDentroDeRango(hora)) { toast('La fecha de ingreso no puede ser futura ni anterior a ayer', 'red', 'ti-alert-circle'); return; }
     if (!ubicacion) { toast('Ingresa la ubicación', 'red', 'ti-alert-circle'); return; }
     if (ubicacion === 'Muelle' && !numeroMuelle) { toast('No hay muelles libres para asignar en este momento', 'red', 'ti-alert-circle'); return; }
     if (!tipo) { toast('Selecciona al menos un tipo de operación', 'red', 'ti-alert-circle'); return; }
     if (!programado) { toast('Selecciona si el vehículo está programado o no', 'red', 'ti-alert-circle'); return; }
+    if (programado === 'Programado' && horaFueraDeRango('f-hora-programacion-h', 'f-hora-programacion-m')) { toast('La hora de programación no es válida (horas 0-23, minutos 0-59)', 'red', 'ti-alert-circle'); return; }
     if (programado === 'Programado' && !horaProgramacion) { toast('Ingresa hora de programación', 'red', 'ti-alert-circle'); return; }
     if (servicioTipo === 'Reciclaje' && !servicioEmpresa) { toast('Selecciona la empresa de reciclaje', 'red', 'ti-alert-circle'); return; }
 
@@ -519,6 +566,10 @@ async function registrarEntrada() {
    ========================================================= */
 
 function mensajeAvanceBloqueado(rec) {
+    if (!requiereAvanceCompleto(rec)) {
+        return '<div style="margin-top:6px;color:var(--amber-600);font-size:12.5px;"><i class="ti ti-alert-triangle"></i> Este vehículo no tiene avance de cargue/descargue registrado (es un registro anterior a esta función) — puede salir sin restricción de %. Verifica manualmente antes de confirmar.</div>';
+    }
+
     if (puedeRegistrarSalida(rec)) return '';
 
     var pct = rec.avancePorcentaje || 0;
@@ -555,6 +606,7 @@ async function confirmarSalida() {
         return;
     }
 
+    if (horaFueraDeRango('m-hora-salida-h', 'm-hora-salida-m')) { toast('La hora de salida no es válida (horas 0-23, minutos 0-59)', 'red', 'ti-alert-circle'); return; }
     var horaSalida = leerFechaHora('m-fecha-salida', 'm-hora-salida-h', 'm-hora-salida-m');
     if (!horaSalida) { toast('Selecciona la hora de salida', 'red', 'ti-alert-circle'); return; }
 
@@ -696,6 +748,7 @@ function openModalDetalle(id) {
         '<div class="detail-row"><span class="detail-lbl">Ubicación:</span><span class="detail-val">' + getDestino(rec) + '</span></div>' +
         '<div class="detail-row"><span class="detail-lbl">Ingreso:</span><span class="detail-val">' + fmtDt(rec.horaEntrada) + '</span></div>' +
         '<div class="detail-row"><span class="detail-lbl">Salida:</span><span class="detail-val">' + fmtDt(rec.horaSalida) + '</span></div>' +
+        '<div class="detail-row"><span class="detail-lbl">Programado:</span><span class="detail-val">' + (rec.programado && rec.horaProgramacion ? fmtDt(rec.horaProgramacion) : 'No') + '</span></div>' +
         '<div class="detail-section-title">Historial</div>' + histHtml;
 
     document.getElementById('modal-detalle').classList.add('open');
@@ -823,6 +876,17 @@ function iniciarPagina(perfil) {
     document.querySelectorAll('input[name=tipo]').forEach(function (chk) { chk.addEventListener('change', syncTipoUI); });
     document.getElementById('btn-limpiar').addEventListener('click', limpiarForm);
     document.getElementById('btn-registrar').addEventListener('click', registrarEntrada);
+
+    // Saneamiento en vivo: conductor solo letras, cédula solo números,
+    // horas/minutos nunca fuera de 0-23 / 0-59 mientras se digitan.
+    document.getElementById('f-conductor').addEventListener('input', filtrarSoloLetras);
+    document.getElementById('f-cedula').addEventListener('input', filtrarSoloDigitos);
+    document.getElementById('f-hora-h').addEventListener('input', function (e) { limitarHora(e, 23); });
+    document.getElementById('f-hora-m').addEventListener('input', function (e) { limitarHora(e, 59); });
+    document.getElementById('f-hora-programacion-h').addEventListener('input', function (e) { limitarHora(e, 23); });
+    document.getElementById('f-hora-programacion-m').addEventListener('input', function (e) { limitarHora(e, 59); });
+    document.getElementById('m-hora-salida-h').addEventListener('input', function (e) { limitarHora(e, 23); });
+    document.getElementById('m-hora-salida-m').addEventListener('input', function (e) { limitarHora(e, 59); });
 
     // Registros: búsqueda
     document.getElementById('search-input').addEventListener('input', renderRegistros);
