@@ -39,6 +39,22 @@ const COLECCION = "vehiculos";
 
 
 /* =========================================================
+   FASES DE UN VEHÍCULO
+
+   Un vehículo "Ambos" hace dos fases en orden fijo: primero
+   descarga y después carga. Los de un solo tipo hacen una sola.
+   Se usa para saber cuántos juegos de picking/auditoría lleva
+   el registro — uno por fase, porque no se puede alistar ni
+   auditar lo que se va a cargar antes de haber descargado.
+   ========================================================= */
+
+export function fasesDe(tipo) {
+    if (tipo === "Ambos") return ["Descargue", "Cargue"];
+    return tipo ? [tipo] : [];
+}
+
+
+/* =========================================================
    CREAR REGISTRO (entrada de vehículo)
 
    `datos` trae los mismos campos que ya arma registrarEntrada()
