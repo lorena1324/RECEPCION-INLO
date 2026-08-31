@@ -1,5 +1,5 @@
 /* =========================================================
-   INLOTRANS — Operación J4 — Operador
+   INLOTRANS — Operación B9 — Operador
 
    Reconstruido a partir del index.html original ("Control de
    Portería"), preservando TODAS sus funcionalidades
@@ -49,8 +49,8 @@ import {
 import { nowLocal, today, fmtDt, formatDuration, fechaDentroDeRango, minutosEnPatio } from "../../../shared/utils/tiempos.js";
 import { exportarExcel } from "../../../shared/utils/excel.js";
 
-const OPERACION = "J4";
-const NUM_MUELLES = 3;
+const OPERACION = "B9";
+const NUM_MUELLES = 4;
 const RUTA_LOGIN = "../../../index.html";
 
 let registros = [];
@@ -472,7 +472,7 @@ function cambiarServicioTipo() {
     if (servicioTipo === 'Reciclaje') {
         wrapper.style.display = 'block'; empresaSelect.style.display = 'block'; empresaText.style.display = 'none'; empresaSelect.value = '';
     } else if (servicioTipo === 'Insumos') {
-        wrapper.style.display = 'block'; empresaSelect.style.display = 'none'; empresaText.style.display = 'block'; empresaText.value = 'Alkosto';
+        wrapper.style.display = 'block'; empresaSelect.style.display = 'none'; empresaText.style.display = 'block'; empresaText.value = 'EMMA';
     } else {
         wrapper.style.display = 'none'; empresaSelect.style.display = 'none'; empresaText.style.display = 'none';
     }
@@ -486,7 +486,7 @@ function limpiarForm() {
     limpiarHora('f-hora-programacion-h', 'f-hora-programacion-m');
 
     document.getElementById('f-servicio-empresa').value = '';
-    document.getElementById('f-servicio-empresa-text').value = 'Alkosto';
+    document.getElementById('f-servicio-empresa-text').value = 'EMMA';
     document.getElementById('programacion-wrapper').style.display = 'none';
     document.getElementById('servicio-empresa-wrapper').style.display = 'none';
     document.getElementById('f-canal').value = 'Sin canal';

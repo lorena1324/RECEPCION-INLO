@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inlotrans | Operador J4</title>
+    <title>Inlotrans | Administrador</title>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 
-    <link rel="stylesheet" href="../../../css/base.css">
-    <link rel="stylesheet" href="../../../css/layout.css">
-    <link rel="stylesheet" href="../../../css/components.css">
-    <link rel="stylesheet" href="operador.css">
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/layout.css">
+    <link rel="stylesheet" href="../css/components.css">
+    <link rel="stylesheet" href="admin.css">
 </head>
 <body>
 
@@ -19,10 +19,10 @@
     <!-- SIDEBAR -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-            <div class="brand-icon"><i class="ti ti-truck"></i></div>
+            <div class="brand-icon"><i class="ti ti-shield-lock"></i></div>
             <div class="brand-text">
                 <strong>Inlotrans</strong>
-                <span>Operación J4</span>
+                <span>Administrador</span>
             </div>
         </div>
 
@@ -37,10 +37,16 @@
             <button class="nav-item" data-view="registros">
                 <i class="ti ti-list-details"></i> Registros
             </button>
+            <button class="nav-item" data-view="estadisticas">
+                <i class="ti ti-chart-histogram"></i> Estadísticas
+            </button>
             <div class="nav-label">Herramientas</div>
             <button class="nav-item" data-view="exportar">
                 <i class="ti ti-download"></i> Exportar datos
             </button>
+            <a class="nav-item" href="backfill-avance.html" style="text-decoration:none;">
+                <i class="ti ti-tool"></i> Backfill de avance
+            </a>
         </nav>
 
         <div class="sidebar-footer">
@@ -48,7 +54,7 @@
                 <div class="operator-avatar" id="op-avatar">--</div>
                 <div class="operator-info">
                     <strong id="op-nombre">Cargando…</strong>
-                    <span>Operador J4</span>
+                    <span>Administrador</span>
                 </div>
             </div>
             <button class="btn-link" id="btn-cerrar-sesion">
@@ -80,9 +86,19 @@
                 </div>
             </div>
             <div class="topbar-right">
+                <!-- Selector de bodega: cambia toda la vista de operación -->
+                <div class="op-switch">
+                    <label for="selector-operacion">Operación</label>
+                    <select id="selector-operacion">
+                        <option value="J3">J3 · Pepsico</option>
+                        <option value="J4">J4 · Alkosto</option>
+                        <option value="B9">B9 · EMMA</option>
+                    </select>
+                </div>
+                <div class="op-badge"><i class="ti ti-building-warehouse"></i> <span id="op-operacion">—</span></div>
                 <div class="topbar-operator">
                     <i class="ti ti-user-circle"></i>
-                    <span>Turno: <strong id="op-nombre-top">Cargando…</strong></span>
+                    <span>Admin: <strong id="op-nombre-top">Cargando…</strong></span>
                 </div>
             </div>
         </header>
@@ -124,7 +140,7 @@
                 </div>
 
                 <div class="section-header">
-                    <div class="section-title">Muelles (1 a 3)</div>
+                    <div class="section-title" id="muelles-titulo">Muelles</div>
                 </div>
                 <div id="muelles-grid" class="muelles-grid"></div>
 
@@ -230,7 +246,8 @@
                                 <option value="Ática">Ática</option>
                                 <option value="Co-Recicladora">Co-Recicladora</option>
                             </select>
-                            <input type="text" id="f-servicio-empresa-text" style="display:none;" readonly value="Alkosto">
+                            <!-- Se rellena con el cliente de la bodega activa (Pepsico / Alkosto / EMMA) -->
+                            <input type="text" id="f-servicio-empresa-text" style="display:none;" readonly value="">
                         </div>
 
                         <div class="form-group full">
@@ -290,11 +307,58 @@
                 </div>
             </div>
 
+            <!-- ESTADÍSTICAS -->
+            <div id="view-estadisticas" class="view">
+                <div class="cards-resumen">
+                    <div class="card-resumen destacada">
+                        <div class="card-resumen-valor" id="es-mejor-dia">—</div>
+                        <div class="card-resumen-label"><i class="ti ti-trending-up"></i> Día con más movimiento</div>
+                        <div class="card-resumen-detalle" id="es-mejor-dia-detalle"></div>
+                    </div>
+                    <div class="card-resumen">
+                        <div class="card-resumen-valor" id="es-total">0</div>
+                        <div class="card-resumen-label"><i class="ti ti-truck"></i> Vehículos (histórico)</div>
+                    </div>
+                    <div class="card-resumen">
+                        <div class="card-resumen-valor" id="es-activos">0</div>
+                        <div class="card-resumen-label"><i class="ti ti-clock-play"></i> Activos ahora</div>
+                    </div>
+                    <div class="card-resumen">
+                        <div class="card-resumen-valor" id="es-salidas">0</div>
+                        <div class="card-resumen-label"><i class="ti ti-logout"></i> Salidas registradas</div>
+                    </div>
+                    <div class="card-resumen">
+                        <div class="card-resumen-valor" id="es-alerta">0</div>
+                        <div class="card-resumen-label alerta"><i class="ti ti-alert-triangle"></i> En alerta</div>
+                    </div>
+                </div>
+
+                <div class="subtitulo">Movimiento y composición</div>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <h3>Entradas y salidas por día operativo (últimos 7 días)</h3>
+                        <canvas id="chart-dias"></canvas>
+                    </div>
+                    <div class="stat-box">
+                        <h3>Tipos de operación</h3>
+                        <canvas id="chart-tipos"></canvas>
+                    </div>
+                    <div class="stat-box">
+                        <h3>Vehículos por canal</h3>
+                        <canvas id="chart-canal"></canvas>
+                    </div>
+                    <div class="stat-box">
+                        <h3>Entradas por franja horaria (hoy, 6am–6am)</h3>
+                        <canvas id="chart-franja"></canvas>
+                    </div>
+                </div>
+            </div>
+
             <!-- EXPORTAR -->
             <div id="view-exportar" class="view">
                 <div class="export-card">
                     <h3>Exportar a Excel (.xlsx)</h3>
-                    <p style="color:var(--text-3); font-size:13px; margin:6px 0 14px;">Descarga un archivo Excel con los registros de esta operación.</p>
+                    <p style="color:var(--text-3); font-size:13px; margin:6px 0 14px;">Descarga los registros de la operación que estás viendo ahora mismo.</p>
                     <div class="export-row">
                         <button class="btn btn-success" id="btn-export-todos"><i class="ti ti-download"></i> Exportar todos</button>
                         <button class="btn" id="btn-export-hoy"><i class="ti ti-calendar-down"></i> Solo hoy</button>
@@ -388,7 +452,8 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script type="module" src="operador.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script type="module" src="admin.js"></script>
 
 </body>
 </html>

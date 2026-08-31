@@ -50,7 +50,17 @@ export async function crearRegistro(operacion, datos, operador) {
 
     const destinoCompleto = datos.destino;
 
-    const rec = {
+    // Picking y auditoría se llevan POR FASE, no por vehículo: un
+    // vehículo "Ambos" alista y audita lo que descarga, y después
+    // alista y audita lo que carga. Se inicializan en 0 solo las
+    // fases que el vehículo realmente va a hacer.
+    const etapas = {};
+    fasesDe(datos.tipo).forEach(function (fase) {
+        etapas["picking" + fase] = 0;
+        etapas["auditoria" + fase] = 0;
+    });
+
+    const rec = Object.assign(etapas, {
         operacion: operacion,
 
         conductor: datos.conductor || "",
@@ -101,7 +111,7 @@ export async function crearRegistro(operacion, datos, operador) {
         }],
 
         creadoEn: serverTimestamp()
-    };
+    });
 
     const ref = await addDoc(collection(db, COLECCION), rec);
 

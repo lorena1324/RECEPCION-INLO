@@ -1,0 +1,127 @@
+/* =========================================================
+   INLOTRANS — Panel de Administrador
+   Estilos específicos de este rol.
+
+   Todo lo genérico (botones, formularios, tablas, modales,
+   badges, barras de avance) viene de css/components.css.
+   Aquí solo va lo propio del admin: la grilla de muelles
+   elástica y las tarjetas de estadísticas.
+   ========================================================= */
+
+/* El admin cambia entre bodegas con distinto número de muelles
+   (J4=3, B9=4, J3=8), así que la grilla no puede tener un número
+   fijo de columnas como en los paneles de una sola operación:
+   se adapta sola al ancho disponible. */
+.muelles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+}
+
+/* Selector de operación del topbar */
+.op-switch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.op-switch label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--text-3);
+}
+
+.op-switch select {
+    font-weight: 600;
+    min-width: 148px;
+}
+
+.op-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--blue-600);
+    color: #fff;
+    border-radius: var(--radius-md);
+    padding: 5px 11px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* ── Estadísticas ── */
+.cards-resumen {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 14px;
+    margin-bottom: 22px;
+}
+
+.card-resumen {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px 18px;
+}
+
+.card-resumen-valor {
+    font-size: 26px;
+    font-weight: 600;
+    color: var(--text-1);
+    line-height: 1.1;
+}
+
+.card-resumen-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-3);
+    margin-top: 6px;
+}
+
+.card-resumen-label.alerta { color: var(--amber-600); }
+
+.card-resumen.destacada {
+    background: var(--surface-2);
+    border-color: var(--blue-600);
+}
+
+.card-resumen-detalle {
+    font-size: 11.5px;
+    color: var(--text-3);
+    margin-top: 4px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+.stat-box {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+}
+
+.stat-box h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-1);
+    margin: 0 0 12px;
+}
+
+.stat-box canvas { max-height: 260px; }
+
+.subtitulo {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--text-3);
+    margin: 22px 0 10px;
+}

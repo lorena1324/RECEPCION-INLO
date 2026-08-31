@@ -1,8 +1,8 @@
 /* ============================================================
-   clientes.js — Portería J4 · Rol Cliente (Alkosto)
-   Panel 100% estadístico, solo lectura. J4 es exclusiva de
-   Alkosto, así que NO se filtra por un campo "cliente" dentro
-   del registro — todo lo que hay en la operación J4 pertenece
+   clientes.js — Portería B9 · Rol Cliente (EMMA)
+   Panel 100% estadístico, solo lectura. B9 es exclusiva de
+   EMMA, así que NO se filtra por un campo "cliente" dentro
+   del registro — todo lo que hay en la operación B9 pertenece
    a este cliente.
 
    Todo lo relacionado con "día" usa el día OPERATIVO (6am–6am),
@@ -25,10 +25,10 @@ import {
 
 import { todayOperativo } from "../../../shared/utils/tiempos.js";
 
-const OPERACION = "J4";
+const OPERACION = "B9";
 const RUTA_LOGIN = "../../../index.html";
 
-// J4 (Alkosto): el día del turno va de 6am a 6am, no de
+// B9 (EMMA): el día del turno va de 6am a 6am, no de
 // medianoche a medianoche. Ver shared/utils/tiempos.js.
 const HORA_CORTE = 6;
 

@@ -1,5 +1,5 @@
 /* =========================================================
-   INLOTRANS — Operación J4 — Operador
+   INLOTRANS — Panel de ADMINISTRADOR
 
    Reconstruido a partir del index.html original ("Control de
    Portería"), preservando TODAS sus funcionalidades
@@ -18,9 +18,9 @@
        Firebase ya no es manual — vive en shared/core/firebase.js.
    ========================================================= */
 
-import { protegerPagina } from "../../../shared/core/guard.js";
-import { cerrarSesionFirebase } from "../../../shared/core/auth.js";
-import { cerrarSesionLocal } from "../../../shared/core/session.js";
+import { protegerPagina } from "../shared/core/guard.js";
+import { cerrarSesionFirebase } from "../shared/core/auth.js";
+import { cerrarSesionLocal } from "../shared/core/session.js";
 
 import {
     crearRegistro,
@@ -34,8 +34,13 @@ import {
     getRegistrosEnPatio,
     puedeRegistrarSalida,
     requiereAvanceCompleto,
-    agregarOperacionFaltante
-} from "../../../shared/services/vehiculos.js";
+    avanceCompleto,
+    agregarOperacionFaltante,
+    actualizarAvance,
+    avanzarAFaseCargue,
+    autorizarSalidaAnticipada,
+    puedeAutorizarSalidaAnticipada
+} from "../shared/services/vehiculos.js";
 
 import {
     getDestino,
@@ -43,15 +48,41 @@ import {
     getLocationDurations,
     minutosEsperando,
     ordenarPorPrioridad,
-    tituloHistorial
-} from "../../../shared/services/eventos.js";
+    tituloHistorial,
+    nivelPrioridad,
+    getDiaOperativo,
+    diaConMasMovimiento
+} from "../shared/services/eventos.js";
 
-import { nowLocal, today, fmtDt, formatDuration, fechaDentroDeRango, minutosEnPatio } from "../../../shared/utils/tiempos.js";
-import { exportarExcel } from "../../../shared/utils/excel.js";
+import { nowLocal, today, fmtDt, formatDuration, fechaDentroDeRango, minutosEnPatio, todayOperativo, diaOperativo } from "../shared/utils/tiempos.js";
+import { exportarExcel } from "../shared/utils/excel.js";
 
-const OPERACION = "J4";
-const NUM_MUELLES = 3;
-const RUTA_LOGIN = "../../../index.html";
+/* Configuración por bodega. El admin no está atado a una sola
+   operación: el selector del topbar cambia `operacionActual` y
+   todo el panel (muelles, registros, estadísticas) se recarga.
+   Al agregar una bodega nueva basta con sumarla a este mapa. */
+const OPERACIONES = {
+    J3: { nombre: "Pepsico", muelles: 8 },
+    J4: { nombre: "Alkosto", muelles: 3 },
+    B9: { nombre: "EMMA",    muelles: 4 }
+};
+
+const HORA_CORTE = 6;
+const STORAGE_OPERACION = "inlotrans_admin_operacion";
+
+// Operación que se está viendo. Se recuerda entre recargas para
+// que el admin no tenga que volver a elegirla en cada visita.
+let operacionActual = localStorage.getItem(STORAGE_OPERACION) || "J3";
+if (!OPERACIONES[operacionActual]) operacionActual = "J3";
+
+function numMuelles() {
+    return OPERACIONES[operacionActual].muelles;
+}
+
+function clienteActual() {
+    return OPERACIONES[operacionActual].nombre;
+}
+const RUTA_LOGIN = "../index.html";
 
 let registros = [];
 let selectedId = null;
@@ -199,7 +230,7 @@ function showView(v) {
     var navBtn = document.querySelector('.nav-item[data-view="' + v + '"]');
     if (navBtn) navBtn.classList.add('active');
 
-    var titulos = { dashboard: 'Dashboard', entrada: 'Registrar entrada', registros: 'Registros', exportar: 'Exportar datos' };
+    var titulos = { dashboard: 'Dashboard', entrada: 'Registrar entrada', registros: 'Registros', estadisticas: 'Estadísticas', exportar: 'Exportar datos' };
     document.getElementById('topbar-title').textContent = titulos[v] || v;
 
     renderTodo();
@@ -224,6 +255,7 @@ function renderTodo() {
     document.getElementById('sidebar-count').textContent = registros.length + ' registro' + (registros.length !== 1 ? 's' : '');
     renderDashboard();
     renderRegistros();
+    renderEstadisticas();
 }
 
 
@@ -264,9 +296,9 @@ function renderDashboard() {
     }
 
     // Grilla de muelles
-    var ocupacion = getMuellesOcupacion(enMuelle, NUM_MUELLES);
+    var ocupacion = getMuellesOcupacion(enMuelle, numMuelles());
     var htmlGrid = '';
-    for (var n = 1; n <= NUM_MUELLES; n++) {
+    for (var n = 1; n <= numMuelles(); n++) {
         var rec = ocupacion[n];
         htmlGrid += '<div class="muelle-card ' + (rec ? 'ocupado' : 'libre') + '">' +
             '<div class="muelle-card-top">' +
@@ -276,9 +308,11 @@ function renderDashboard() {
             '<div class="muelle-card-body">' +
                 (rec
                     ? '<div class="muelle-card-placa">' + rec.placa + '</div><div>' + rec.conductor + '</div>' +
+                      renderAvance(rec) +
                       '<div style="margin-top:6px;display:flex;gap:4px;">' +
                         '<button class="btn btn-sm btn-primary" data-editar="' + rec.id + '">Mover</button>' +
                         '<button class="btn btn-sm btn-danger" data-salida="' + rec.id + '">Salida</button>' +
+                        '<button class="btn btn-sm" data-detalle="' + rec.id + '"><i class="ti ti-info-circle"></i></button>' +
                       '</div>'
                     : '<div class="muelle-card-empty">Disponible</div>') +
             '</div></div>';
@@ -429,12 +463,12 @@ function poblarSelectMuelles(selectEl, muelleActual) {
     if (!selectEl) return 0;
 
     var enMuelle = getRegistrosEnMuelle(registros);
-    var ocupacion = getMuellesOcupacion(enMuelle, NUM_MUELLES);
-    var libres = getMuellesLibres(ocupacion, NUM_MUELLES, muelleActual);
+    var ocupacion = getMuellesOcupacion(enMuelle, numMuelles());
+    var libres = getMuellesLibres(ocupacion, numMuelles(), muelleActual);
     var valorPrevio = selectEl.value;
 
     var html = '';
-    for (var n = 1; n <= NUM_MUELLES; n++) {
+    for (var n = 1; n <= numMuelles(); n++) {
         var esActual = muelleActual != null && String(n) === String(muelleActual);
         if (libres.indexOf(n) !== -1) {
             html += '<option value="' + n + '">' + n + (esActual ? ' (actual)' : '') + '</option>';
@@ -472,7 +506,7 @@ function cambiarServicioTipo() {
     if (servicioTipo === 'Reciclaje') {
         wrapper.style.display = 'block'; empresaSelect.style.display = 'block'; empresaText.style.display = 'none'; empresaSelect.value = '';
     } else if (servicioTipo === 'Insumos') {
-        wrapper.style.display = 'block'; empresaSelect.style.display = 'none'; empresaText.style.display = 'block'; empresaText.value = 'Alkosto';
+        wrapper.style.display = 'block'; empresaSelect.style.display = 'none'; empresaText.style.display = 'block'; empresaText.value = clienteActual();
     } else {
         wrapper.style.display = 'none'; empresaSelect.style.display = 'none'; empresaText.style.display = 'none';
     }
@@ -486,7 +520,7 @@ function limpiarForm() {
     limpiarHora('f-hora-programacion-h', 'f-hora-programacion-m');
 
     document.getElementById('f-servicio-empresa').value = '';
-    document.getElementById('f-servicio-empresa-text').value = 'Alkosto';
+    document.getElementById('f-servicio-empresa-text').value = clienteActual();
     document.getElementById('programacion-wrapper').style.display = 'none';
     document.getElementById('servicio-empresa-wrapper').style.display = 'none';
     document.getElementById('f-canal').value = 'Sin canal';
@@ -548,7 +582,7 @@ async function registrarEntrada() {
     setSyncStatus('syncing');
 
     try {
-        await crearRegistro(OPERACION, datos, perfilActual.nombre);
+        await crearRegistro(operacionActual, datos, perfilActual.nombre);
         setSyncStatus('ok');
         toast('Vehículo ' + placa + ' registrado', 'green', 'ti-circle-check');
         limpiarForm();
@@ -749,6 +783,8 @@ function openModalDetalle(id) {
         '<div class="detail-row"><span class="detail-lbl">Ingreso:</span><span class="detail-val">' + fmtDt(rec.horaEntrada) + '</span></div>' +
         '<div class="detail-row"><span class="detail-lbl">Salida:</span><span class="detail-val">' + fmtDt(rec.horaSalida) + '</span></div>' +
         '<div class="detail-row"><span class="detail-lbl">Programado:</span><span class="detail-val">' + (rec.programado && rec.horaProgramacion ? fmtDt(rec.horaProgramacion) : 'No') + '</span></div>' +
+        '<div class="detail-row"><span class="detail-lbl">Avance:</span><span class="detail-val">' + textoAvance(rec) + '</span></div>' +
+        bloqueAutorizacion(rec) +
         '<div class="detail-section-title">Historial</div>' + histHtml;
 
     document.getElementById('modal-detalle').classList.add('open');
@@ -790,15 +826,331 @@ function getStateLabel(r) {
 }
 
 function exportarTodos() {
-    var ok = exportarExcel(registros, getStateLabel, 'inlotrans_' + OPERACION + '_' + today() + '.xlsx', 'Registros ' + OPERACION);
+    var ok = exportarExcel(registros, getStateLabel, 'inlotrans_' + operacionActual + '_' + today() + '.xlsx', 'Registros ' + operacionActual);
     if (!ok) toast('No hay registros para exportar', 'amber', 'ti-alert-circle');
 }
 
 function exportarHoy() {
     var hoy = today();
     var deHoy = registros.filter(function (r) { return (r.fecha || (r.horaEntrada || '').slice(0, 10)) === hoy; });
-    var ok = exportarExcel(deHoy, getStateLabel, 'inlotrans_' + OPERACION + '_hoy_' + hoy + '.xlsx', 'Hoy');
+    var ok = exportarExcel(deHoy, getStateLabel, 'inlotrans_' + operacionActual + '_hoy_' + hoy + '.xlsx', 'Hoy');
     if (!ok) toast('No hay registros de hoy para exportar', 'amber', 'ti-alert-circle');
+}
+
+
+/* =========================================================
+   AVANCE DE CARGUE/DESCARGUE  (capacidad de supervisor)
+
+   Mismas reglas de negocio que en supervisor.js: el descargue
+   debe llegar al 100% sin excepción; el cargue puede salir
+   desde el 75% pero solo con autorización motivada. El admin
+   puede hacer las dos cosas sin cambiar de panel.
+   ========================================================= */
+
+function escapar(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function getAvanceTipoEfectivo(r) {
+    if (r.avanceTipo) return r.avanceTipo;
+    if (r.tipo === 'Cargue' || r.tipo === 'Descargue') return r.tipo;
+    return null;
+}
+
+function renderAvance(r) {
+
+    // Vehículos anteriores a la regla de avance: no tienen el campo
+    // y por eso hoy pueden salir sin restricción de %. Se avisa y se
+    // ofrece fijarles el avance para que la regla empiece a aplicar.
+    if (!requiereAvanceCompleto(r)) {
+        var botones = (r.tipo === 'Cargue' || r.tipo === 'Descargue')
+            ? '<button class="btn btn-sm btn-primary" data-avance-tipo="' + r.id + ':' + r.tipo + '">Fijar avance (' + r.tipo + ')</button>'
+            : '<button class="btn btn-sm btn-primary" data-avance-tipo="' + r.id + ':Cargue">Cargue</button>' +
+              '<button class="btn btn-sm btn-primary" data-avance-tipo="' + r.id + ':Descargue">Descargue</button>';
+        return '<div class="avance-box">' +
+            '<div style="font-size:11.5px;color:var(--amber-600);"><i class="ti ti-alert-triangle"></i> Sin avance registrado — puede salir sin restricción de %.</div>' +
+            '<div class="avance-selector-btns" style="margin-top:6px;">' + botones + '</div>' +
+            '</div>';
+    }
+
+    var avanceTipo = getAvanceTipoEfectivo(r);
+
+    if (!avanceTipo) {
+        return '<div class="avance-box">' +
+            '<span class="avance-label">¿Cargue o descargue?</span>' +
+            '<div class="avance-selector-btns">' +
+                '<button class="btn btn-sm btn-primary" data-avance-tipo="' + r.id + ':Cargue">Cargue</button>' +
+                '<button class="btn btn-sm btn-primary" data-avance-tipo="' + r.id + ':Descargue">Descargue</button>' +
+            '</div></div>';
+    }
+
+    var pct = r.avancePorcentaje || 0;
+    var claseBadge = avanceTipo === 'Cargue' ? 'badge-cargue' : 'badge-descargue';
+    var deshabilitado = pct >= 100 ? 'disabled' : '';
+
+    var aviso = '';
+    if (puedeAutorizarSalidaAnticipada(r) && !(r.autorizacionSalida && r.autorizacionSalida.motivo)) {
+        aviso = '<div style="margin-top:4px;font-size:11px;color:var(--amber-600);"><i class="ti ti-alert-triangle"></i> Requiere autorización para salir' +
+                ' <button class="btn btn-sm" data-autorizar="' + r.id + '" style="margin-left:4px;">Autorizar</button></div>';
+    } else if (r.autorizacionSalida && r.autorizacionSalida.motivo && pct < 100) {
+        aviso = '<div style="margin-top:4px;font-size:11px;color:var(--green-600);"><i class="ti ti-shield-check"></i> Salida anticipada autorizada</div>';
+    }
+
+    return '<div class="avance-box">' +
+        '<div class="avance-info">' +
+            '<span class="badge ' + claseBadge + '">' + avanceTipo + '</span>' +
+            '<span class="avance-pct">' + pct + '%</span>' +
+        '</div>' +
+        '<div class="avance-bar"><div class="avance-bar-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="avance-btns">' +
+            '<button class="btn btn-sm" data-avance-add="' + r.id + ':5" ' + deshabilitado + '>+5%</button>' +
+            '<button class="btn btn-sm" data-avance-add="' + r.id + ':10" ' + deshabilitado + '>+10%</button>' +
+        '</div>' + aviso +
+        '</div>';
+}
+
+// Resumen del avance para el modal de detalle (solo lectura).
+function textoAvance(r) {
+    if (!requiereAvanceCompleto(r)) return 'Sin registrar (puede salir sin restricción de %)';
+    var tipo = getAvanceTipoEfectivo(r) || 'sin definir';
+    return tipo + ' — ' + (r.avancePorcentaje || 0) + '%' + (avanceCompleto(r) ? ' (completo)' : '');
+}
+
+// Constancia de la autorización de salida anticipada, si la hubo.
+function bloqueAutorizacion(r) {
+    if (!r.autorizacionSalida || !r.autorizacionSalida.motivo) return '';
+    var a = r.autorizacionSalida;
+    return '<div class="detail-section-title">Autorización de salida anticipada</div>' +
+        '<p style="font-size:12.5px;">Autorizada por <strong>' + escapar(a.autorizadoPor) + '</strong> el ' + fmtDt(a.fecha) +
+        ', con ' + (a.porcentajeAlAutorizar || 0) + '% de avance.<br>Motivo: ' + escapar(a.motivo) + '</p>';
+}
+
+async function seleccionarAvanceTipo(id, tipo) {
+    setSyncStatus('syncing');
+    try {
+        await actualizarAvance(id, { avanceTipo: tipo, porcentaje: 0 }, perfilActual.nombre);
+        setSyncStatus('ok');
+        toast('Avance fijado en ' + tipo + ' 0%', 'green', 'ti-check');
+    } catch (error) {
+        setSyncStatus('error');
+        toast('No se pudo guardar el tipo de avance', 'red', 'ti-x');
+        console.error(error);
+    }
+}
+
+async function incrementarAvance(id, delta) {
+    var rec = registros.find(function (r) { return r.id === id; });
+    if (!rec) return;
+
+    var avanceTipo = getAvanceTipoEfectivo(rec);
+    if (!avanceTipo) return;
+
+    var actual = rec.avancePorcentaje || 0;
+    if (actual >= 100) return;
+
+    var nuevoPct = Math.min(100, actual + delta);
+
+    setSyncStatus('syncing');
+    try {
+        await actualizarAvance(id, { avanceTipo: avanceTipo, porcentaje: nuevoPct }, perfilActual.nombre);
+
+        // "Ambos": al completar el descargue pasa solo a cargue,
+        // retomando el % que traía pendiente si lo había.
+        if (rec.tipo === 'Ambos' && avanceTipo === 'Descargue' && nuevoPct >= 100) {
+            await avanzarAFaseCargue(id, { porcentajeInicial: rec.avanceCarguePendiente || 0 }, perfilActual.nombre);
+        }
+        setSyncStatus('ok');
+    } catch (error) {
+        setSyncStatus('error');
+        toast('No se pudo guardar el avance', 'red', 'ti-x');
+        console.error(error);
+    }
+}
+
+async function autorizarSalida(id) {
+    var rec = registros.find(function (r) { return r.id === id; });
+    if (!rec) return;
+
+    var motivo = prompt('Motivo de la salida anticipada (queda en el historial del vehículo):', '');
+    if (motivo === null) return;
+    motivo = motivo.trim();
+    if (!motivo) { toast('Debes explicar el motivo', 'red', 'ti-alert-circle'); return; }
+
+    setSyncStatus('syncing');
+    try {
+        await autorizarSalidaAnticipada(id, { motivo: motivo, porcentaje: rec.avancePorcentaje || 0 }, perfilActual.nombre);
+        setSyncStatus('ok');
+        toast('Salida anticipada autorizada', 'green', 'ti-shield-check');
+    } catch (error) {
+        setSyncStatus('error');
+        toast('Error al autorizar la salida', 'red', 'ti-x');
+        console.error(error);
+    }
+}
+
+
+/* =========================================================
+   SELECTOR DE OPERACIÓN (J3 / J4 / B9)
+
+   Cambia la bodega que se está administrando: corta la
+   suscripción anterior, limpia lo que quedaba en pantalla y
+   vuelve a suscribirse a la nueva. Se recuerda en localStorage.
+   ========================================================= */
+
+function cambiarOperacion(nueva) {
+    if (!OPERACIONES[nueva] || nueva === operacionActual) return;
+
+    operacionActual = nueva;
+    localStorage.setItem(STORAGE_OPERACION, nueva);
+
+    if (unsubscribeRegistros) { unsubscribeRegistros(); unsubscribeRegistros = null; }
+
+    registros = [];
+    selectedId = null;
+    renderTodo();
+
+    pintarEtiquetasOperacion();
+    suscribir();
+
+    toast('Viendo operación ' + nueva + ' (' + clienteActual() + ')', 'blue', 'ti-building-warehouse');
+}
+
+function pintarEtiquetasOperacion() {
+    document.getElementById('op-operacion').textContent = operacionActual + ' · ' + clienteActual();
+    document.getElementById('muelles-titulo').textContent = 'Muelles (1 a ' + numMuelles() + ')';
+    document.getElementById('selector-operacion').value = operacionActual;
+    // El formulario de entrada muestra el cliente de la bodega activa
+    cambiarServicioTipo();
+}
+
+function suscribir() {
+    unsubscribeRegistros = suscribirseARegistros(operacionActual, function (data, error) {
+        if (error) { setSyncStatus('error'); return; }
+        setSyncStatus('ok');
+        registros = data;
+        renderTodo();
+        if (document.getElementById('muelle-options').style.display !== 'none') {
+            poblarSelectMuelles(document.getElementById('f-numeroMuelle'), null);
+        }
+    });
+}
+
+
+/* =========================================================
+   ESTADÍSTICAS (día operativo 6am–6am, igual que supervisor)
+   ========================================================= */
+
+var chartDias = null, chartTipos = null, chartCanal = null, chartFranja = null;
+
+function destruirCharts() {
+    [chartDias, chartTipos, chartCanal, chartFranja].forEach(function (c) { if (c) c.destroy(); });
+    chartDias = chartTipos = chartCanal = chartFranja = null;
+}
+
+function renderEstadisticas() {
+
+    if (!document.getElementById('view-estadisticas').classList.contains('active')) return;
+    if (typeof Chart === 'undefined') return;
+
+    var total = registros.length;
+    var salidas = registros.filter(function (r) { return !!r.horaSalida; }).length;
+    var activos = total - salidas;
+
+    document.getElementById('es-total').textContent = total;
+    document.getElementById('es-salidas').textContent = salidas;
+    document.getElementById('es-activos').textContent = activos;
+
+    var enPatio = getRegistrosEnPatio(registros);
+    var enAlerta = enPatio.filter(function (r) { return nivelPrioridad(minutosEsperando(r)) === 'alta'; }).length;
+    document.getElementById('es-alerta').textContent = enAlerta;
+
+    var mejor = diaConMasMovimiento(registros, HORA_CORTE);
+    document.getElementById('es-mejor-dia').textContent = mejor ? mejor.dia : '—';
+    document.getElementById('es-mejor-dia-detalle').textContent = mejor
+        ? mejor.total + ' movimientos (' + mejor.entradas + ' entradas · ' + mejor.salidas + ' salidas)'
+        : 'Sin datos todavía';
+
+    // Últimos 7 días operativos
+    var dias = [];
+    for (var i = 6; i >= 0; i--) {
+        var d = new Date();
+        d.setDate(d.getDate() - i);
+        dias.push(diaOperativo(d.toISOString(), HORA_CORTE));
+    }
+
+    var entradasPorDia = dias.map(function (dia) {
+        return registros.filter(function (r) { return getDiaOperativo(r, HORA_CORTE) === dia; }).length;
+    });
+    var salidasPorDia = dias.map(function (dia) {
+        return registros.filter(function (r) { return r.horaSalida && diaOperativo(r.horaSalida, HORA_CORTE) === dia; }).length;
+    });
+
+    destruirCharts();
+
+    chartDias = new Chart(document.getElementById('chart-dias'), {
+        type: 'bar',
+        data: {
+            labels: dias,
+            datasets: [
+                { label: 'Entradas', data: entradasPorDia, backgroundColor: '#2563eb', borderRadius: 4 },
+                { label: 'Salidas', data: salidasPorDia, backgroundColor: '#3B6D11', borderRadius: 4 }
+            ]
+        },
+        options: { plugins: { legend: { position: 'bottom' } }, responsive: true }
+    });
+
+    // Tipos de operación
+    var cont = { Cargue: 0, Descargue: 0, Ambos: 0 };
+    registros.forEach(function (r) { if (cont[r.tipo] !== undefined) cont[r.tipo]++; });
+
+    chartTipos = new Chart(document.getElementById('chart-tipos'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Cargue', 'Descargue', 'Ambos'],
+            datasets: [{ data: [cont.Cargue, cont.Descargue, cont.Ambos], backgroundColor: ['#2563eb', '#854F0B', '#3B6D11'] }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } } }
+    });
+
+    // Canal
+    var canales = {};
+    registros.forEach(function (r) {
+        var c = r.canal || 'Sin canal';
+        canales[c] = (canales[c] || 0) + 1;
+    });
+
+    chartCanal = new Chart(document.getElementById('chart-canal'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(canales),
+            datasets: [{ label: 'Vehículos', data: Object.keys(canales).map(function (k) { return canales[k]; }), backgroundColor: '#2563eb', borderRadius: 4 }]
+        },
+        options: { plugins: { legend: { display: false } } }
+    });
+
+    // Franja horaria del día operativo actual (eje arranca a las 6am)
+    var diaHoy = todayOperativo(HORA_CORTE);
+    var porHora = new Array(24).fill(0);
+    registros.filter(function (r) { return getDiaOperativo(r, HORA_CORTE) === diaHoy; })
+        .forEach(function (r) {
+            if (!r.horaEntrada) return;
+            var h = new Date(r.horaEntrada).getHours();
+            if (!isNaN(h)) porHora[h]++;
+        });
+
+    var labelsH = [], valoresH = [];
+    for (var j = 0; j < 24; j++) {
+        var hh = (HORA_CORTE + j) % 24;
+        labelsH.push(hh + 'h');
+        valoresH.push(porHora[hh]);
+    }
+
+    chartFranja = new Chart(document.getElementById('chart-franja'), {
+        type: 'bar',
+        data: { labels: labelsH, datasets: [{ label: 'Entradas', data: valoresH, backgroundColor: '#854F0B', borderRadius: 4 }] },
+        options: { plugins: { legend: { display: false } } }
+    });
 }
 
 
@@ -823,6 +1175,23 @@ function wireDelegatedClicks() {
 
         var btnAgregarOp = e.target.closest('[data-agregar-operacion]');
         if (btnAgregarOp) { confirmarAgregarOperacion(btnAgregarOp.getAttribute('data-agregar-operacion')); return; }
+
+        var btnAvanceTipo = e.target.closest('[data-avance-tipo]');
+        if (btnAvanceTipo) {
+            var partesTipo = btnAvanceTipo.getAttribute('data-avance-tipo').split(':');
+            seleccionarAvanceTipo(partesTipo[0], partesTipo[1]);
+            return;
+        }
+
+        var btnAvanceAdd = e.target.closest('[data-avance-add]');
+        if (btnAvanceAdd) {
+            var partesAdd = btnAvanceAdd.getAttribute('data-avance-add').split(':');
+            incrementarAvance(partesAdd[0], Number(partesAdd[1]));
+            return;
+        }
+
+        var btnAutorizar = e.target.closest('[data-autorizar]');
+        if (btnAutorizar) { autorizarSalida(btnAutorizar.getAttribute('data-autorizar')); return; }
 
         var btnClose = e.target.closest('[data-close]');
         if (btnClose) { closeModal(btnClose.getAttribute('data-close')); return; }
@@ -860,14 +1229,13 @@ function iniciarPagina(perfil) {
     document.getElementById('f-fecha-ingreso').min = ayer.toISOString().slice(0, 10);
     document.getElementById('f-fecha-ingreso').max = today();
 
-    unsubscribeRegistros = suscribirseARegistros(OPERACION, function (data, error) {
-        if (error) { setSyncStatus('error'); return; }
-        registros = data;
-        renderTodo();
-        if (document.getElementById('muelle-options').style.display !== 'none') {
-            poblarSelectMuelles(document.getElementById('f-numeroMuelle'), null);
-        }
+    // Selector de operación del topbar (J3 / J4 / B9)
+    document.getElementById('selector-operacion').addEventListener('change', function (e) {
+        cambiarOperacion(e.target.value);
     });
+
+    pintarEtiquetasOperacion();
+    suscribir();
 
     // Eventos del formulario
     document.getElementById('f-ubicacion').addEventListener('change', cambiarUbicacion);
@@ -914,9 +1282,10 @@ function iniciarPagina(perfil) {
 }
 
 
+// Sin `operacion`: el administrador no está atado a una bodega,
+// entra a todas y elige cuál ver con el selector del topbar.
 protegerPagina({
-    rolesPermitidos: ["operario"],
-    operacion: OPERACION
+    rolesPermitidos: ["administrador"]
 }).then(iniciarPagina).catch(function (error) {
     console.warn('Acceso bloqueado:', error.message);
 });

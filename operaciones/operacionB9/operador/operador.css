@@ -1,0 +1,18 @@
+/* =========================================================
+   INLOTRANS — Operación B9 — Operador
+   Estilos específicos de este rol
+
+   Todo lo genérico (botones, formularios, tablas, modales,
+   badges, grilla de muelles) vive en css/components.css.
+   Este archivo queda disponible para overrides puntuales de
+   esta vista si aparecen más adelante.
+   ========================================================= */
+
+/* Override: B9 tiene 4 muelles, así que 4 columnas fijas.
+   Se carga después de components.css, así que gana por cascada. */
+.muelles-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 28px;
+}

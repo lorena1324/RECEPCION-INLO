@@ -1,5 +1,5 @@
 /* ============================================================
-   supervisor.js — Portería J4 · Rol Supervisor
+   supervisor.js — Portería B9 · Rol Supervisor
    Escrito desde cero como módulo ES, consumiendo directamente
    shared/core/guard.js y shared/services/{vehiculos,eventos}.js.
    Solo lectura, salvo dos excepciones: el supervisor puede fijar
@@ -41,11 +41,11 @@ import {
 
 import { todayOperativo, diaOperativo } from "../../../shared/utils/tiempos.js";
 
-const OPERACION = "J4";
-const NUM_MUELLES = 3;
+const OPERACION = "B9";
+const NUM_MUELLES = 4;
 const RUTA_LOGIN = "../../../index.html";
 
-// J4 (Alkosto): el "día" del turno va de 6am a 6am, no de
+// B9 (EMMA): el "día" del turno va de 6am a 6am, no de
 // medianoche a medianoche. Ver shared/utils/tiempos.js.
 const HORA_CORTE = 6;
 
@@ -322,7 +322,7 @@ function filaVacia(cols) {
 }
 
 /* =========================================================
-   UBICACIÓN EN VIVO — tablero de 3 muelles + patio
+   UBICACIÓN EN VIVO — tablero de 4 muelles + patio
 
    La tarjeta de cada muelle es idéntica a la que ve el operador
    (mismas clases: muelle-card/-top/-num/-status/-body/-placa/
@@ -1049,8 +1049,8 @@ function exportar() {
 
   const hoja = XLSX.utils.json_to_sheet(filas);
   const libro = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(libro, hoja, "Registros J4");
-  XLSX.writeFile(libro, `registros_J4_${desde || "todo"}_a_${hasta || "hoy"}.xlsx`);
+  XLSX.utils.book_append_sheet(libro, hoja, "Registros B9");
+  XLSX.writeFile(libro, `registros_B9_${desde || "todo"}_a_${hasta || "hoy"}.xlsx`);
 }
 
 /* =========================================================
