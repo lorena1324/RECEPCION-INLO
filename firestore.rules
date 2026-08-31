@@ -1,0 +1,148 @@
+rules_version = '2';
+
+/* =========================================================
+   INLOTRANS — Reglas de seguridad de Firestore
+
+   IMPORTANTE: hasta ahora TODO el control de acceso vivía solo
+   en el navegador (guard.js y las funciones de shared/services).
+   Eso es una barrera de interfaz, no de datos: cualquiera con la
+   consola del navegador abierta podía leer o escribir la
+   colección "vehiculos" saltándose las reglas de negocio.
+   Este archivo mueve ese control al servidor, donde no se puede
+   esquivar.
+
+   Modelo de roles (colección "usuarios", id = uid de Auth):
+       { nombre, rol, operacion, cliente, activo }
+
+       administrador → todo, en todas las operaciones
+       supervisor    → su operación: lee todo, edita avance y
+                       autorizaciones de salida
+       operario      → su operación: lee todo, crea entradas,
+                       registra salidas, mueve y elimina
+       cliente       → su operación: solo lectura
+
+   ANTES DE DESPLEGAR: probar en la consola de Firebase con el
+   "Rules Playground" (Firestore → Reglas → Simulador), usando un
+   uid real de cada rol. Unas reglas mal puestas dejan la app
+   inutilizable para todos.
+   ========================================================= */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* ── Ayudantes ────────────────────────────────────────── */
+
+    function autenticado() {
+      return request.auth != null;
+    }
+
+    // Perfil del usuario que hace la petición. Cada llamada a
+    // get() cuenta como una lectura facturable, por eso se
+    // envuelve en funciones y no se repite el path suelto.
+    function perfil() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function tienePerfil() {
+      return autenticado() &&
+             exists(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+
+    // Un usuario desactivado no puede hacer nada, tenga el rol
+    // que tenga. `activo` solo bloquea si viene explícitamente
+    // en false, para no romper perfiles antiguos que no lo traen.
+    function activo() {
+      return tienePerfil() && perfil().activo != false;
+    }
+
+    function rol() {
+      return perfil().rol;
+    }
+
+    function esAdmin() {
+      return activo() && rol() == 'administrador';
+    }
+
+    // El administrador no tiene operación asignada: entra a todas.
+    function enSuOperacion(operacionDoc) {
+      return activo() && perfil().operacion == operacionDoc;
+    }
+
+    /* ── usuarios ─────────────────────────────────────────────
+       Cada quien lee su propio perfil (lo necesita el login).
+       Solo el administrador ve y administra los demás: si no,
+       cualquier operario podría listar todo el personal.
+       ──────────────────────────────────────────────────────── */
+
+    match /usuarios/{uid} {
+      allow get: if autenticado() && (request.auth.uid == uid || esAdmin());
+      allow list: if esAdmin();
+      allow create, update, delete: if esAdmin();
+    }
+
+    /* ── vehiculos ────────────────────────────────────────────
+       Una sola colección compartida por las tres bodegas; el
+       campo `operacion` ("J3" | "J4" | "B9") es lo que separa
+       quién ve qué.
+
+       Nota sobre las consultas: la app siempre pide los
+       vehículos con where("operacion","==",X). Firestore evalúa
+       las reglas de `list` contra la consulta, no contra cada
+       documento, así que esa cláusula es lo que hace que la
+       lectura por operación funcione. Si algún día se consulta
+       sin ese filtro, dejará de funcionar para todos menos el
+       administrador — que sí puede listar sin restricción
+       (lo necesita la herramienta de backfill).
+       ──────────────────────────────────────────────────────── */
+
+    match /vehiculos/{vehiculoId} {
+
+      // Campos que un supervisor puede tocar. Todo lo demás
+      // (placa, conductor, horas, ubicación, salida) es del
+      // operario o del administrador.
+      function camposDeSupervisor() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly([
+                 'avanceTipo', 'avancePorcentaje', 'avanceCarguePendiente',
+                 'autorizacionSalida', 'historial',
+                 'pickingCargue', 'auditoriaCargue',
+                 'pickingDescargue', 'auditoriaDescargue'
+               ]);
+      }
+
+      // LECTURA — el administrador ve todo; los demás, su bodega.
+      // En `list`, Firestore evalúa la regla contra cada documento
+      // que devolvería la consulta y la rechaza entera si alguno
+      // no pasa. Como la app siempre filtra por operación, un
+      // supervisor de J3 obtiene los suyos y jamás los de J4.
+      allow get, list: if esAdmin() || enSuOperacion(resource.data.operacion);
+
+      // CREAR — solo administrador y operario, y el registro
+      // tiene que nacer dentro de la operación del que lo crea.
+      allow create: if esAdmin() ||
+                       (activo() && rol() == 'operario' &&
+                        request.resource.data.operacion == perfil().operacion);
+
+      // ACTUALIZAR — el administrador sin límite; el operario
+      // dentro de su bodega; el supervisor solo los campos de
+      // avance y autorización de su bodega. El cliente, nunca.
+      allow update: if esAdmin() ||
+                       (rol() == 'operario' && enSuOperacion(resource.data.operacion)) ||
+                       (rol() == 'supervisor' && enSuOperacion(resource.data.operacion)
+                        && camposDeSupervisor());
+
+      // BORRAR — administrador y operario de esa bodega.
+      allow delete: if esAdmin() ||
+                       (rol() == 'operario' && enSuOperacion(resource.data.operacion));
+    }
+
+    /* ── Todo lo demás queda cerrado ─────────────────────────
+       Sin esto, una colección nueva quedaría sin protección
+       hasta que alguien se acuerde de agregarle reglas.
+       ──────────────────────────────────────────────────────── */
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -75,17 +75,23 @@ export function protegerPagina(opciones) {
                 return;
             }
 
-            if (rolesPermitidos && rolesPermitidos.indexOf(perfil.rol) === -1) {
+            // El administrador es superusuario: entra a CUALQUIER página
+            // (operario, supervisor, cliente) y a cualquier operación, sin
+            // que las páginas tengan que listarlo en `rolesPermitidos`.
+            // Antes el filtro de rol se aplicaba también a él y lo devolvía
+            // al login, dejándolo encerrado en su propio panel.
+            var esAdministrador = perfil.rol === "administrador";
+
+            if (!esAdministrador && rolesPermitidos && rolesPermitidos.indexOf(perfil.rol) === -1) {
                 redirigirALogin();
                 reject(new Error("ROL_NO_AUTORIZADO"));
                 return;
             }
 
-            // El administrador puede entrar a cualquier operación;
-            // los demás roles solo a la suya.
+            // Los demás roles solo entran a la operación que tienen asignada.
             if (
                 operacion &&
-                perfil.rol !== "administrador" &&
+                !esAdministrador &&
                 (perfil.operacion || "").toLowerCase() !== operacion.toLowerCase()
             ) {
                 redirigirALogin();
