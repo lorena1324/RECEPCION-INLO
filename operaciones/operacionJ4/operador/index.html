@@ -51,6 +51,9 @@
                     <span>Operador J4</span>
                 </div>
             </div>
+            <button class="btn-link" id="btn-cerrar-sesion">
+                <i class="ti ti-logout"></i> Cerrar sesión
+            </button>
             <div class="sidebar-footer-row">
                 <i class="ti ti-database"></i>
                 <span id="sidebar-count">0 registros</span>
@@ -343,6 +346,11 @@
         <div class="form-group full" style="margin-top:10px;">
             <label for="e-obs-ubicacion">Observaciones / Motivo</label>
             <textarea id="e-obs-ubicacion"></textarea>
+        </div>
+        <div class="form-group full" style="margin-top:10px;">
+            <label>Tipo de operación</label>
+            <div id="tipo-operacion-actual" style="font-size:13.5px;color:var(--text-2);margin-bottom:6px;"></div>
+            <button class="btn btn-sm" id="btn-agregar-operacion" style="display:none;"></button>
         </div>
         <div class="modal-footer">
             <button class="btn" data-close="modal-editar">Cancelar</button>

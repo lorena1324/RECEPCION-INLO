@@ -98,6 +98,7 @@ textarea { resize: vertical; min-height: 64px; }
 @keyframes pulse-amber { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
 .badge-ambos     { background: #F0E7FA; color: #6B2FB3; }
 .badge-operador  { background: var(--teal-50);  color: var(--teal-600);  }
+.badge-canal     { background: var(--gray-50);  color: var(--gray-600);  }
 
 /* ── Toast ── */
 .toast {
@@ -193,6 +194,16 @@ textarea { resize: vertical; min-height: 64px; }
 .muelle-card-body { font-size: 12px; color: var(--text-2); line-height: 1.55; min-height: 34px; }
 .muelle-card-placa { font-weight: 600; color: var(--text-1); font-size: 13px; }
 .muelle-card-empty { color: var(--text-3); font-style: italic; }
+
+/* ── Avance de cargue/descargue (dentro de una muelle-card ocupada) ── */
+.avance-selector, .avance-box { margin-top: 8px; padding-top: 8px; border-top: 0.5px dashed var(--border); }
+.avance-label { display: block; font-size: 11px; color: var(--text-3); margin-bottom: 6px; }
+.avance-selector-btns { display: flex; gap: 4px; }
+.avance-info { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+.avance-pct { font-weight: 600; font-size: 12.5px; color: var(--text-1); }
+.avance-bar { height: 6px; border-radius: 4px; background: var(--surface-3); overflow: hidden; margin-bottom: 6px; }
+.avance-bar-fill { height: 100%; background: var(--blue-600); border-radius: 4px; transition: width .2s; }
+.avance-btns { display: flex; gap: 4px; }
 
 /* ── Tablas ── */
 .table-wrap {

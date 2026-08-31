@@ -19,6 +19,8 @@
    ========================================================= */
 
 import { protegerPagina } from "../../../shared/core/guard.js";
+import { cerrarSesionFirebase } from "../../../shared/core/auth.js";
+import { cerrarSesionLocal } from "../../../shared/core/session.js";
 
 import {
     crearRegistro,
@@ -29,7 +31,9 @@ import {
     getMuellesOcupacion,
     getMuellesLibres,
     getRegistrosEnMuelle,
-    getRegistrosEnPatio
+    getRegistrosEnPatio,
+    puedeRegistrarSalida,
+    agregarOperacionFaltante
 } from "../../../shared/services/vehiculos.js";
 
 import {
@@ -46,6 +50,7 @@ import { exportarExcel } from "../../../shared/utils/excel.js";
 
 const OPERACION = "J4";
 const NUM_MUELLES = 3;
+const RUTA_LOGIN = "../../../index.html";
 
 let registros = [];
 let selectedId = null;
@@ -85,6 +90,17 @@ function setSyncStatus(status) {
 
 function initials(name) {
     return (name || '').split(' ').map(function (p) { return p[0]; }).slice(0, 2).join('').toUpperCase();
+}
+
+// guard.js no expone una función de logout, así que la armamos aquí
+// con las mismas piezas que usa internamente (auth.js + session.js).
+function salir() {
+    cerrarSesionFirebase()
+        .catch(function () {})
+        .finally(function () {
+            cerrarSesionLocal();
+            window.location.href = RUTA_LOGIN;
+        });
 }
 
 
@@ -452,11 +468,29 @@ async function registrarEntrada() {
    MODAL: SALIDA
    ========================================================= */
 
+function mensajeAvanceBloqueado(rec) {
+    if (puedeRegistrarSalida(rec)) return '';
+
+    var pct = rec.avancePorcentaje || 0;
+    var texto;
+
+    if (rec.avanceTipo !== 'Cargue') {
+        texto = 'El descargue está en ' + pct + '% — debe llegar al 100% para poder salir, sin excepción.';
+    } else if (pct < 75) {
+        texto = 'El cargue está en ' + pct + '% — debe llegar mínimo al 75% para que un supervisor pueda autorizar la salida.';
+    } else {
+        texto = 'El cargue está en ' + pct + '% — un supervisor debe autorizar la salida anticipada (con motivo) antes de poder registrarla.';
+    }
+
+    return '<div style="margin-top:6px;color:var(--amber-600);font-size:12.5px;"><i class="ti ti-alert-triangle"></i> ' + texto + '</div>';
+}
+
 function openModalSalida(id) {
     selectedId = id;
     var rec = registros.find(function (r) { return r.id === id; });
     if (!rec) return;
-    document.getElementById('modal-salida-info').innerHTML = '<strong>' + rec.placa + '</strong> — ' + rec.conductor;
+
+    document.getElementById('modal-salida-info').innerHTML = '<strong>' + rec.placa + '</strong> — ' + rec.conductor + mensajeAvanceBloqueado(rec);
     document.getElementById('m-hora-salida').value = nowLocal();
     document.getElementById('m-obs-salida').value = '';
     document.getElementById('modal-salida').classList.add('open');
@@ -465,6 +499,11 @@ function openModalSalida(id) {
 async function confirmarSalida() {
     var rec = registros.find(function (r) { return r.id === selectedId; });
     if (!rec) return;
+
+    if (!puedeRegistrarSalida(rec)) {
+        toast(rec.avanceTipo !== 'Cargue' ? 'El descargue debe llegar al 100% para salir' : 'Falta autorización del supervisor para esta salida', 'red', 'ti-alert-circle');
+        return;
+    }
 
     var horaSalida = document.getElementById('m-hora-salida').value;
     if (!horaSalida) { toast('Selecciona la hora de salida', 'red', 'ti-alert-circle'); return; }
@@ -499,7 +538,39 @@ function openModalEditar(id) {
     document.getElementById('e-canal').value = rec.canal || 'Sin canal';
     document.getElementById('e-obs-ubicacion').value = '';
     cambiarUbicacionEdit();
+
+    document.getElementById('tipo-operacion-actual').textContent = 'Actual: ' + rec.tipo;
+    var btnAgregar = document.getElementById('btn-agregar-operacion');
+    if (rec.tipo === 'Ambos') {
+        btnAgregar.style.display = 'none';
+    } else {
+        var faltante = rec.tipo === 'Cargue' ? 'Descargue' : 'Cargue';
+        btnAgregar.textContent = '+ Agregar ' + faltante + ' también';
+        btnAgregar.style.display = 'inline-flex';
+        btnAgregar.setAttribute('data-agregar-operacion', rec.id);
+    }
+
     document.getElementById('modal-editar').classList.add('open');
+}
+
+async function confirmarAgregarOperacion(id) {
+    var rec = registros.find(function (r) { return r.id === id; });
+    if (!rec) return;
+
+    var faltante = rec.tipo === 'Cargue' ? 'Descargue' : 'Cargue';
+    if (!confirm('¿Confirmas que este vehículo también debe hacer ' + faltante + '?')) return;
+
+    setSyncStatus('syncing');
+    try {
+        await agregarOperacionFaltante(rec.id, rec, perfilActual.nombre);
+        setSyncStatus('ok');
+        toast('Se agregó ' + faltante + ' a este vehículo', 'green', 'ti-check');
+        openModalEditar(id);
+    } catch (error) {
+        setSyncStatus('error');
+        toast('Error al actualizar el tipo de operación', 'red', 'ti-x');
+        console.error(error);
+    }
 }
 
 function cambiarUbicacionEdit() {
@@ -647,6 +718,9 @@ function wireDelegatedClicks() {
         var btnEliminar = e.target.closest('[data-eliminar]');
         if (btnEliminar) { eliminarRegistro(btnEliminar.getAttribute('data-eliminar')); return; }
 
+        var btnAgregarOp = e.target.closest('[data-agregar-operacion]');
+        if (btnAgregarOp) { confirmarAgregarOperacion(btnAgregarOp.getAttribute('data-agregar-operacion')); return; }
+
         var btnClose = e.target.closest('[data-close]');
         if (btnClose) { closeModal(btnClose.getAttribute('data-close')); return; }
 
@@ -715,6 +789,8 @@ function iniciarPagina(perfil) {
     // Sidebar móvil
     document.getElementById('btn-menu-toggle').addEventListener('click', toggleSidebar);
     document.getElementById('sidebar-overlay').addEventListener('click', closeSidebar);
+
+    document.getElementById('btn-cerrar-sesion').addEventListener('click', salir);
 
     wireDelegatedClicks();
 

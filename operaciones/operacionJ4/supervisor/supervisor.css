@@ -104,9 +104,13 @@ body.cargando .layout { visibility: hidden; }
 .badge-prioridad-media { background: #fef3c7; color: #92400e; }
 .badge-prioridad-alta { background: #fee2e2; color: #991b1b; }
 
-/* ── Tablero de muelles ── */
+/* ── Tablero de muelles ──
+   Misma tarjeta que usa el operador (clases .muelles-grid,
+   .muelle-card, .muelle-card-top/-num/-status/-body/-placa/-empty
+   definidas en css/components.css) — aquí solo se ajusta el
+   número de columnas para los 3 muelles de J4. */
 
-.grid-muelles {
+.muelles-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 14px;
@@ -114,61 +118,9 @@ body.cargando .layout { visibility: hidden; }
 }
 
 @media (max-width: 900px) {
-  .grid-muelles { grid-template-columns: repeat(2, 1fr); }
+  .muelles-grid { grid-template-columns: repeat(2, 1fr); }
   .cards-resumen { grid-template-columns: repeat(2, 1fr); }
 }
-
-.muelle-card {
-  border-radius: 12px;
-  padding: 16px;
-  min-height: 120px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-}
-
-.muelle-card.libre {
-  background: #f8fafc;
-  border-style: dashed;
-}
-
-.muelle-card.ocupado { border-color: #93c5fd; background: #eff6ff; }
-.muelle-card.ocupado.prioridad-media { border-color: #fcd34d; background: #fffbeb; }
-.muelle-card.ocupado.prioridad-alta { border-color: #fca5a5; background: #fef2f2; }
-
-.muelle-card-titulo {
-  font-weight: 700;
-  font-size: 14px;
-  color: #1f2937;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.muelle-card-cuerpo { font-size: 13px; color: #374151; margin-top: 8px; }
-.muelle-card-placa { font-weight: 700; font-size: 15px; }
-.muelle-card-libre-texto { color: #9ca3af; font-size: 13px; font-style: italic; }
-
-.lista-patio {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.patio-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 10px 16px;
-}
-
-.patio-item.prioridad-media { border-left: 4px solid #f59e0b; }
-.patio-item.prioridad-alta { border-left: 4px solid #ef4444; }
 
 /* ── Filtros / registros ── */
 

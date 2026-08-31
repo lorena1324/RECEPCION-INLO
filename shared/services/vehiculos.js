@@ -33,6 +33,7 @@ import {
 
 import { db } from "../core/firebase.js";
 import { getDestino, ordenarPorPrioridad } from "../services/eventos.js";
+import { nowLocal } from "../utils/tiempos.js";
 
 const COLECCION = "vehiculos";
 
@@ -67,6 +68,15 @@ export async function crearRegistro(operacion, datos, operador) {
         destino: destinoCompleto,
 
         tipo: datos.tipo,
+
+        // Avance de cargue/descargue: si el tipo ya es uno solo, el
+        // "avanceTipo" queda fijo desde la entrada. Si es "Ambos", el
+        // vehículo siempre arranca en Descargue — es un orden fijo del
+        // negocio, no algo que el supervisor deba elegir — y al llegar
+        // al 100% pasa automáticamente a Cargue (ver incrementarAvance()
+        // en supervisor.js).
+        avanceTipo: datos.tipo === "Ambos" ? "Descargue" : datos.tipo,
+        avancePorcentaje: 0,
 
         cedula: datos.cedula || "",
         obs: datos.obs || "",
@@ -142,7 +152,7 @@ export function suscribirseARegistros(operacion, callback) {
 export async function actualizarUbicacion(id, cambios, operador) {
 
     const entrada = {
-        fecha: new Date().toISOString().slice(0, 16),
+        fecha: nowLocal(),
         tipo: "ubicacion",
         operador: operador,
         ubicacion: cambios.destino,
@@ -168,6 +178,59 @@ export async function actualizarUbicacion(id, cambios, operador) {
 
 
 /* =========================================================
+   AGREGAR LA OPERACIÓN QUE LE FALTABA (Cargue o Descargue → Ambos)
+
+   El operario detecta en muelle que un vehículo que solo iba a
+   hacer una operación en realidad necesita las dos, y lo marca
+   aquí como "Ambos". `rec` es el registro actual en memoria del
+   llamador (para saber en qué fase de avance está y no perder
+   nada al reordenar):
+
+     - Si ya estaba en fase Descargue, no se toca — es el orden
+       correcto (descargue siempre va primero) y sigue igual.
+     - Si estaba en fase Cargue sin avance (0%) o no tenía fase
+       todavía (vehículo de antes de esta función), se reinicia
+       en Descargue — no hay nada que perder.
+     - Si ya estaba en fase Cargue CON avance, ese % se guarda en
+       `avanceCarguePendiente` para retomarlo automáticamente en
+       cuanto termine el descargue (ver avanzarAFaseCargue en
+       supervisor.js) — no se pierde el trabajo ya hecho.
+   ========================================================= */
+
+export async function agregarOperacionFaltante(id, rec, operador) {
+
+    if (rec.tipo === "Ambos") return;
+
+    const faltante = rec.tipo === "Cargue" ? "Descargue" : "Cargue";
+
+    const entrada = {
+        fecha: nowLocal(),
+        tipo: "operacion",
+        operador: operador,
+        tipoAnterior: rec.tipo,
+        tipoNuevo: "Ambos",
+        texto: `Se agregó ${faltante} — el vehículo ya venía haciendo ${rec.tipo}`
+    };
+
+    const cambiosDoc = {
+        tipo: "Ambos",
+        historial: arrayUnion(entrada)
+    };
+
+    if (rec.avanceTipo !== "Descargue") {
+        cambiosDoc.avanceTipo = "Descargue";
+        cambiosDoc.avancePorcentaje = 0;
+
+        if (rec.avanceTipo === "Cargue" && (rec.avancePorcentaje || 0) > 0) {
+            cambiosDoc.avanceCarguePendiente = rec.avancePorcentaje;
+        }
+    }
+
+    await updateDoc(doc(db, COLECCION, id), cambiosDoc);
+}
+
+
+/* =========================================================
    REGISTRAR SALIDA (despacho)
    ========================================================= */
 
@@ -184,6 +247,93 @@ export async function registrarSalida(id, horaSalida, obsSalida, operador) {
         horaSalida: horaSalida,
         obsSalida: obsSalida || "",
         operadorSalida: operador,
+        historial: arrayUnion(entrada)
+    });
+}
+
+
+/* =========================================================
+   ACTUALIZAR AVANCE (porcentaje de cargue/descargue)
+
+   `cambios.avanceTipo` fija cuál de los dos está midiendo el
+   supervisor (obligatorio elegirlo una vez cuando `tipo` es
+   "Ambos"). El porcentaje siempre se guarda entre 0 y 100 —
+   nunca puede pasarse de 100 aunque el llamador lo intente.
+   ========================================================= */
+
+export async function actualizarAvance(id, cambios, operador) {
+
+    const porcentaje = Math.max(0, Math.min(100, Math.round(cambios.porcentaje)));
+
+    const entrada = {
+        fecha: nowLocal(),
+        tipo: "avance",
+        operador: operador,
+        texto: `Avance de ${cambios.avanceTipo} actualizado a ${porcentaje}%`
+    };
+
+    await updateDoc(doc(db, COLECCION, id), {
+        avanceTipo: cambios.avanceTipo,
+        avancePorcentaje: porcentaje,
+        historial: arrayUnion(entrada)
+    });
+}
+
+
+/* =========================================================
+   AVANZAR A LA FASE DE CARGUE (cuando el descargue llega al 100%)
+
+   Solo aplica a vehículos "Ambos": el descargue siempre va
+   primero, y al completarse se pasa solo a Cargue. Normalmente
+   arranca en 0%, salvo que el vehículo ya traía cargue pendiente
+   de antes de agregarle el descargue (ver agregarOperacionFaltante)
+   — en ese caso retoma exactamente donde se había quedado.
+   ========================================================= */
+
+export async function avanzarAFaseCargue(id, cambios, operador) {
+
+    const entrada = {
+        fecha: nowLocal(),
+        tipo: "avance",
+        operador: operador,
+        texto: `Descargue completado — inicia Cargue en ${cambios.porcentajeInicial}%`
+    };
+
+    await updateDoc(doc(db, COLECCION, id), {
+        avanceTipo: "Cargue",
+        avancePorcentaje: cambios.porcentajeInicial,
+        historial: arrayUnion(entrada)
+    });
+}
+
+
+/* =========================================================
+   AUTORIZAR SALIDA ANTICIPADA (solo Cargue, mínimo 75%)
+
+   Un supervisor autoriza que un vehículo salga sin haber
+   llegado al 100% de cargue, dejando constancia del motivo en
+   el historial. `cambios.porcentaje` es el % que tenía el
+   vehículo al momento de autorizar (lo trae el llamador, que ya
+   tiene el registro en memoria) — se guarda como referencia,
+   no se vuelve a validar aquí contra el servidor.
+   ========================================================= */
+
+export async function autorizarSalidaAnticipada(id, cambios, supervisor) {
+
+    const entrada = {
+        fecha: nowLocal(),
+        tipo: "autorizacion",
+        operador: supervisor,
+        texto: cambios.motivo
+    };
+
+    await updateDoc(doc(db, COLECCION, id), {
+        autorizacionSalida: {
+            autorizadoPor: supervisor,
+            motivo: cambios.motivo,
+            fecha: nowLocal(),
+            porcentajeAlAutorizar: cambios.porcentaje
+        },
         historial: arrayUnion(entrada)
     });
 }
@@ -257,4 +407,52 @@ export function getRegistrosEnMuelle(registros) {
 export function puedeDespachar(r) {
     if (!r) return false;
     return r.ubicacion === "Muelle" || (r.destino || "").indexOf("Muelle") === 0 || (r.destino || "").indexOf("Muelle") !== -1;
+}
+
+
+/* =========================================================
+   REGLA: NO SALIR SIN COMPLETAR EL AVANCE (cargue/descargue)
+
+   `avancePorcentaje` no existía antes de esta función — los
+   vehículos que ya estaban activos en el sistema cuando se
+   agregó nunca lo tendrán en su documento (undefined), así que
+   quedan exceptuados de la regla automáticamente: no es justo
+   bloquearlos por un dato que nunca se les pidió. Solo los
+   registros creados de aquí en adelante (que sí traen el campo,
+   aunque sea en 0) quedan sujetos a ella.
+
+   Reglas de negocio (definidas por el cliente):
+     - Descargue: sin excepción, debe llegar al 100% para salir.
+       Ni el operario ni el supervisor pueden saltarse esto.
+     - Cargue: puede salir por debajo del 100% SOLO si (a) llegó
+       al menos al 75% y (b) un supervisor autorizó la salida
+       explicando el motivo (autorizarSalidaAnticipada). Por
+       debajo del 75% no hay ninguna excepción posible.
+     - Un vehículo "Ambos" sin que el supervisor haya elegido
+       todavía cuál de los dos está midiendo (avanceTipo null)
+       se trata como Descargue: 100% sin excepción, porque no
+       hay forma de saber si aplica la excepción de Cargue.
+   ========================================================= */
+
+export function requiereAvanceCompleto(r) {
+    return r.avancePorcentaje !== undefined && r.avancePorcentaje !== null;
+}
+
+export function avanceCompleto(r) {
+    return (r.avancePorcentaje || 0) >= 100;
+}
+
+export function puedeAutorizarSalidaAnticipada(r) {
+    if (!requiereAvanceCompleto(r)) return false;
+    if (avanceCompleto(r)) return false;
+    if (r.avanceTipo !== "Cargue") return false;
+    return (r.avancePorcentaje || 0) >= 75;
+}
+
+export function puedeRegistrarSalida(r) {
+    if (!requiereAvanceCompleto(r)) return true;
+    if (avanceCompleto(r)) return true;
+    if (r.avanceTipo !== "Cargue") return false;
+    if ((r.avancePorcentaje || 0) < 75) return false;
+    return !!(r.autorizacionSalida && r.autorizacionSalida.motivo);
 }

@@ -113,18 +113,34 @@
           </div>
         </div>
 
+        <div class="subtitulo">Muelles (1 a 8)</div>
+        <div class="muelles-grid" id="grid-muelles"></div>
+
+        <div class="subtitulo">Vehículos en patio</div>
+        <div class="tabla-wrap">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th>Placa</th>
+                <th>Conductor</th>
+                <th>Tipo</th>
+                <th>Canal</th>
+                <th>Ingreso</th>
+                <th>Esperando</th>
+                <th>Operador</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tabla-patio-body"></tbody>
+          </table>
+        </div>
+
         <div class="subtitulo">Franja horaria (hoy, 6am–6am)</div>
         <div class="stats-grid">
           <div class="stat-box full">
             <canvas id="chart-franja-horaria-dashboard"></canvas>
           </div>
         </div>
-
-        <div class="subtitulo">Muelles (1 a 8)</div>
-        <div class="grid-muelles" id="grid-muelles"></div>
-
-        <div class="subtitulo">Vehículos en patio</div>
-        <div class="lista-patio" id="lista-patio"></div>
 
         <div class="subtitulo">Últimos movimientos</div>
         <div class="tabla-wrap">
@@ -159,13 +175,22 @@
           <table class="tabla">
             <thead>
               <tr>
+                <th>Prioridad</th>
                 <th>Placa</th>
                 <th>Conductor</th>
-                <th>Entrada</th>
-                <th>Salida</th>
                 <th>Ubicación</th>
                 <th>Tipo</th>
+                <th>Canal</th>
+                <th>Ingreso</th>
+                <th>Salida</th>
+                <th>Estado</th>
+                <th>Programado</th>
+                <th>Servicio</th>
+                <th>T. patio</th>
+                <th>T. muelle</th>
+                <th>Motivo patio</th>
                 <th>Operador</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="tabla-registros-body"></tbody>
@@ -288,6 +313,20 @@
       </div>
 
     </main>
+  </div>
+</div>
+
+<!-- NOVEDADES DEL VEHÍCULO: historial completo (entrada, ubicación,
+     avance, salida) visto desde la tarjeta de cada muelle. Solo
+     lectura — el supervisor no edita nada desde aquí. -->
+<div class="modal-backdrop" id="modal-novedades">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="ti ti-info-circle"></i> Novedades del vehículo</div>
+      <button class="modal-close" data-close="modal-novedades"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="modal-novedades-body"></div>
+    <div class="modal-footer"><button class="btn" data-close="modal-novedades">Cerrar</button></div>
   </div>
 </div>
 

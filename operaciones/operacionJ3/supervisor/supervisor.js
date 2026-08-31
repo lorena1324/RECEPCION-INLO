@@ -2,7 +2,11 @@
    supervisor.js — Portería J3 · Rol Supervisor
    Escrito desde cero como módulo ES, consumiendo directamente
    shared/core/guard.js y shared/services/{vehiculos,eventos}.js.
-   100% solo lectura: no importa nada de crearRegistro,
+   Solo lectura, salvo dos excepciones: el supervisor puede fijar
+   el % de avance de cargue/descargue de cada muelle ocupado
+   (actualizarAvance), y autorizar la salida anticipada de un
+   vehículo en Cargue que no llegó al 100% pero sí al 75%
+   (autorizarSalidaAnticipada). No importa nada de crearRegistro,
    actualizarUbicacion, registrarSalida ni eliminarRegistro.
    ============================================================ */
 
@@ -14,17 +18,25 @@ import {
   suscribirseARegistros,
   getRegistrosEnPatio,
   getRegistrosEnMuelle,
-  getMuellesOcupacion
+  getMuellesOcupacion,
+  actualizarAvance,
+  avanzarAFaseCargue,
+  autorizarSalidaAnticipada,
+  puedeAutorizarSalidaAnticipada,
+  requiereAvanceCompleto,
+  avanceCompleto
 } from "../../../shared/services/vehiculos.js";
 
 import {
   getDestino,
   getDiaOperativo,
+  getHistorial,
   getLocationDurations,
   minutosEsperando,
   nivelPrioridad,
   ordenarPorPrioridad,
-  diaConMasMovimiento
+  diaConMasMovimiento,
+  tituloHistorial
 } from "../../../shared/services/eventos.js";
 
 import { todayOperativo, diaOperativo } from "../../../shared/utils/tiempos.js";
@@ -58,6 +70,7 @@ let estadPeriodoActual = "hoy";
 let registros = [];
 let canalFiltro = ""; // "" = todos, "MQ", "3PD" — filtro global (Dashboard + Registros + Estadísticas)
 let unsubscribe = null;
+let perfilActual = null;
 
 // guard.js no expone una función de logout, así que la armamos aquí
 // con las mismas piezas que usa internamente (auth.js + session.js).
@@ -80,6 +93,8 @@ function salir() {
 
 protegerPagina({ rolesPermitidos: ["supervisor"], operacion: OPERACION }).then((perfil) => {
 
+  perfilActual = perfil;
+
   document.getElementById("nombre-usuario").textContent = perfil.nombre || perfil.uid;
   document.getElementById("btn-cerrar-sesion").addEventListener("click", salir);
 
@@ -89,6 +104,7 @@ protegerPagina({ rolesPermitidos: ["supervisor"], operacion: OPERACION }).then((
   iniciarFiltros();
   iniciarExportar();
   iniciarPeriodoEstadisticas();
+  iniciarAvanceClicks();
 
   document.getElementById("filtro-canal").addEventListener("change", (e) => {
     canalFiltro = e.target.value;
@@ -216,37 +232,68 @@ function renderDashboard() {
   const tbody = document.getElementById("tabla-dashboard-body");
   tbody.innerHTML = ultimos.map(filaTabla).join("") || filaVacia(6);
 
-  renderChartFranjaHorariaDashboard(entradasHoy);
+  renderChartFranjaHoraria("chart-franja-horaria-dashboard", entradasHoy);
 }
 
-function renderChartFranjaHorariaDashboard(entradasHoy) {
-  if (typeof Chart === "undefined") return;
+/* =========================================================
+   FRANJA HORARIA — compartida entre Dashboard y Estadísticas
 
-  const cont = new Array(24).fill(0);
-  entradasHoy.forEach((r) => {
+   Misma construcción de datos y mismas opciones de Chart.js en
+   los dos lugares (apiladas por canal: 3PD / MQ / Otros), para
+   que la gráfica se vea y se comporte exactamente igual — solo
+   cambia qué lista de registros se le pasa (hoy vs. el periodo
+   elegido en Estadísticas).
+   ========================================================= */
+
+function datosFranjaHoraria(registros) {
+  const porHora3PD = new Array(24).fill(0);
+  const porHoraMQ = new Array(24).fill(0);
+  const porHoraOtros = new Array(24).fill(0);
+
+  registros.forEach((r) => {
+    if (!r.horaEntrada) return;
     const h = new Date(r.horaEntrada).getHours();
-    if (!isNaN(h)) cont[h]++;
+    if (isNaN(h)) return;
+    const canalUp = (r.canal || "").toUpperCase();
+    if (canalUp.indexOf("3PD") !== -1) porHora3PD[h]++;
+    else if (canalUp === "MQ") porHoraMQ[h]++;
+    else porHoraOtros[h]++;
   });
 
-  // Mismo reordenamiento de eje que en Estadísticas: arranca en
-  // HORA_CORTE (6am), no a medianoche.
   const labels = [];
-  const valores = [];
+  const franja3PD = [], franjaMQ = [], franjaOtros = [];
   for (let i = 0; i < 24; i++) {
     const h = (HORA_CORTE + i) % 24;
-    labels.push(h + "h");
-    valores.push(cont[h]);
+    labels.push((h < 10 ? "0" : "") + h + "h");
+    franja3PD.push(porHora3PD[h]);
+    franjaMQ.push(porHoraMQ[h]);
+    franjaOtros.push(porHoraOtros[h]);
   }
 
-  renderChart("chart-franja-horaria-dashboard", {
+  const datasets = [
+    { label: "3PD", data: franja3PD, backgroundColor: ESTAD_COLORS.azulClaro, borderColor: ESTAD_COLORS.azul, borderWidth: 1, borderRadius: 4, stack: "franja" },
+    { label: "MQ", data: franjaMQ, backgroundColor: ESTAD_COLORS.tealClaro, borderColor: ESTAD_COLORS.teal, borderWidth: 1, borderRadius: 4, stack: "franja" }
+  ];
+  if (franjaOtros.some((v) => v > 0)) {
+    datasets.push({ label: "Otros", data: franjaOtros, backgroundColor: ESTAD_COLORS.gris, borderRadius: 4, stack: "franja" });
+  }
+
+  return { labels, datasets };
+}
+
+function renderChartFranjaHoraria(canvasId, registros) {
+  if (typeof Chart === "undefined") return;
+  const { labels, datasets } = datosFranjaHoraria(registros);
+
+  renderChart(canvasId, {
     type: "bar",
-    data: { labels, datasets: [{ label: "Entradas", data: valores, backgroundColor: ESTAD_COLORS.azul, borderRadius: 4 }] },
+    data: { labels, datasets },
     options: {
       plugins: {
-        legend: { display: false },
-        datalabels: { display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, anchor: "end", align: "top", color: "#374151", font: { size: 10, weight: "600" }, formatter: (v) => v }
+        legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } },
+        datalabels: { display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, anchor: "center", align: "center", color: "#2B2B29", font: { size: 9, weight: "600" }, formatter: (v) => v }
       },
-      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } }
     }
   });
 }
@@ -276,6 +323,11 @@ function filaVacia(cols) {
 
 /* =========================================================
    UBICACIÓN EN VIVO — tablero de 8 muelles + patio
+
+   La tarjeta de cada muelle es idéntica a la que ve el operador
+   (mismas clases: muelle-card/-top/-num/-status/-body/-placa/
+   -empty, ver operador.js y css/components.css), sin los botones
+   de Mover/Salida — el supervisor solo agrega el % de avance.
    ========================================================= */
 
 function renderUbicacion() {
@@ -289,27 +341,18 @@ function renderUbicacion() {
   for (let n = 1; n <= NUM_MUELLES; n++) {
     const r = ocupacion[n];
 
-    if (!r) {
-      html += `
-        <div class="muelle-card libre">
-          <div class="muelle-card-titulo">Muelle ${n} <i class="ti ti-square-rounded"></i></div>
-          <div class="muelle-card-libre-texto">Libre</div>
-        </div>`;
-      continue;
-    }
-
-    const min = minutosEsperando(r);
-    const nivel = nivelPrioridad(min);
-
     html += `
-      <div class="muelle-card ocupado prioridad-${nivel}">
-        <div class="muelle-card-titulo">
-          Muelle ${n}
-          <span class="badge badge-prioridad-${nivel}">${formatearMinutos(min)}</span>
+      <div class="muelle-card ${r ? "ocupado" : "libre"}">
+        <div class="muelle-card-top">
+          <span class="muelle-card-num">Muelle ${n}</span>
+          <span class="muelle-card-status ${r ? "ocupado" : "libre"}">${r ? "OCUPADO" : "LIBRE"}</span>
         </div>
-        <div class="muelle-card-cuerpo">
-          <div class="muelle-card-placa">${escapar(r.placa)}</div>
-          <div>${escapar(r.conductor || "—")}</div>
+        <div class="muelle-card-body">
+          ${r
+            ? `<div class="muelle-card-placa">${escapar(r.placa)}</div><div>${escapar(r.conductor || "—")}</div>` +
+              `<div style="margin-top:4px;"><span class="badge badge-canal">${escapar(r.canal || "—")}</span></div>${renderAvance(r)}` +
+              `<div style="margin-top:6px;"><button class="btn btn-sm" data-novedades="${r.id}"><i class="ti ti-info-circle"></i> Novedades</button></div>`
+            : `<div class="muelle-card-empty">Disponible</div>`}
         </div>
       </div>`;
   }
@@ -317,17 +360,254 @@ function renderUbicacion() {
   grid.innerHTML = html;
 
   const enPatio = ordenarPorPrioridad(getRegistrosEnPatio(base));
-  const lista = document.getElementById("lista-patio");
+  document.getElementById("tabla-patio-body").innerHTML = enPatio.map(filaPatio).join("") || filaVacia(8);
+}
 
-  lista.innerHTML = enPatio.map((r) => {
-    const min = minutosEsperando(r);
-    const nivel = nivelPrioridad(min);
+function claseTipo(tipo) {
+  return tipo === "Cargue" ? "badge-cargue" : tipo === "Descargue" ? "badge-descargue" : "badge-ambos";
+}
+
+function filaPatio(r) {
+  const min = minutosEsperando(r);
+  const nivel = nivelPrioridad(min);
+  return `
+    <tr>
+      <td><strong>${escapar(r.placa)}</strong></td>
+      <td>${escapar(r.conductor || "—")}</td>
+      <td><span class="badge ${claseTipo(r.tipo)}">${escapar(r.tipo || "—")}</span></td>
+      <td><span class="badge badge-canal">${escapar(r.canal || "—")}</span></td>
+      <td>${formatearFecha(r.horaEntrada)}</td>
+      <td><span class="badge badge-prioridad-${nivel}">${formatearMinutos(min)}</span></td>
+      <td>${escapar(r.operadorEntrada || "—")}</td>
+      <td><button class="btn btn-sm" data-novedades="${r.id}"><i class="ti ti-info-circle"></i></button></td>
+    </tr>`;
+}
+
+/* =========================================================
+   AVANCE DE CARGUE/DESCARGUE (dentro de la tarjeta de muelle)
+
+   Si el vehículo es "Ambos" (cargue y descargue), el supervisor
+   primero elige cuál de los dos está midiendo — una vez elegido
+   queda fijo (avanceTipo). Si el tipo ya es uno solo, no hace
+   falta elegir: avanceTipo se fija desde la entrada en
+   crearRegistro(). El porcentaje nunca pasa de 100: los botones
+   se deshabilitan al llegar ahí y actualizarAvance() también lo
+   recorta por seguridad.
+   ========================================================= */
+
+function getAvanceTipoEfectivo(r) {
+  if (r.avanceTipo) return r.avanceTipo;
+  if (r.tipo === "Cargue" || r.tipo === "Descargue") return r.tipo;
+  return null;
+}
+
+function renderAvance(r) {
+  const avanceTipo = getAvanceTipoEfectivo(r);
+
+  if (!avanceTipo) {
     return `
-      <div class="patio-item prioridad-${nivel}">
-        <div><strong>${escapar(r.placa)}</strong> — ${escapar(r.conductor || "—")}</div>
-        <div class="badge badge-prioridad-${nivel}">${formatearMinutos(min)} esperando</div>
+      <div class="avance-selector">
+        <span class="avance-label">¿Cargue o descargue?</span>
+        <div class="avance-selector-btns">
+          <button class="btn btn-sm btn-primary" data-avance-tipo="${r.id}:Cargue">Cargue</button>
+          <button class="btn btn-sm btn-primary" data-avance-tipo="${r.id}:Descargue">Descargue</button>
+        </div>
       </div>`;
-  }).join("") || `<div class="texto-ayuda">No hay vehículos en patio ahora mismo.</div>`;
+  }
+
+  const pct = r.avancePorcentaje || 0;
+  const claseBadge = avanceTipo === "Cargue" ? "badge-cargue" : "badge-descargue";
+  const deshabilitado = pct >= 100 ? "disabled" : "";
+
+  let aviso = "";
+  if (puedeAutorizarSalidaAnticipada(r) && !(r.autorizacionSalida && r.autorizacionSalida.motivo)) {
+    aviso = `<div style="margin-top:4px;font-size:11px;color:#854F0B;"><i class="ti ti-alert-triangle"></i> Requiere autorización para salir — ver Novedades</div>`;
+  } else if (r.autorizacionSalida && r.autorizacionSalida.motivo && pct < 100) {
+    aviso = `<div style="margin-top:4px;font-size:11px;color:#3B6D11;"><i class="ti ti-shield-check"></i> Salida anticipada autorizada</div>`;
+  }
+
+  return `
+    <div class="avance-box">
+      <div class="avance-info">
+        <span class="badge ${claseBadge}">${avanceTipo}</span>
+        <span class="avance-pct">${pct}%</span>
+      </div>
+      <div class="avance-bar"><div class="avance-bar-fill" style="width:${pct}%"></div></div>
+      <div class="avance-btns">
+        <button class="btn btn-sm" data-avance-add="${r.id}:5" ${deshabilitado}>+5%</button>
+        <button class="btn btn-sm" data-avance-add="${r.id}:10" ${deshabilitado}>+10%</button>
+      </div>
+      ${aviso}
+    </div>`;
+}
+
+function iniciarAvanceClicks() {
+  document.body.addEventListener("click", (e) => {
+    const btnTipo = e.target.closest("[data-avance-tipo]");
+    if (btnTipo) {
+      const [id, tipo] = btnTipo.getAttribute("data-avance-tipo").split(":");
+      seleccionarAvanceTipo(id, tipo);
+      return;
+    }
+
+    const btnAdd = e.target.closest("[data-avance-add]");
+    if (btnAdd) {
+      const [id, delta] = btnAdd.getAttribute("data-avance-add").split(":");
+      incrementarAvance(id, Number(delta));
+      return;
+    }
+
+    const btnNovedades = e.target.closest("[data-novedades]");
+    if (btnNovedades) {
+      openModalNovedades(btnNovedades.getAttribute("data-novedades"));
+      return;
+    }
+
+    const btnClose = e.target.closest("[data-close]");
+    if (btnClose) {
+      closeModal(btnClose.getAttribute("data-close"));
+      return;
+    }
+
+    const btnAutorizar = e.target.closest("[data-autorizar-salida]");
+    if (btnAutorizar) {
+      autorizarSalida(btnAutorizar.getAttribute("data-autorizar-salida"));
+    }
+  });
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove("open");
+}
+
+/* =========================================================
+   NOVEDADES DEL VEHÍCULO (historial completo, solo lectura)
+   ========================================================= */
+
+function openModalNovedades(id) {
+  const rec = registros.find((r) => r.id === id);
+  if (!rec) return;
+
+  const hist = getHistorial(rec).slice().sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+  const histHtml = !hist.length
+    ? '<p style="color:#9ca3af;font-size:12.5px;">Sin novedades registradas.</p>'
+    : hist.map((h) => `
+        <div class="historial-item">
+          <div class="historial-ico"><i class="ti ti-activity"></i></div>
+          <div class="historial-body">
+            <div class="historial-top"><strong>${escapar(tituloHistorial(h))}</strong><span class="historial-fecha">${formatearFecha(h.fecha)}</span></div>
+            <div style="font-size:11px;color:#9ca3af;">${escapar(h.operador || "—")}</div>
+            ${h.texto ? `<div class="historial-texto">${escapar(h.texto)}</div>` : ""}
+          </div>
+        </div>`).join("");
+
+  document.getElementById("modal-novedades-body").innerHTML = `
+    <div class="detail-row"><span class="detail-lbl">Placa:</span><span class="detail-val">${escapar(rec.placa)}</span></div>
+    <div class="detail-row"><span class="detail-lbl">Conductor:</span><span class="detail-val">${escapar(rec.conductor || "—")}</span></div>
+    <div class="detail-row"><span class="detail-lbl">Ubicación:</span><span class="detail-val">${escapar(getDestino(rec))}</span></div>
+    <div class="detail-row"><span class="detail-lbl">Ingreso:</span><span class="detail-val">${formatearFecha(rec.horaEntrada)}</span></div>
+    ${seccionAutorizacion(rec)}
+    <div class="detail-section-title">Novedades</div>${histHtml}`;
+
+  document.getElementById("modal-novedades").classList.add("open");
+}
+
+/* =========================================================
+   AUTORIZACIÓN DE SALIDA ANTICIPADA (solo Cargue, mínimo 75%)
+
+   Reglas de negocio: en Descargue no hay excepción posible (debe
+   llegar al 100%). En Cargue, por debajo del 75% tampoco hay
+   excepción — recién entre 75% y 99% el supervisor puede
+   autorizar la salida explicando el motivo, que queda grabado
+   en el historial del vehículo.
+   ========================================================= */
+
+function seccionAutorizacion(r) {
+  if (r.horaSalida) return "";
+  if (!requiereAvanceCompleto(r) || avanceCompleto(r)) return "";
+
+  const pct = r.avancePorcentaje || 0;
+
+  if (r.avanceTipo !== "Cargue") {
+    return `<div class="detail-section-title">Autorización de salida</div>
+      <p style="font-size:12.5px;color:#9ca3af;">Este vehículo es de descargue (${pct}%) — debe llegar al 100% para poder salir, sin excepción.</p>`;
+  }
+
+  if (r.autorizacionSalida && r.autorizacionSalida.motivo) {
+    return `<div class="detail-section-title">Autorización de salida</div>
+      <p style="font-size:12.5px;">Autorizada por <strong>${escapar(r.autorizacionSalida.autorizadoPor)}</strong> el ${formatearFecha(r.autorizacionSalida.fecha)}, con ${r.autorizacionSalida.porcentajeAlAutorizar}% de cargue.<br>Motivo: ${escapar(r.autorizacionSalida.motivo)}</p>`;
+  }
+
+  if (pct < 75) {
+    return `<div class="detail-section-title">Autorización de salida</div>
+      <p style="font-size:12.5px;color:#9ca3af;">El cargue está en ${pct}% — debe llegar mínimo al 75% para poder autorizar una salida anticipada.</p>`;
+  }
+
+  return `<div class="detail-section-title">Autorización de salida</div>
+    <p style="font-size:12.5px;color:#854F0B;">El cargue está en ${pct}% (no llegó al 100%). Puedes autorizar la salida anticipada explicando el motivo.</p>
+    <textarea id="autorizacion-motivo" placeholder="Motivo de la salida anticipada..." style="width:100%;min-height:60px;margin-bottom:8px;"></textarea>
+    <button class="btn btn-sm btn-primary" data-autorizar-salida="${r.id}"><i class="ti ti-shield-check"></i> Autorizar salida</button>`;
+}
+
+async function autorizarSalida(id) {
+  const rec = registros.find((r) => r.id === id);
+  if (!rec) return;
+
+  const textarea = document.getElementById("autorizacion-motivo");
+  const motivo = textarea ? textarea.value.trim() : "";
+
+  if (!motivo) {
+    alert("Debes explicar el motivo de la salida anticipada.");
+    return;
+  }
+
+  try {
+    await autorizarSalidaAnticipada(id, { motivo, porcentaje: rec.avancePorcentaje || 0 }, perfilActual.nombre);
+    openModalNovedades(id);
+  } catch (error) {
+    console.error("Error al autorizar la salida:", error);
+    alert("Error al autorizar la salida. Intenta de nuevo.");
+  }
+}
+
+async function seleccionarAvanceTipo(id, tipo) {
+  try {
+    await actualizarAvance(id, { avanceTipo: tipo, porcentaje: 0 }, perfilActual.nombre);
+  } catch (error) {
+    console.error("Error al fijar el tipo de avance:", error);
+    alert("No se pudo guardar el tipo de avance (" + tipo + "). " + (error && error.message ? error.message : "Intenta de nuevo."));
+  }
+}
+
+async function incrementarAvance(id, delta) {
+  const rec = registros.find((r) => r.id === id);
+  if (!rec) return;
+
+  const avanceTipo = getAvanceTipoEfectivo(rec);
+  if (!avanceTipo) return;
+
+  const actual = rec.avancePorcentaje || 0;
+  if (actual >= 100) return;
+
+  const nuevoPct = Math.min(100, actual + delta);
+
+  try {
+    await actualizarAvance(id, { avanceTipo, porcentaje: nuevoPct }, perfilActual.nombre);
+
+    // "Ambos": el descargue siempre va primero. Al llegar al 100%
+    // se pasa solo a Cargue — el supervisor no tiene que elegir
+    // manualmente el segundo tramo. Si el vehículo ya traía cargue
+    // pendiente (porque el operario le agregó el descargue después
+    // de que ya había empezado a cargar), retoma justo ahí en vez
+    // de reiniciar en 0%.
+    if (rec.tipo === "Ambos" && avanceTipo === "Descargue" && nuevoPct >= 100) {
+      await avanzarAFaseCargue(id, { porcentajeInicial: rec.avanceCarguePendiente || 0 }, perfilActual.nombre);
+    }
+  } catch (error) {
+    console.error("Error al actualizar el avance:", error);
+    alert("No se pudo guardar el avance. " + (error && error.message ? error.message : "Intenta de nuevo."));
+  }
 }
 
 /* =========================================================
@@ -357,17 +637,56 @@ function renderRegistros() {
   filtrados = ordenarPorPrioridad(filtrados);
 
   const tbody = document.getElementById("tabla-registros-body");
-  tbody.innerHTML = filtrados.map((r) => `
+  let activeRank = 0;
+  tbody.innerHTML = filtrados.map((r) => {
+    if (!r.horaSalida) activeRank++;
+    return filaRegistro(r, activeRank);
+  }).join("") || filaVacia(16);
+}
+
+/* =========================================================
+   Fila de la tabla "Registros" — misma información que ve el
+   operario (prioridad, tiempos por ubicación, motivo de patio,
+   servicio, programación, etc.), pero de solo lectura: en vez
+   de botones de editar/mover/salida/eliminar, un botón de
+   Novedades que abre el mismo historial que el de muelles/patio.
+   ========================================================= */
+
+function prioridadRegistro(r, rank) {
+  if (r.horaSalida) return '<span class="badge badge-salio">—</span>';
+  const min = minutosEsperando(r);
+  const clase = min >= 240 ? "badge-amber" : min >= 120 ? "badge-descargue" : "badge-en-patio";
+  return `<span class="badge ${clase}"><i class="ti ti-flag-3"></i> #${rank} · ${formatearMinutos(min)}</span>`;
+}
+
+function celdaMotivoPatio(r) {
+  if (r.horaSalida || r.ubicacion !== "Patio") return '<span style="color:#9ca3af;">—</span>';
+  if (!r.obsUbicacion) return '<span style="color:#b45309;">Sin registrar</span>';
+  const texto = r.obsUbicacion.length > 30 ? r.obsUbicacion.slice(0, 30) + "…" : r.obsUbicacion;
+  return `<span title="${escapar(r.obsUbicacion)}">${escapar(texto)}</span>`;
+}
+
+function filaRegistro(r, rank) {
+  const dur = getLocationDurations(r);
+  return `
     <tr>
+      <td>${prioridadRegistro(r, rank)}</td>
       <td><strong>${escapar(r.placa)}</strong></td>
       <td>${escapar(r.conductor || "—")}</td>
+      <td>${escapar(getDestino(r))}</td>
+      <td><span class="badge ${claseTipo(r.tipo)}">${escapar(r.tipo || "—")}</span></td>
+      <td><span class="badge badge-canal">${escapar(r.canal || "—")}</span></td>
       <td>${formatearFecha(r.horaEntrada)}</td>
       <td>${r.horaSalida ? formatearFecha(r.horaSalida) : "—"}</td>
-      <td>${escapar(getDestino(r))}</td>
-      <td>${escapar(r.tipo || "—")}</td>
+      <td>${!r.horaSalida ? '<span class="badge badge-en-patio">Activo</span>' : '<span class="badge badge-salio">Salió</span>'}</td>
+      <td>${r.programado ? "Programado" : "No programado"}</td>
+      <td>${escapar(r.servicioTipo || "Normal")}</td>
+      <td>${formatearMinutos(dur.patio)}</td>
+      <td>${formatearMinutos(dur.muelle)}</td>
+      <td>${celdaMotivoPatio(r)}</td>
       <td>${escapar(r.operadorEntrada || "—")}</td>
-    </tr>
-  `).join("") || filaVacia(7);
+      <td><button class="btn btn-sm" data-novedades="${r.id}"><i class="ti ti-info-circle"></i></button></td>
+    </tr>`;
 }
 
 /* =========================================================
@@ -482,7 +801,7 @@ function renderEstadisticas() {
   /* ── Tarjetas resumen ── */
   const totalEntradas = recs.length;
   const totalSalidas = recs.filter((r) => !!r.horaSalida).length;
-  const tiempos = recs.filter((r) => r.horaSalida).map((r) => (new Date(r.horaSalida) - new Date(r.horaEntrada)) / 60000);
+  const tiempos = recs.filter((r) => r.horaSalida).map((r) => getLocationDurations(r).patio || 0);
   const promedioMin = tiempos.length ? Math.round(tiempos.reduce((a, b) => a + b, 0) / tiempos.length) : 0;
   const cargues = recs.filter((r) => r.tipo === "Cargue" || r.tipo === "Ambos").length;
 
@@ -526,49 +845,8 @@ function renderEstadisticas() {
     }
   });
 
-  /* ── Franja horaria: entradas por hora, eje arrancando en HORA_CORTE, divididas por canal ── */
-  const porHora3PD = new Array(24).fill(0);
-  const porHoraMQ = new Array(24).fill(0);
-  const porHoraOtros = new Array(24).fill(0);
-  recs.forEach((r) => {
-    if (!r.horaEntrada) return;
-    const h = new Date(r.horaEntrada).getHours();
-    if (isNaN(h)) return;
-    const canalUp = (r.canal || "").toUpperCase();
-    if (canalUp.indexOf("3PD") !== -1) porHora3PD[h]++;
-    else if (canalUp === "MQ") porHoraMQ[h]++;
-    else porHoraOtros[h]++;
-  });
-
-  const horasLabels = [];
-  const franja3PD = [], franjaMQ = [], franjaOtros = [];
-  for (let i = 0; i < 24; i++) {
-    const h = (HORA_CORTE + i) % 24;
-    horasLabels.push((h < 10 ? "0" : "") + h + "h");
-    franja3PD.push(porHora3PD[h]);
-    franjaMQ.push(porHoraMQ[h]);
-    franjaOtros.push(porHoraOtros[h]);
-  }
-
-  const franjaDatasets = [
-    { label: "3PD", data: franja3PD, backgroundColor: ESTAD_COLORS.azulClaro, borderColor: ESTAD_COLORS.azul, borderWidth: 1, borderRadius: 4, stack: "franja" },
-    { label: "MQ", data: franjaMQ, backgroundColor: ESTAD_COLORS.tealClaro, borderColor: ESTAD_COLORS.teal, borderWidth: 1, borderRadius: 4, stack: "franja" }
-  ];
-  if (franjaOtros.some((v) => v > 0)) {
-    franjaDatasets.push({ label: "Otros", data: franjaOtros, backgroundColor: ESTAD_COLORS.gris, borderRadius: 4, stack: "franja" });
-  }
-
-  renderChart("chart-franja-horaria", {
-    type: "bar",
-    data: { labels: horasLabels, datasets: franjaDatasets },
-    options: {
-      plugins: {
-        legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } },
-        datalabels: { display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, anchor: "center", align: "center", color: "#2B2B29", font: { size: 9, weight: "600" }, formatter: (v) => v }
-      },
-      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } }
-    }
-  });
+  /* ── Franja horaria: misma función que la del Dashboard, ver arriba ── */
+  renderChartFranjaHoraria("chart-franja-horaria", recs);
 
   /* ── Tipo de operación ── */
   const soloCargue = recs.filter((r) => r.tipo === "Cargue").length;
@@ -594,7 +872,7 @@ function renderEstadisticas() {
   const tiempoPorDia = dias.map((d) => {
     const recsDia = recs.filter((r) => r.horaSalida && getDiaOperativo(r, HORA_CORTE) === d);
     if (!recsDia.length) return 0;
-    const tot = recsDia.reduce((a, r) => a + (new Date(r.horaSalida) - new Date(r.horaEntrada)) / 60000, 0);
+    const tot = recsDia.reduce((a, r) => a + (getLocationDurations(r).patio || 0), 0);
     return Math.round(tot / recsDia.length);
   });
   renderChart("chart-tiempo-patio", {
@@ -758,7 +1036,7 @@ function formatearFecha(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
   if (isNaN(d)) return iso;
-  return d.toLocaleString("es-CO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString("es-CO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 function formatearFechaCorta(iso) {

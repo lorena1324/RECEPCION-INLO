@@ -189,6 +189,8 @@ export function iconoHistorial(tipo) {
         : tipo === 'salida' ? 'ti-logout'
         : tipo === 'operacion' ? 'ti-transfer-in'
         : tipo === 'canal' ? 'ti-route'
+        : tipo === 'avance' ? 'ti-percentage'
+        : tipo === 'autorizacion' ? 'ti-shield-check'
         : 'ti-edit';
 }
 
@@ -200,6 +202,14 @@ export function tituloHistorial(item) {
 
     if (item.tipo === 'salida') {
         return 'Salida registrada';
+    }
+
+    if (item.tipo === 'avance') {
+        return 'Avance de cargue/descargue actualizado';
+    }
+
+    if (item.tipo === 'autorizacion') {
+        return 'Salida anticipada autorizada por el supervisor';
     }
 
     if (item.tipo === 'ubicacion') {
