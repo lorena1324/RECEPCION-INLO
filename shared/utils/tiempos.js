@@ -58,11 +58,9 @@ export function formatDuration(minutes) {
     return horas > 0 ? horas + 'h ' + mins + 'min' : mins + ' min';
 }
 
-export function minutosEnPatio(r) {
-    if (!r || !r.horaEntrada || r.horaSalida) return 0;
-    var diff = (new Date() - new Date(r.horaEntrada)) / 60000;
-    return diff < 0 ? 0 : Math.round(diff);
-}
+/* minutosEnPatio() se mudó a services/eventos.js: medir tiempo en
+   patio exige leer el historial, y el historial vive allá. Aquí
+   medía `ahora − horaEntrada`, que es tiempo en planta. */
 
 export function duracion(entrada, salida) {
     if (!entrada || !salida) return '—';
@@ -107,4 +105,28 @@ export function diaOperativo(fechaHoraISO, horaCorte) {
 */
 export function todayOperativo(horaCorte) {
     return diaOperativo(new Date().toISOString(), horaCorte);
+}
+
+/*
+    Suma (o resta, con n negativo) días a una fecha 'YYYY-MM-DD'
+    devolviendo otra 'YYYY-MM-DD'.
+
+    Existe porque el patrón que se venía usando en los paneles
+    —new Date(dia + 'T00:00:00'), sumar días y volver a
+    .toISOString().slice(0,10)— convierte la medianoche LOCAL a
+    UTC antes de recortar. En Colombia (UTC-5) eso da la fecha
+    correcta de casualidad: la medianoche local son las 05:00Z
+    del mismo día. Con cualquier huso positivo (UTC+2, por
+    ejemplo) la medianoche local es las 22:00Z del día ANTERIOR y
+    todos los rangos de las estadísticas se corren un día.
+
+    Trabajar sobre la fecha en UTC evita el problema por completo:
+    no hay hora local de por medio que convertir.
+*/
+export function sumarDias(diaISO, n) {
+    if (!diaISO) return null;
+    var d = new Date(diaISO + 'T12:00:00Z');
+    if (isNaN(d)) return null;
+    d.setUTCDate(d.getUTCDate() + (n || 0));
+    return d.toISOString().slice(0, 10);
 }

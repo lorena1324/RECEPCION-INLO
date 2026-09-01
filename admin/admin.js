@@ -46,7 +46,9 @@ import {
     getDestino,
     getHistorial,
     getLocationDurations,
+    minutosEnPatio,
     minutosEsperando,
+    promedioMinutos,
     ordenarPorPrioridad,
     tituloHistorial,
     nivelPrioridad,
@@ -54,7 +56,7 @@ import {
     diaConMasMovimiento
 } from "../shared/services/eventos.js";
 
-import { nowLocal, today, fmtDt, formatDuration, fechaDentroDeRango, minutosEnPatio, todayOperativo, diaOperativo } from "../shared/utils/tiempos.js";
+import { nowLocal, today, fmtDt, formatDuration, fechaDentroDeRango, todayOperativo, diaOperativo } from "../shared/utils/tiempos.js";
 import { exportarExcel } from "../shared/utils/excel.js";
 
 /* Configuración por bodega. El admin no está atado a una sola
@@ -263,6 +265,19 @@ function renderTodo() {
    DASHBOARD
    ========================================================= */
 
+/* Promedio de tiempo en una tarjeta del dashboard: "—" cuando no hay
+   ninguna visita terminada que promediar (0 min se leería como "salen
+   al instante"), y el tamaño de la muestra al lado, para que un
+   promedio sobre un vehículo no se vea igual que uno sobre cuarenta. */
+function pintarPromedio(id, p) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = p.promedio === null
+        ? '—'
+        : formatDuration(p.promedio) + ' <span class="prom-n">(' + p.n + ')</span>';
+}
+
+
 function renderDashboard() {
 
     if (!document.getElementById('view-dashboard').classList.contains('active')) return;
@@ -275,14 +290,19 @@ function renderDashboard() {
     document.getElementById('s-patio').textContent = enPatio.length;
     document.getElementById('s-muelle').textContent = enMuelle.length;
 
-    var acumP = 0, countP = 0, acumM = 0, countM = 0;
-    registros.forEach(function (r) {
-        var dur = getLocationDurations(r);
-        if (dur.patio > 0) { acumP += dur.patio; countP++; }
-        if (dur.muelle > 0) { acumM += dur.muelle; countM++; }
-    });
-    document.getElementById('s-tiempo-patio').textContent = countP ? formatDuration(acumP / countP) : '0 min';
-    document.getElementById('s-tiempo-muelle').textContent = countM ? formatDuration(acumM / countM) : '0 min';
+    // Promedios del DÍA OPERATIVO en curso, con la misma regla que el
+    // panel de supervisor (promedioMinutos en shared/services/eventos.js):
+    // solo visitas terminadas, y solo las que pasaron por esa ubicación.
+    //
+    // Antes se promediaban TODOS los registros históricos de la operación
+    // —más de mil— y encima con el cronómetro abierto de los que seguían
+    // adentro. Por eso al lado de "En patio: 0" podía leerse "Tiempo prom.
+    // patio: 12h 58min": no era el patio de hoy, era el de toda la
+    // historia, y no coincidía con nada de lo que muestra el supervisor.
+    var diaOp = todayOperativo(HORA_CORTE);
+    var deHoy = registros.filter(function (r) { return getDiaOperativo(r, HORA_CORTE) === diaOp; });
+    pintarPromedio('s-tiempo-patio', promedioMinutos(deHoy, 'patio'));
+    pintarPromedio('s-tiempo-muelle', promedioMinutos(deHoy, 'muelle'));
 
     // Banner: vehículos con más de 4h en patio
     var retrasados = enPatio.filter(function (r) { return minutosEnPatio(r) >= 240; });

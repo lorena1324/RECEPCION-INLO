@@ -17,7 +17,8 @@ rules_version = '2';
        administrador → todo, en todas las operaciones
        supervisor    → su operación: lee todo, edita avance y
                        autorizaciones de salida
-       operario      → su operación: lee todo, crea entradas,
+       operario      → su operación: lee todo (incluido el avance,
+                       que ve pero no autoriza), crea entradas,
                        registra salidas, mueve y elimina
        cliente       → su operación: solo lectura
 
@@ -97,6 +98,19 @@ service cloud.firestore {
 
     match /vehiculos/{vehiculoId} {
 
+      // Campos que SOLO el supervisor firma. El operario ve el
+      // avance en su panel pero no lo edita, y la autorización de
+      // salida anticipada es justamente el permiso que no puede
+      // darse a sí mismo — sin esta regla le bastaría la consola
+      // del navegador para saltarse el mínimo de cargue.
+      // Ojo: `avanceTipo`/`avancePorcentaje` NO van aquí porque el
+      // operario sí los toca legítimamente al agregar la operación
+      // faltante (agregarOperacionFaltante reinicia el avance).
+      function camposSoloDeSupervisor() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+               .hasAny(['autorizacionSalida']);
+      }
+
       // Campos que un supervisor puede tocar. Todo lo demás
       // (placa, conductor, horas, ubicación, salida) es del
       // operario o del administrador.
@@ -124,10 +138,12 @@ service cloud.firestore {
                         request.resource.data.operacion == perfil().operacion);
 
       // ACTUALIZAR — el administrador sin límite; el operario
-      // dentro de su bodega; el supervisor solo los campos de
-      // avance y autorización de su bodega. El cliente, nunca.
+      // dentro de su bodega, salvo la autorización de salida
+      // anticipada; el supervisor solo los campos de avance y
+      // autorización de su bodega. El cliente, nunca.
       allow update: if esAdmin() ||
-                       (rol() == 'operario' && enSuOperacion(resource.data.operacion)) ||
+                       (rol() == 'operario' && enSuOperacion(resource.data.operacion)
+                        && !camposSoloDeSupervisor()) ||
                        (rol() == 'supervisor' && enSuOperacion(resource.data.operacion)
                         && camposDeSupervisor());
 

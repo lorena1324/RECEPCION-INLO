@@ -32,6 +32,7 @@ import {
   getDiaOperativo,
   getHistorial,
   getLocationDurations,
+  promedioMinutos,
   minutosEsperando,
   nivelPrioridad,
   ordenarPorPrioridad,
@@ -39,7 +40,7 @@ import {
   tituloHistorial
 } from "../../../shared/services/eventos.js";
 
-import { todayOperativo, diaOperativo } from "../../../shared/utils/tiempos.js";
+import { todayOperativo, diaOperativo, sumarDias } from "../../../shared/utils/tiempos.js";
 
 const OPERACION = "J4";
 const NUM_MUELLES = 3;
@@ -775,31 +776,52 @@ function getDiasOperativosDelPeriodo() {
       if (d) dias.add(d);
     });
     if (!dias.size) dias.add(hoyOp);
+    rangoRecortado = 0;
     return Array.from(dias).sort();
   }
 
   const nDias = estadPeriodoActual === "3dias" ? 3 : estadPeriodoActual === "semana" ? 7 : estadPeriodoActual === "mes" ? 30 : 1;
   const dias = [];
-  const cur = new Date(hoyOp + "T00:00:00");
-  for (let i = nDias - 1; i >= 0; i--) {
-    const d = new Date(cur);
-    d.setDate(d.getDate() - i);
-    dias.push(d.toISOString().slice(0, 10));
-  }
+  rangoRecortado = 0;
+  for (let i = nDias - 1; i >= 0; i--) dias.push(sumarDias(hoyOp, -i));
   return dias;
 }
 
+/* El rango personalizado estaba topado en 60 días y recortaba en
+   silencio: quien pedía tres meses veía dos y no se enteraba. El
+   tope sigue existiendo (un año) porque cada día del rango es un
+   punto en las gráficas, pero ahora cuando recorta lo dice.
+   `rangoRecortado` lo lee renderEstadisticas() al pintar. */
+const MAX_DIAS_RANGO = 366;
+let rangoRecortado = 0;
+
 function buildDayRange(desde, hasta) {
   const dias = [];
-  const cur = new Date(desde + "T00:00:00");
-  const fin = new Date(hasta + "T00:00:00");
-  let iter = 0;
-  while (cur <= fin && iter < 60) {
-    dias.push(cur.toISOString().slice(0, 10));
-    cur.setDate(cur.getDate() + 1);
-    iter++;
+  let cur = desde;
+  while (cur <= hasta && dias.length < MAX_DIAS_RANGO) {
+    dias.push(cur);
+    cur = sumarDias(cur, 1);
   }
+
+  // Cuántos días quedaron fuera del tope, para el aviso.
+  const pedidos = Math.round(
+    (new Date(hasta + "T12:00:00Z") - new Date(desde + "T12:00:00Z")) / 86400000
+  ) + 1;
+  rangoRecortado = Math.max(0, pedidos - dias.length);
+
   return dias.length ? dias : [todayOperativo(HORA_CORTE)];
+}
+
+function pintarAvisoRango() {
+  const el = document.getElementById("estad-aviso-rango");
+  if (!el) return;
+  if (estadPeriodoActual !== "personalizado" || !rangoRecortado) {
+    el.style.display = "none";
+    return;
+  }
+  el.style.display = "";
+  el.textContent = "El rango pedido es más largo de lo que este panel puede graficar: se están " +
+    "mostrando los primeros " + MAX_DIAS_RANGO + " días y quedaron " + rangoRecortado + " por fuera.";
 }
 
 function fmtDiaCorto(diaOp) {
@@ -820,23 +842,27 @@ function destruirSiExiste(id) {
 function renderEstadisticas() {
   const base = registrosFiltrados();
   const dias = getDiasOperativosDelPeriodo();
+  pintarAvisoRango();
   const diasSet = new Set(dias);
   const recs = base.filter((r) => diasSet.has(getDiaOperativo(r, HORA_CORTE)));
 
   /* ── Tarjetas resumen ── */
   const totalEntradas = recs.length;
   const totalSalidas = recs.filter((r) => !!r.horaSalida).length;
-  const tiempos = recs.filter((r) => r.horaSalida).map((r) => getLocationDurations(r).patio || 0);
-  const promedioMin = tiempos.length ? Math.round(tiempos.reduce((a, b) => a + b, 0) / tiempos.length) : 0;
+  // Los promedios salen de promedioMinutos(), que solo cuenta
+  // visitas terminadas: un vehículo que sigue adentro tiene el
+  // cronómetro corriendo y desplazaría el promedio en cada
+  // repintado. Ver el comentario en shared/services/eventos.js.
+  const promPatio = promedioMinutos(recs, "patio");
+  const promMuelle = promedioMinutos(recs, "muelle");
   const cargues = recs.filter((r) => r.tipo === "Cargue" || r.tipo === "Ambos").length;
 
   document.getElementById("es-total").textContent = totalEntradas;
   document.getElementById("es-salidas").textContent = totalSalidas;
-  document.getElementById("es-promedio").textContent = formatearMinutos(promedioMin);
-
-  const tiemposMuelle = recs.filter((r) => r.horaSalida).map((r) => getLocationDurations(r).muelle || 0);
-  const promedioMuelleMin = tiemposMuelle.length ? Math.round(tiemposMuelle.reduce((a, b) => a + b, 0) / tiemposMuelle.length) : 0;
-  document.getElementById("es-promedio-muelle").textContent = formatearMinutos(promedioMuelleMin);
+  document.getElementById("es-promedio").textContent = formatearPromedio(promPatio);
+  document.getElementById("es-promedio-muelle").textContent = formatearPromedio(promMuelle);
+  pintarNotaPromedio("es-promedio-nota", promPatio, "patio");
+  pintarNotaPromedio("es-promedio-muelle-nota", promMuelle, "muelle");
   document.getElementById("es-cargue-pct").textContent = totalEntradas ? Math.round((cargues / totalEntradas) * 100) + "%" : "0%";
   // General: NO depende del periodo ni del canal — todos los registros conocidos.
   document.getElementById("es-total-general").textContent = registros.length;
@@ -894,12 +920,12 @@ function renderEstadisticas() {
   });
 
   /* ── Tiempo promedio en patio por día ── */
-  const tiempoPorDia = dias.map((d) => {
-    const recsDia = recs.filter((r) => r.horaSalida && getDiaOperativo(r, HORA_CORTE) === d);
-    if (!recsDia.length) return 0;
-    const tot = recsDia.reduce((a, r) => a + (getLocationDurations(r).patio || 0), 0);
-    return Math.round(tot / recsDia.length);
-  });
+  // null (no 0) en los días sin vehículos terminados: un cero
+  // dibuja una caída a fondo que se lee como "ese día salieron
+  // al instante", cuando lo que pasa es que no hay dato.
+  const tiempoPorDia = dias.map((d) =>
+    promedioMinutos(recs.filter((r) => getDiaOperativo(r, HORA_CORTE) === d), "patio").promedio
+  );
   renderChart("chart-tiempo-patio", {
     type: "line",
     data: { labels: dias.map(fmtDiaCorto), datasets: [{ label: "Minutos promedio", data: tiempoPorDia, borderColor: ESTAD_COLORS.ambar, backgroundColor: "rgba(245,158,11,0.15)", fill: true, tension: 0.3, pointRadius: 3 }] },
@@ -931,12 +957,9 @@ function renderEstadisticas() {
   });
 
   /* ── Tiempo promedio en muelle por día ── */
-  const muellePorDia = dias.map((d) => {
-    const recsDia = recs.filter((r) => r.horaSalida && getDiaOperativo(r, HORA_CORTE) === d);
-    if (!recsDia.length) return 0;
-    const tot = recsDia.reduce((a, r) => a + (getLocationDurations(r).muelle || 0), 0);
-    return Math.round(tot / recsDia.length);
-  });
+  const muellePorDia = dias.map((d) =>
+    promedioMinutos(recs.filter((r) => getDiaOperativo(r, HORA_CORTE) === d), "muelle").promedio
+  );
   renderChart("chart-tiempo-muelle", {
     type: "line",
     data: { labels: dias.map(fmtDiaCorto), datasets: [{ label: "Minutos promedio", data: muellePorDia, borderColor: ESTAD_COLORS.teal, backgroundColor: "rgba(13,148,136,0.15)", fill: true, tension: 0.3, pointRadius: 3 }] },
@@ -955,30 +978,35 @@ function renderTablaPorCanal(recs, canalLabels) {
     cont.innerHTML = '<div class="texto-ayuda">No hay datos para el periodo.</div>';
     return;
   }
-  let html = '<table class="tabla"><thead><tr><th>Canal</th><th>Promedio patio</th><th># Vehículos</th></tr></thead><tbody>';
+  let html = '<table class="tabla"><thead><tr><th>Canal</th><th>Promedio patio</th><th># Vehículos</th><th>Finalizados</th></tr></thead><tbody>';
+  let descartadas = 0, sinPaso = 0;
   canalLabels.forEach((k) => {
     const grupo = recs.filter((r) => (r.canal || "—") === k);
-    const suma = grupo.reduce((acc, r) => acc + (getLocationDurations(r).patio || 0), 0);
-    const prom = grupo.length ? Math.round(suma / grupo.length) : 0;
-    html += `<tr><td>${escapar(k)}</td><td>${formatearMinutos(prom)}</td><td>${grupo.length}</td></tr>`;
+    const prom = promedioMinutos(grupo, "patio");
+    descartadas += prom.descartadas;
+    sinPaso += prom.sinPaso;
+    html += `<tr><td>${escapar(k)}</td><td>${celdaPromedio(prom)}</td><td>${grupo.length}</td><td>${finalizadosDe(prom)}</td></tr>`;
   });
   html += "</tbody></table>";
+  html += notaPromedios(descartadas, sinPaso);
   cont.innerHTML = html;
 }
 
 function renderTablaPorTipo(recs) {
   const cont = document.getElementById("estad-por-tipo-body");
   const tipos = ["Cargue", "Descargue", "Ambos"];
-  let html = '<table class="tabla"><thead><tr><th>Tipo</th><th>Promedio patio</th><th>Promedio muelle</th><th># Vehículos</th></tr></thead><tbody>';
+  let html = '<table class="tabla"><thead><tr><th>Tipo</th><th>Promedio patio</th><th>Promedio muelle</th><th># Vehículos</th><th>Finalizados</th></tr></thead><tbody>';
+  let descartadas = 0, sinPaso = 0;
   tipos.forEach((t) => {
     const grupo = recs.filter((r) => r.tipo === t);
-    const sumaP = grupo.reduce((acc, r) => acc + (getLocationDurations(r).patio || 0), 0);
-    const sumaM = grupo.reduce((acc, r) => acc + (getLocationDurations(r).muelle || 0), 0);
-    const promP = grupo.length ? Math.round(sumaP / grupo.length) : 0;
-    const promM = grupo.length ? Math.round(sumaM / grupo.length) : 0;
-    html += `<tr><td>${t}</td><td>${formatearMinutos(promP)}</td><td>${formatearMinutos(promM)}</td><td>${grupo.length}</td></tr>`;
+    const promP = promedioMinutos(grupo, "patio");
+    const promM = promedioMinutos(grupo, "muelle");
+    descartadas += promP.descartadas;
+    sinPaso += promP.sinPaso;
+    html += `<tr><td>${t}</td><td>${celdaPromedio(promP)}</td><td>${celdaPromedio(promM)}</td><td>${grupo.length}</td><td>${finalizadosDe(promP)}</td></tr>`;
   });
   html += "</tbody></table>";
+  html += notaPromedios(descartadas, sinPaso);
   cont.innerHTML = html;
 }
 
@@ -1076,6 +1104,54 @@ function formatearMinutos(min) {
   if (m < 60) return m + " min";
   const h = Math.floor(m / 60);
   return h + "h " + (m % 60) + "m";
+}
+
+/* Resultado de promedioMinutos(): "—" cuando no hubo ninguna
+   visita terminada con la cual promediar. */
+function formatearPromedio(p) {
+  return p && p.promedio !== null ? formatearMinutos(p.promedio) : "—";
+}
+
+/* Debajo de la tarjeta de promedio: sobre cuántos vehículos se calculó,
+   o por qué no hay cifra. Sin esto, un "—" parece un error del panel y
+   un "1h 40m" sacado de un solo vehículo se lee como el dato del turno. */
+function pintarNotaPromedio(id, p, ubicacion) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = p.promedio === null
+    ? "Ningún vehículo terminado pasó por " + ubicacion + " en el periodo"
+    : "sobre " + p.n + " vehículo(s) que ya salieron";
+}
+
+/* Todas las visitas terminadas del grupo, hayan entrado o no al
+   promedio. n = las que sí; sinPaso = las que no pasaron por esa
+   ubicación; descartadas = las que no se pudieron medir. */
+function finalizadosDe(p) {
+  return p ? p.n + p.sinPaso + p.descartadas : 0;
+}
+
+/* Celda de promedio con el tamaño de la muestra al lado: un
+   promedio de 3h sobre 1 vehículo no dice lo mismo que sobre 40, y
+   sin el (n) las dos cifras se ven idénticas en la tabla. */
+function celdaPromedio(p) {
+  return formatearPromedio(p) + ' <span class="prom-n">(' + (p ? p.n : 0) + ')</span>';
+}
+
+/* Pie de las tablas de promedios: deja explícito a quién se contó.
+   `sinPaso` son los que no pasaron por esa ubicación (una entrada
+   directa a muelle no "esperó 0 minutos en patio", no estuvo en
+   patio) y `descartadas` los que promedioMinutos() no pudo medir.
+   Ambos se dicen en voz alta en vez de disolverse en la cifra. */
+function notaPromedios(descartadas, sinPaso) {
+  return '<p class="texto-ayuda" style="margin-top:8px;">Los promedios cuentan solo los vehículos que ya salieron ' +
+    'y que efectivamente pasaron por esa ubicación: los que siguen adentro tienen el tiempo corriendo y ' +
+    'moverían la cifra en cada actualización.' +
+    (sinPaso ? ' ' + sinPaso + ' vehículo(s) entraron directo a muelle y no cuentan en el promedio de patio.' : '') +
+    (descartadas
+      ? ' Otros ' + descartadas + ' quedaron fuera por no tener tiempos utilizables: historial incompleto, ' +
+        'o una hora de salida anterior al último cambio de ubicación.'
+      : '') +
+    '</p>';
 }
 
 function escapar(txt) {

@@ -482,3 +482,114 @@ export function puedeRegistrarSalida(r) {
     if ((r.avancePorcentaje || 0) < 75) return false;
     return !!(r.autorizacionSalida && r.autorizacionSalida.motivo);
 }
+
+/* =========================================================
+   DIAGNÓSTICO DE SALIDA (por qué NO puede salir, y qué falta)
+
+   Las funciones de arriba responden sí/no. Esta responde
+   "por qué" y, sobre todo, "cuánto falta" — que es lo que el
+   operario necesita ver en portería para saber si espera o
+   llama al supervisor, sin poder tocar el avance él mismo.
+
+   Devuelve siempre el mismo objeto, así que quien lo pinta no
+   tiene que repetir la lógica de negocio:
+
+     puedeSalir  boolean  — equivalente a puedeRegistrarSalida()
+     nivel       'ok' | 'sin-avance' | 'bloqueo' | 'espera'
+     titulo      resumen corto (una línea, para badges/estados)
+     detalle     frase completa para la alerta del modal
+     accion      qué hay que hacer para desbloquearlo
+     porcentaje  avance actual
+     minimo      % mínimo que exige la regla que está fallando
+     faltante    puntos que faltan para ese mínimo (0 si ninguno)
+
+   `minimo`/`faltante` van en null cuando el bloqueo no se
+   resuelve subiendo el porcentaje (p. ej. ya está en el 75% y
+   lo único que falta es la firma del supervisor).
+   ========================================================= */
+
+export const MINIMO_CARGUE_ANTICIPADO = 75;
+export const MINIMO_SALIDA = 100;
+
+export function diagnosticoSalida(r) {
+
+    if (!r) {
+        return {
+            puedeSalir: false, nivel: 'bloqueo',
+            titulo: 'Registro no encontrado',
+            detalle: 'No se encontró el registro del vehículo.',
+            accion: 'Recarga la página e inténtalo de nuevo.',
+            porcentaje: 0, minimo: null, faltante: null
+        };
+    }
+
+    var pct = r.avancePorcentaje || 0;
+    var esCargue = r.avanceTipo === 'Cargue';
+    var tipo = r.avanceTipo || r.tipo || 'la operación';
+
+    // Registros anteriores a la función de avance: nunca se les
+    // pidió el dato, así que no se les puede exigir.
+    if (!requiereAvanceCompleto(r)) {
+        return {
+            puedeSalir: true, nivel: 'sin-avance',
+            titulo: 'Sin avance registrado',
+            detalle: 'Este vehículo no tiene avance de cargue/descargue registrado (es un registro anterior a esta función), así que puede salir sin restricción de porcentaje.',
+            accion: 'Verifica manualmente con el muelle antes de confirmar la salida.',
+            porcentaje: 0, minimo: null, faltante: null
+        };
+    }
+
+    if (avanceCompleto(r)) {
+        return {
+            puedeSalir: true, nivel: 'ok',
+            titulo: 'Completo — listo para salir',
+            detalle: 'El ' + tipo.toLowerCase() + ' está al 100%. El vehículo puede salir.',
+            accion: '',
+            porcentaje: pct, minimo: MINIMO_SALIDA, faltante: 0
+        };
+    }
+
+    var autorizada = !!(r.autorizacionSalida && r.autorizacionSalida.motivo);
+
+    if (esCargue && pct >= MINIMO_CARGUE_ANTICIPADO && autorizada) {
+        return {
+            puedeSalir: true, nivel: 'ok',
+            titulo: 'Salida anticipada autorizada',
+            detalle: 'El cargue está en ' + pct + '%, pero un supervisor autorizó la salida anticipada' +
+                     (r.autorizacionSalida.autorizadoPor ? ' (' + r.autorizacionSalida.autorizadoPor + ')' : '') + '.',
+            accion: '',
+            porcentaje: pct, minimo: MINIMO_CARGUE_ANTICIPADO, faltante: 0
+        };
+    }
+
+    // Descargue (y "Ambos" sin fase definida): 100% sin excepción.
+    if (!esCargue) {
+        return {
+            puedeSalir: false, nivel: 'bloqueo',
+            titulo: 'El descargue debe llegar al 100%',
+            detalle: 'El descargue está en ' + pct + '% y debe llegar al ' + MINIMO_SALIDA + '% para poder salir. No hay excepción posible: ni el operario ni el supervisor pueden saltarse esta regla.',
+            accion: 'Faltan ' + (MINIMO_SALIDA - pct) + ' puntos de descargue. Espera a que el muelle lo complete.',
+            porcentaje: pct, minimo: MINIMO_SALIDA, faltante: MINIMO_SALIDA - pct
+        };
+    }
+
+    // Cargue por debajo del 75%: ni siquiera es autorizable.
+    if (pct < MINIMO_CARGUE_ANTICIPADO) {
+        return {
+            puedeSalir: false, nivel: 'bloqueo',
+            titulo: 'El cargue no llega al mínimo autorizable',
+            detalle: 'El cargue está en ' + pct + '% y debe llegar mínimo al ' + MINIMO_CARGUE_ANTICIPADO + '% para que un supervisor siquiera pueda autorizar una salida anticipada.',
+            accion: 'Faltan ' + (MINIMO_CARGUE_ANTICIPADO - pct) + ' puntos para el mínimo del ' + MINIMO_CARGUE_ANTICIPADO + '%, o ' + (MINIMO_SALIDA - pct) + ' para completar el cargue y salir sin autorización.',
+            porcentaje: pct, minimo: MINIMO_CARGUE_ANTICIPADO, faltante: MINIMO_CARGUE_ANTICIPADO - pct
+        };
+    }
+
+    // Cargue entre 75% y 99%: solo falta la firma del supervisor.
+    return {
+        puedeSalir: false, nivel: 'espera',
+        titulo: 'Falta la autorización del supervisor',
+        detalle: 'El cargue está en ' + pct + '% (ya pasó el mínimo del ' + MINIMO_CARGUE_ANTICIPADO + '%), pero por debajo del 100% un supervisor debe autorizar la salida anticipada indicando el motivo.',
+        accion: 'Pídele al supervisor que autorice la salida, o espera los ' + (MINIMO_SALIDA - pct) + ' puntos que faltan para el 100%.',
+        porcentaje: pct, minimo: null, faltante: null
+    };
+}

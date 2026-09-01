@@ -32,26 +32,34 @@ import {
     getMuellesLibres,
     getRegistrosEnMuelle,
     getRegistrosEnPatio,
-    puedeRegistrarSalida,
     requiereAvanceCompleto,
+    diagnosticoSalida,
     agregarOperacionFaltante
 } from "../../../shared/services/vehiculos.js";
 
 import {
     getDestino,
     getHistorial,
+    getDiaOperativo,
     getLocationDurations,
+    minutosEnPatio,
     minutosEsperando,
     ordenarPorPrioridad,
+    promedioMinutos,
     tituloHistorial
 } from "../../../shared/services/eventos.js";
 
-import { nowLocal, today, fmtDt, formatDuration, fechaDentroDeRango, minutosEnPatio } from "../../../shared/utils/tiempos.js";
+import { nowLocal, today, fmtDt, formatDuration, fechaDentroDeRango, todayOperativo } from "../../../shared/utils/tiempos.js";
 import { exportarExcel } from "../../../shared/utils/excel.js";
 
 const OPERACION = "B9";
 const NUM_MUELLES = 4;
 const RUTA_LOGIN = "../../../index.html";
+
+// Mismo corte de turno que usan los paneles de supervisor y cliente:
+// el "día" va de 6am a 6am, no de medianoche a medianoche. Sin esto,
+// los promedios del dashboard cortarían el turno por la mitad.
+const HORA_CORTE = 6;
 
 let registros = [];
 let selectedId = null;
@@ -231,6 +239,19 @@ function renderTodo() {
    DASHBOARD
    ========================================================= */
 
+/* Promedio de tiempo en una tarjeta del dashboard: "—" cuando no hay
+   ninguna visita terminada que promediar (0 min se leería como "salen
+   al instante"), y el tamaño de la muestra al lado, para que un
+   promedio sobre un vehículo no se vea igual que uno sobre cuarenta. */
+function pintarPromedio(id, p) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = p.promedio === null
+        ? '—'
+        : formatDuration(p.promedio) + ' <span class="prom-n">(' + p.n + ')</span>';
+}
+
+
 function renderDashboard() {
 
     if (!document.getElementById('view-dashboard').classList.contains('active')) return;
@@ -243,14 +264,19 @@ function renderDashboard() {
     document.getElementById('s-patio').textContent = enPatio.length;
     document.getElementById('s-muelle').textContent = enMuelle.length;
 
-    var acumP = 0, countP = 0, acumM = 0, countM = 0;
-    registros.forEach(function (r) {
-        var dur = getLocationDurations(r);
-        if (dur.patio > 0) { acumP += dur.patio; countP++; }
-        if (dur.muelle > 0) { acumM += dur.muelle; countM++; }
-    });
-    document.getElementById('s-tiempo-patio').textContent = countP ? formatDuration(acumP / countP) : '0 min';
-    document.getElementById('s-tiempo-muelle').textContent = countM ? formatDuration(acumM / countM) : '0 min';
+    // Promedios del DÍA OPERATIVO en curso, con la misma regla que el
+    // panel de supervisor (promedioMinutos en shared/services/eventos.js):
+    // solo visitas terminadas, y solo las que pasaron por esa ubicación.
+    //
+    // Antes se promediaban TODOS los registros históricos de la operación
+    // —más de mil— y encima con el cronómetro abierto de los que seguían
+    // adentro. Por eso al lado de "En patio: 0" podía leerse "Tiempo prom.
+    // patio: 12h 58min": no era el patio de hoy, era el de toda la
+    // historia, y no coincidía con nada de lo que muestra el supervisor.
+    var diaOp = todayOperativo(HORA_CORTE);
+    var deHoy = registros.filter(function (r) { return getDiaOperativo(r, HORA_CORTE) === diaOp; });
+    pintarPromedio('s-tiempo-patio', promedioMinutos(deHoy, 'patio'));
+    pintarPromedio('s-tiempo-muelle', promedioMinutos(deHoy, 'muelle'));
 
     // Banner: vehículos con más de 4h en patio
     var retrasados = enPatio.filter(function (r) { return minutosEnPatio(r) >= 240; });
@@ -279,7 +305,7 @@ function renderDashboard() {
                       renderAvanceSoloLectura(rec, false) +
                       '<div style="margin-top:6px;display:flex;gap:4px;">' +
                         '<button class="btn btn-sm btn-primary" data-editar="' + rec.id + '">Mover</button>' +
-                        '<button class="btn btn-sm btn-danger" data-salida="' + rec.id + '">Salida</button>' +
+                        '<button class="btn btn-sm btn-danger" data-salida="' + rec.id + '"' + attrsBotonSalida(rec) + '>Salida</button>' +
                       '</div>'
                     : '<div class="muelle-card-empty">Disponible</div>') +
             '</div></div>';
@@ -325,26 +351,11 @@ function badgePrioridad(r, rank) {
    data-avance, para que no haya nada en qué hacer clic.
    ========================================================= */
 
-function estadoAvance(rec) {
-    if (!requiereAvanceCompleto(rec)) {
-        return { texto: 'Sin avance registrado', clase: 'avance-estado-neutro' };
-    }
-
-    var pct = rec.avancePorcentaje || 0;
-
-    if (puedeRegistrarSalida(rec)) {
-        return pct >= 100
-            ? { texto: 'Completo — listo para salir', clase: 'avance-estado-ok' }
-            : { texto: 'Salida anticipada autorizada', clase: 'avance-estado-ok' };
-    }
-
-    if (rec.avanceTipo !== 'Cargue') {
-        return { texto: 'Descargue debe llegar al 100% para salir', clase: 'avance-estado-bloqueo' };
-    }
-    if (pct < 75) {
-        return { texto: 'Debe llegar al 75% para poder autorizarse', clase: 'avance-estado-bloqueo' };
-    }
-    return { texto: 'Falta autorización del supervisor', clase: 'avance-estado-espera' };
+function claseNivel(nivel) {
+    if (nivel === 'ok') return 'avance-estado-ok';
+    if (nivel === 'sin-avance') return 'avance-estado-neutro';
+    if (nivel === 'espera') return 'avance-estado-espera';
+    return 'avance-estado-bloqueo';
 }
 
 function renderAvanceSoloLectura(rec, compacto) {
@@ -357,13 +368,28 @@ function renderAvanceSoloLectura(rec, compacto) {
     var pct = rec.avancePorcentaje || 0;
     var tipo = rec.avanceTipo || rec.tipo || '';
     var claseBadge = tipo === 'Cargue' ? 'badge-cargue' : 'badge-descargue';
-    var est = estadoAvance(rec);
+    var d = diagnosticoSalida(rec);
+
+    // Un vehículo que ya salió no tiene nada pendiente: decirle
+    // "faltan 20%" a un registro cerrado solo confunde.
+    var abierto = !rec.horaSalida;
+
+    // Cuánto falta para desbloquear la salida. Solo se pinta si
+    // subir el porcentaje es lo que la destraba: si ya pasó el
+    // mínimo y lo único pendiente es la firma del supervisor,
+    // `faltante` viene en null y aquí no se muestra ninguna cifra
+    // (decir "faltan 0%" confundiría más de lo que ayuda).
+    var falta = (abierto && !d.puedeSalir && d.faltante)
+        ? d.faltante + '% para el mínimo del ' + d.minimo + '%'
+        : '';
 
     if (compacto) {
         return '<div class="avance-mini">' +
             '<div class="avance-mini-top"><span class="badge ' + claseBadge + '">' + tipo + '</span>' +
             '<span class="avance-mini-pct">' + pct + '%</span></div>' +
             '<div class="avance-bar"><div class="avance-bar-fill" style="width:' + pct + '%"></div></div>' +
+            (falta ? '<div class="avance-mini-falta" title="' + d.titulo + '">Faltan ' + falta + '</div>' : '') +
+            (abierto && !falta ? '<div class="avance-mini-estado ' + claseNivel(d.nivel) + '">' + d.titulo + '</div>' : '') +
         '</div>';
     }
 
@@ -373,7 +399,69 @@ function renderAvanceSoloLectura(rec, compacto) {
             '<span class="avance-pct">' + pct + '%</span>' +
         '</div>' +
         '<div class="avance-bar"><div class="avance-bar-fill" style="width:' + pct + '%"></div></div>' +
-        '<div class="avance-estado ' + est.clase + '">' + est.texto + '</div>' +
+        (abierto
+            ? '<div class="avance-estado ' + claseNivel(d.nivel) + '">' + d.titulo +
+                  (falta ? ' · faltan ' + falta : '') +
+              '</div>'
+            : '') +
+    '</div>';
+}
+
+
+/* =========================================================
+   ALERTA DE SALIDA BLOQUEADA
+
+   Toda la regla de negocio (qué mínimo aplica, cuántos puntos
+   faltan) vive en diagnosticoSalida(); aquí solo se pinta. Se
+   muestra en el modal de salida y en el de detalle, para que el
+   operario sepa POR QUÉ no puede despachar el vehículo y QUÉ
+   falta, sin tener que ir a preguntarle al supervisor.
+   ========================================================= */
+
+/* El botón de salida NUNCA se oculta ni se deshabilita en la
+   lista: es el que abre el modal donde se explica el bloqueo. Lo
+   que sí lleva es el motivo en el tooltip y un color de aviso,
+   para que el operario lo sepa antes de hacer clic. */
+function attrsBotonSalida(rec) {
+    var d = diagnosticoSalida(rec);
+    if (d.puedeSalir) return '';
+    return ' data-bloqueada="1" title="' + d.titulo +
+        (d.faltante ? ' — faltan ' + d.faltante + '% para el ' + d.minimo + '%' : '') + '"';
+}
+
+function alertaSalida(rec) {
+
+    var d = diagnosticoSalida(rec);
+
+    // Si puede salir y el avance está en regla no hay nada que
+    // advertir. El caso 'sin-avance' sí se avisa aunque deje
+    // salir: ahí la verificación queda en manos del operario.
+    if (d.nivel === 'ok') return '';
+
+    var estilo = d.nivel === 'bloqueo' ? 'bloqueo' : (d.nivel === 'espera' ? 'espera' : 'aviso');
+    var icono = d.nivel === 'bloqueo' ? 'ti-ban' : (d.nivel === 'espera' ? 'ti-hourglass-high' : 'ti-alert-triangle');
+
+    var medidor = '';
+    if (d.faltante) {
+        medidor =
+            '<div class="alerta-salida-medidor">' +
+                '<div class="alerta-salida-bar">' +
+                    '<div class="alerta-salida-bar-fill" style="width:' + d.porcentaje + '%"></div>' +
+                    '<div class="alerta-salida-bar-min" style="left:' + d.minimo + '%"></div>' +
+                '</div>' +
+                '<div class="alerta-salida-cifras">' +
+                    '<span>Actual: <strong>' + d.porcentaje + '%</strong></span>' +
+                    '<span>Mínimo: <strong>' + d.minimo + '%</strong></span>' +
+                    '<span class="alerta-salida-falta">Faltan: <strong>' + d.faltante + '%</strong></span>' +
+                '</div>' +
+            '</div>';
+    }
+
+    return '<div class="alerta-salida alerta-salida-' + estilo + '">' +
+        '<div class="alerta-salida-top"><i class="ti ' + icono + '"></i>' + d.titulo + '</div>' +
+        '<div class="alerta-salida-detalle">' + d.detalle + '</div>' +
+        medidor +
+        (d.accion ? '<div class="alerta-salida-accion"><i class="ti ti-arrow-narrow-right"></i> ' + d.accion + '</div>' : '') +
     '</div>';
 }
 
@@ -457,7 +545,7 @@ function renderRegistros() {
             '<td>' + celdaMotivoPatio(r) + '</td>' +
             '<td>' + (r.operadorEntrada || '—') + '</td>' +
             '<td><div class="td-actions">' +
-                (!r.horaSalida ? '<button class="btn btn-sm btn-success" data-salida="' + r.id + '"><i class="ti ti-logout"></i></button>' : '') +
+                (!r.horaSalida ? '<button class="btn btn-sm btn-success" data-salida="' + r.id + '"' + attrsBotonSalida(r) + '><i class="ti ti-logout"></i></button>' : '') +
                 '<button class="btn btn-sm" data-editar="' + r.id + '"><i class="ti ti-edit"></i></button>' +
                 '<button class="btn btn-sm" data-detalle="' + r.id + '"><i class="ti ti-info-circle"></i></button>' +
                 '<button class="btn btn-sm btn-danger" data-eliminar="' + r.id + '"><i class="ti ti-trash"></i></button>' +
@@ -630,25 +718,35 @@ async function registrarEntrada() {
    MODAL: SALIDA
    ========================================================= */
 
-function mensajeAvanceBloqueado(rec) {
-    if (!requiereAvanceCompleto(rec)) {
-        return '<div style="margin-top:6px;color:var(--amber-600);font-size:12.5px;"><i class="ti ti-alert-triangle"></i> Este vehículo no tiene avance de cargue/descargue registrado (es un registro anterior a esta función) — puede salir sin restricción de %. Verifica manualmente antes de confirmar.</div>';
-    }
+/* Pinta la alerta y habilita o bloquea el botón de confirmar.
+   Se llama al abrir el modal y otra vez en cada snapshot, para
+   que si el supervisor sube el porcentaje o autoriza la salida
+   mientras el modal está abierto, el botón se destrabe solo sin
+   que el operario tenga que cerrar y volver a entrar. */
+function pintarEstadoSalida(rec) {
 
-    if (puedeRegistrarSalida(rec)) return '';
+    var d = diagnosticoSalida(rec);
 
-    var pct = rec.avancePorcentaje || 0;
-    var texto;
+    document.getElementById('modal-salida-info').innerHTML =
+        '<strong>' + rec.placa + '</strong> — ' + rec.conductor + alertaSalida(rec);
 
-    if (rec.avanceTipo !== 'Cargue') {
-        texto = 'El descargue está en ' + pct + '% — debe llegar al 100% para poder salir, sin excepción.';
-    } else if (pct < 75) {
-        texto = 'El cargue está en ' + pct + '% — debe llegar mínimo al 75% para que un supervisor pueda autorizar la salida.';
-    } else {
-        texto = 'El cargue está en ' + pct + '% — un supervisor debe autorizar la salida anticipada (con motivo) antes de poder registrarla.';
-    }
+    // El bloqueo no se deja solo para el momento de confirmar: el
+    // botón queda inhabilitado desde que se abre el modal, para que
+    // no se llene la hora y las observaciones a cambio de un toast
+    // de error. confirmarSalida() vuelve a validar de todos modos.
+    var btnConfirmar = document.getElementById('btn-confirmar-salida');
+    btnConfirmar.disabled = !d.puedeSalir;
+    btnConfirmar.title = d.puedeSalir ? '' : (d.accion || d.titulo);
+    btnConfirmar.innerHTML = d.puedeSalir
+        ? '<i class="ti ti-check"></i> Confirmar salida'
+        : '<i class="ti ti-lock"></i> Salida bloqueada';
+}
 
-    return '<div style="margin-top:6px;color:var(--amber-600);font-size:12.5px;"><i class="ti ti-alert-triangle"></i> ' + texto + '</div>';
+function refrescarModalSalida() {
+    var modal = document.getElementById('modal-salida');
+    if (!modal.classList.contains('open')) return;
+    var rec = registros.find(function (r) { return r.id === selectedId; });
+    if (rec) pintarEstadoSalida(rec);
 }
 
 function openModalSalida(id) {
@@ -656,7 +754,7 @@ function openModalSalida(id) {
     var rec = registros.find(function (r) { return r.id === id; });
     if (!rec) return;
 
-    document.getElementById('modal-salida-info').innerHTML = '<strong>' + rec.placa + '</strong> — ' + rec.conductor + mensajeAvanceBloqueado(rec);
+    pintarEstadoSalida(rec);
     escribirFechaHora('m-fecha-salida', 'm-hora-salida-h', 'm-hora-salida-m', nowLocal());
     document.getElementById('m-obs-salida').value = '';
     document.getElementById('modal-salida').classList.add('open');
@@ -666,8 +764,14 @@ async function confirmarSalida() {
     var rec = registros.find(function (r) { return r.id === selectedId; });
     if (!rec) return;
 
-    if (!puedeRegistrarSalida(rec)) {
-        toast(rec.avanceTipo !== 'Cargue' ? 'El descargue debe llegar al 100% para salir' : 'Falta autorización del supervisor para esta salida', 'red', 'ti-alert-circle');
+    var diag = diagnosticoSalida(rec);
+    if (!diag.puedeSalir) {
+        toast(
+            diag.faltante
+                ? diag.titulo + ': faltan ' + diag.faltante + '% para el mínimo del ' + diag.minimo + '%'
+                : diag.titulo,
+            'red', 'ti-alert-circle'
+        );
         return;
     }
 
@@ -815,6 +919,7 @@ function openModalDetalle(id) {
         '<div class="detail-row"><span class="detail-lbl">Salida:</span><span class="detail-val">' + fmtDt(rec.horaSalida) + '</span></div>' +
         '<div class="detail-row"><span class="detail-lbl">Programado:</span><span class="detail-val">' + (rec.programado && rec.horaProgramacion ? fmtDt(rec.horaProgramacion) : 'No') + '</span></div>' +
         '<div class="detail-section-title">Avance de la operación</div>' + renderAvanceSoloLectura(rec, false) +
+        (!rec.horaSalida ? alertaSalida(rec) : '') +
         '<div class="detail-section-title">Historial</div>' + histHtml;
 
     document.getElementById('modal-detalle').classList.add('open');
@@ -930,6 +1035,7 @@ function iniciarPagina(perfil) {
         if (error) { setSyncStatus('error'); return; }
         registros = data;
         renderTodo();
+        refrescarModalSalida();
         if (document.getElementById('muelle-options').style.display !== 'none') {
             poblarSelectMuelles(document.getElementById('f-numeroMuelle'), null);
         }

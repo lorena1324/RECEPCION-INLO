@@ -240,6 +240,7 @@
           <button class="btn-primario" id="estad-aplicar-rango"><i class="ti ti-filter"></i> Aplicar</button>
         </div>
         <p class="texto-ayuda">Los días de este panel van de 6am a 6am (turno operativo de B9), no de medianoche a medianoche.</p>
+        <p class="texto-ayuda" id="estad-aviso-rango" style="display:none;"></p>
 
         <!-- Tendencias: periodo actual contra el anterior del mismo tamaño -->
         <div class="subtitulo">Tendencia frente al periodo anterior</div>
@@ -273,10 +274,12 @@
           <div class="card-resumen">
             <div class="card-resumen-valor" id="es-promedio">0 min</div>
             <div class="card-resumen-label"><i class="ti ti-clock-hour-4"></i> Tiempo promedio en patio</div>
+            <div class="card-resumen-detalle" id="es-promedio-nota"></div>
           </div>
           <div class="card-resumen">
             <div class="card-resumen-valor" id="es-promedio-muelle">0 min</div>
             <div class="card-resumen-label"><i class="ti ti-door"></i> Tiempo promedio en muelle</div>
+            <div class="card-resumen-detalle" id="es-promedio-muelle-nota"></div>
           </div>
           <div class="card-resumen">
             <div class="card-resumen-valor" id="es-cargue-pct">0%</div>
@@ -309,7 +312,7 @@
           </div>
           <div class="card-resumen">
             <div class="card-resumen-valor" id="es-perdida-pct">0%</div>
-            <div class="card-resumen-label"><i class="ti ti-percentage"></i> De la flota del periodo</div>
+            <div class="card-resumen-label"><i class="ti ti-percentage"></i> De los vehículos que ya salieron</div>
           </div>
         </div>
         <div id="es-perdida-detalle"></div>

@@ -9,7 +9,7 @@
    ubicación, salida), y de ahí se calculan los tiempos.
    ========================================================= */
 
-import { minutosEnPatio, diaOperativo } from "../utils/tiempos.js";
+import { diaOperativo } from "../utils/tiempos.js";
 
 
 /* ── HISTORIAL ── */
@@ -135,6 +135,111 @@ export function getLocationDurations(r) {
 
     return { patio: Math.round(patio), muelle: Math.round(muelle) };
 }
+
+/* ── PROMEDIOS DE TIEMPO ──────────────────────────────────
+
+   Un promedio de "tiempo en patio" o "tiempo en muelle" solo
+   tiene sentido sobre visitas TERMINADAS. Para un vehículo que
+   todavía está adentro, getLocationDurations() cuenta hasta
+   `new Date()`, así que su tramo abierto crece en cada repintado:
+   meterlo en un promedio da un número que cambia solo cada vez que
+   se mira el panel y que además está a medio hacer (un camión que
+   entró hace 5 minutos "promedia" 5 minutos, no las 3 horas que va
+   a terminar tardando).
+
+   Este es el único sitio donde se decide qué vehículos entran a un
+   promedio, para que las tarjetas, las gráficas y las tablas de los
+   paneles no puedan volver a contar cosas distintas bajo el mismo
+   rótulo.
+
+   `promedio` viene en null —no en 0— cuando no queda ninguna visita
+   que medir: 0 min se lee como "salen rapidísimo" cuando en realidad
+   es "todavía no hay con qué medir".
+   ───────────────────────────────────────────────────────── */
+
+export function visitasTerminadas(recs) {
+    return (recs || []).filter(function (r) { return r && r.horaSalida; });
+}
+
+/*
+    Una visita "no medible": estuvo en planta un rato real
+    (entrada → salida) pero el historial no atribuye ni un minuto
+    a Patio ni a Muelle. Pasa con registros viejos sin `destino`
+    reconocible, y cuando la hora de salida se digita ANTES del
+    último cambio de ubicación (esa hora la teclea el operario, el
+    cambio de ubicación lo sella el reloj) — getLocationDurations()
+    descarta los tramos negativos y el registro queda en cero.
+
+    Promediarlas como si fueran ceros hunde el promedio: un camión
+    del que no sabemos cuánto tardó no es un camión que tardó nada.
+    Se excluyen del cálculo y se cuentan aparte, para que el dato
+    sucio se pueda ver en vez de disolverse en la cifra.
+*/
+function noMedible(r, dur) {
+    if ((dur.patio || 0) + (dur.muelle || 0) > 0) return false;
+    var span = (new Date(r.horaSalida) - new Date(r.horaEntrada)) / 60000;
+    return span > 1;
+}
+
+/*
+    Promedio de minutos en una ubicación ('patio' | 'muelle')
+    sobre las visitas que REALMENTE pasaron por ahí.
+
+    Un vehículo que entró directo a muelle no esperó 0 minutos en
+    patio: no estuvo en patio. Meterlo al promedio de patio como un
+    cero no baja el promedio, lo falsea — y como el reparto entre
+    entradas directas a muelle y entradas a patio cambia día a día,
+    el "tiempo promedio en patio" subía y bajaba por razones que no
+    tienen nada que ver con lo que se demora la espera. Lo mismo al
+    revés con el muelle.
+
+    Devuelve:
+      promedio    minutos (null si no quedó ninguna visita que medir)
+      n           visitas que sustentan el promedio
+      sinPaso     visitas terminadas que no pasaron por esa ubicación
+      descartadas visitas terminadas sin tiempos utilizables
+*/
+export function promedioMinutos(recs, ubicacion) {
+
+    var total = 0, n = 0, descartadas = 0, sinPaso = 0;
+
+    visitasTerminadas(recs).forEach(function (r) {
+
+        var dur = getLocationDurations(r);
+
+        if (noMedible(r, dur)) { descartadas++; return; }
+
+        var min = dur[ubicacion] || 0;
+        if (min <= 0) { sinPaso++; return; }
+
+        total += min;
+        n++;
+    });
+
+    return {
+        promedio: n ? Math.round(total / n) : null,
+        n: n,
+        sinPaso: sinPaso,
+        descartadas: descartadas
+    };
+}
+
+
+/*
+    Minutos que un vehículo ACTIVO lleva acumulados en patio.
+
+    Vivía en utils/tiempos.js midiendo `ahora − horaEntrada`, que no
+    es tiempo en patio sino tiempo en planta: a un vehículo que hizo
+    Patio → Muelle → Patio le contaba también las horas del muelle, y
+    el aviso de "más de 4h en patio" se disparaba antes de tiempo.
+    Aquí se calcula desde el historial, que es donde está el dato
+    real, y por eso vive en este módulo y no allá.
+*/
+export function minutosEnPatio(r) {
+    if (!r || !r.horaEntrada || r.horaSalida) return 0;
+    return getLocationDurations(r).patio || 0;
+}
+
 
 export function requiereObservacionLargaEstadia(r) {
     return r && !r.horaSalida && r.ubicacion === 'Patio' && minutosEnPatio(r) >= 240;

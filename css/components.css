@@ -205,6 +205,12 @@ textarea { resize: vertical; min-height: 64px; }
 .avance-bar-fill { height: 100%; background: var(--blue-600); border-radius: 4px; transition: width .2s; }
 .avance-btns { display: flex; gap: 4px; }
 
+/* Tamaño de la muestra al lado de un promedio de tiempo: cuántos
+   vehículos terminados lo sustentan. Un "3h" sobre un solo vehículo
+   y otro sobre cuarenta se ven iguales sin este dato. Lo usan los
+   cuatro paneles, por eso vive aquí y no en el CSS de cada rol. */
+.prom-n { color: var(--text-3); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+
 /* ── Tablas ── */
 .table-wrap {
     background: var(--surface); border: 0.5px solid var(--border);
