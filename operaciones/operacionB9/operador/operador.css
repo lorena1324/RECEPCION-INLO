@@ -16,3 +16,43 @@
   gap: 14px;
   margin-bottom: 28px;
 }
+/* =========================================================
+   AVANCE EN SOLO LECTURA (operario)
+
+   El operario ve el avance pero no lo edita: aquí no hay
+   estilos de botón a propósito. El objetivo es que pueda
+   decirle al supervisor en qué punto va cada muelle sin
+   tener que ir a preguntarle.
+   ========================================================= */
+
+.avance-estado {
+  margin-top: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.avance-estado-ok      { color: var(--green-600); }
+.avance-estado-espera  { color: var(--amber-600); }
+.avance-estado-bloqueo { color: var(--red-600); }
+.avance-estado-neutro  { color: var(--text-3); font-weight: 400; }
+
+/* Versión compacta para la celda de la tabla de Registros */
+.avance-mini { min-width: 104px; }
+
+.avance-mini-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.avance-mini-pct {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.avance-mini-vacio { color: var(--text-3); }

@@ -276,6 +276,7 @@ function renderDashboard() {
             '<div class="muelle-card-body">' +
                 (rec
                     ? '<div class="muelle-card-placa">' + rec.placa + '</div><div>' + rec.conductor + '</div>' +
+                      renderAvanceSoloLectura(rec, false) +
                       '<div style="margin-top:6px;display:flex;gap:4px;">' +
                         '<button class="btn btn-sm btn-primary" data-editar="' + rec.id + '">Mover</button>' +
                         '<button class="btn btn-sm btn-danger" data-salida="' + rec.id + '">Salida</button>' +
@@ -311,6 +312,69 @@ function badgePrioridad(r, rank) {
     var min = minutosEsperando(r);
     var clase = min >= 240 ? 'badge-amber' : (min >= 120 ? 'badge-descargue' : 'badge-en-patio');
     return '<span class="badge ' + clase + '"><i class="ti ti-flag-3"></i> #' + rank + ' · ' + formatDuration(min) + '</span>';
+}
+
+/* =========================================================
+   AVANCE EN SOLO LECTURA (vista del operario)
+
+   El operario NO edita el avance — eso es del supervisor. Pero sí
+   necesita verlo: es lo que le permite decirle al supervisor
+   "el muelle 3 va en 80% de cargue y le falta la autorización"
+   en vez de tener que ir a preguntar. Por eso aquí solo se pinta
+   la barra y el estado; no se emite ningún botón ni atributo
+   data-avance, para que no haya nada en qué hacer clic.
+   ========================================================= */
+
+function estadoAvance(rec) {
+    if (!requiereAvanceCompleto(rec)) {
+        return { texto: 'Sin avance registrado', clase: 'avance-estado-neutro' };
+    }
+
+    var pct = rec.avancePorcentaje || 0;
+
+    if (puedeRegistrarSalida(rec)) {
+        return pct >= 100
+            ? { texto: 'Completo — listo para salir', clase: 'avance-estado-ok' }
+            : { texto: 'Salida anticipada autorizada', clase: 'avance-estado-ok' };
+    }
+
+    if (rec.avanceTipo !== 'Cargue') {
+        return { texto: 'Descargue debe llegar al 100% para salir', clase: 'avance-estado-bloqueo' };
+    }
+    if (pct < 75) {
+        return { texto: 'Debe llegar al 75% para poder autorizarse', clase: 'avance-estado-bloqueo' };
+    }
+    return { texto: 'Falta autorización del supervisor', clase: 'avance-estado-espera' };
+}
+
+function renderAvanceSoloLectura(rec, compacto) {
+    if (!requiereAvanceCompleto(rec)) {
+        return compacto
+            ? '<span class="avance-mini-vacio">—</span>'
+            : '<div class="avance-box"><span class="avance-label">Sin avance registrado</span></div>';
+    }
+
+    var pct = rec.avancePorcentaje || 0;
+    var tipo = rec.avanceTipo || rec.tipo || '';
+    var claseBadge = tipo === 'Cargue' ? 'badge-cargue' : 'badge-descargue';
+    var est = estadoAvance(rec);
+
+    if (compacto) {
+        return '<div class="avance-mini">' +
+            '<div class="avance-mini-top"><span class="badge ' + claseBadge + '">' + tipo + '</span>' +
+            '<span class="avance-mini-pct">' + pct + '%</span></div>' +
+            '<div class="avance-bar"><div class="avance-bar-fill" style="width:' + pct + '%"></div></div>' +
+        '</div>';
+    }
+
+    return '<div class="avance-box">' +
+        '<div class="avance-info">' +
+            '<span class="badge ' + claseBadge + '">' + tipo + '</span>' +
+            '<span class="avance-pct">' + pct + '%</span>' +
+        '</div>' +
+        '<div class="avance-bar"><div class="avance-bar-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="avance-estado ' + est.clase + '">' + est.texto + '</div>' +
+    '</div>';
 }
 
 function badgeEstado(r) {
@@ -364,7 +428,7 @@ function renderRegistros() {
     var tbody = document.getElementById('reg-table');
 
     if (!list.length) {
-        tbody.innerHTML = '<tr><td colspan="17" class="empty-state">Sin registros con estos filtros.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="18" class="empty-state">Sin registros con estos filtros.</td></tr>';
         return;
     }
 
@@ -384,6 +448,7 @@ function renderRegistros() {
             '<td>' + fmtDt(r.horaEntrada) + '</td>' +
             '<td>' + fmtDt(r.horaSalida) + '</td>' +
             '<td>' + badgeEstado(r) + '</td>' +
+            '<td>' + renderAvanceSoloLectura(r, true) + '</td>' +
             '<td>' + (r.programado ? 'Sí' : 'No') + '</td>' +
             '<td>' + (r.programado && r.horaProgramacion ? fmtDt(r.horaProgramacion) : '—') + '</td>' +
             '<td>' + (r.servicioTipo || 'Normal') + '</td>' +
@@ -749,6 +814,7 @@ function openModalDetalle(id) {
         '<div class="detail-row"><span class="detail-lbl">Ingreso:</span><span class="detail-val">' + fmtDt(rec.horaEntrada) + '</span></div>' +
         '<div class="detail-row"><span class="detail-lbl">Salida:</span><span class="detail-val">' + fmtDt(rec.horaSalida) + '</span></div>' +
         '<div class="detail-row"><span class="detail-lbl">Programado:</span><span class="detail-val">' + (rec.programado && rec.horaProgramacion ? fmtDt(rec.horaProgramacion) : 'No') + '</span></div>' +
+        '<div class="detail-section-title">Avance de la operación</div>' + renderAvanceSoloLectura(rec, false) +
         '<div class="detail-section-title">Historial</div>' + histHtml;
 
     document.getElementById('modal-detalle').classList.add('open');
