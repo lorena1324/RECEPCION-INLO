@@ -246,6 +246,136 @@ export function requiereObservacionLargaEstadia(r) {
 }
 
 
+/* ── CANAL ────────────────────────────────────────────────
+
+   La lista es MQ / 3PD / Otro. "Otro" absorbe todo lo demás:
+   los registros viejos que quedaron en "Sin canal" (cuando esa
+   era la opción por defecto del formulario) y los que nunca
+   trajeron el campo. Se normaliza en la lectura, no en la base:
+   nada reescribe Firestore, así que si mañana se quiere separar
+   "sin registrar" de "otro canal", el dato original sigue ahí.
+   ───────────────────────────────────────────────────────── */
+
+export const CANALES = ['MQ', '3PD', 'Otro'];
+
+export function canalDe(r) {
+    var c = (r && r.canal ? String(r.canal) : '').trim().toUpperCase();
+    if (c === 'MQ') return 'MQ';
+    if (c.indexOf('3PD') !== -1) return '3PD';
+    return 'Otro';
+}
+
+
+/* ── CUMPLIMIENTO DE CITA (ON TIME) ───────────────────────
+
+   Compara la llegada real (horaEntrada) contra la hora que traía
+   programada (horaProgramacion). Negativo = llegó antes de la
+   cita; positivo = llegó tarde.
+
+   Solo entran los vehículos programados y con hora de cita: un
+   vehículo sin cita no llega ni temprano ni tarde, no tiene
+   contra qué medirse. Se cuentan aparte para que el panel pueda
+   decir sobre cuántos vehículos está calculando el indicador.
+
+   Tramos (contiguos, sin huecos, definidos por el cliente):
+       31+ min antes    rojo
+       11 a 30 antes    amarillo
+       0 a 10 (± cita)  verde
+       11 a 30 después  amarillo
+       31+ min después  rojo
+   ───────────────────────────────────────────────────────── */
+
+export const TRAMOS_ONTIME = [
+    { clave: 'muy-temprano', etiqueta: '31+ min antes',    color: 'rojo'     },
+    { clave: 'temprano',     etiqueta: '11 a 30 antes',    color: 'amarillo' },
+    { clave: 'en-hora',      etiqueta: 'En hora (± 10 min)', color: 'verde'  },
+    { clave: 'tarde',        etiqueta: '11 a 30 después',  color: 'amarillo' },
+    { clave: 'muy-tarde',    etiqueta: '31+ min después',  color: 'rojo'     }
+];
+
+/*
+    Minutos de desfase, ya corregidos por cruce de medianoche.
+
+    La hora de la cita se captura solo como HH:MM y la fecha se
+    deriva de la entrada, así que una cita a las 23:50 con llegada
+    a las 00:10 daría −23h40 en vez de +20 min. Cuando la
+    diferencia pasa de 12 horas, lo que ocurrió fue un cruce de
+    día, no un desfase de un día entero: se corrige aquí. Esto
+    también endereza los registros viejos, guardados cuando la
+    cita se estampaba con la fecha del día en que se digitaba y
+    no con la de la entrada.
+*/
+function minutosDesfase(r) {
+
+    if (!r || !r.programado || !r.horaProgramacion || !r.horaEntrada) return null;
+
+    var cita = new Date(r.horaProgramacion);
+    var llegada = new Date(r.horaEntrada);
+    if (isNaN(cita) || isNaN(llegada)) return null;
+
+    var min = (llegada - cita) / 60000;
+
+    if (min > 720) min -= 1440;
+    else if (min < -720) min += 1440;
+
+    return Math.round(min);
+}
+
+export function clasificarOnTime(r) {
+
+    var min = minutosDesfase(r);
+    if (min === null) return null;
+
+    var clave;
+    if (min <= -31) clave = 'muy-temprano';
+    else if (min <= -11) clave = 'temprano';
+    else if (min <= 10) clave = 'en-hora';
+    else if (min <= 30) clave = 'tarde';
+    else clave = 'muy-tarde';
+
+    var tramo = TRAMOS_ONTIME.find(function (t) { return t.clave === clave; });
+
+    return { minutos: min, clave: clave, etiqueta: tramo.etiqueta, color: tramo.color };
+}
+
+/*
+    Reparte una lista de registros en los cinco tramos.
+
+    `total` es sobre cuántos vehículos se calculan los porcentajes
+    (los que tienen cita), y `sinCita` los que quedaron fuera del
+    indicador. Mostrar los dos evita leer "80% en hora" sin saber
+    que se calculó sobre cinco vehículos de cuarenta.
+*/
+export function resumenOnTime(recs) {
+
+    var conteo = {};
+    TRAMOS_ONTIME.forEach(function (t) { conteo[t.clave] = 0; });
+
+    var total = 0, sinCita = 0;
+
+    (recs || []).forEach(function (r) {
+        var c = clasificarOnTime(r);
+        if (!c) { sinCita++; return; }
+        conteo[c.clave]++;
+        total++;
+    });
+
+    return {
+        total: total,
+        sinCita: sinCita,
+        tramos: TRAMOS_ONTIME.map(function (t) {
+            return {
+                clave: t.clave,
+                etiqueta: t.etiqueta,
+                color: t.color,
+                n: conteo[t.clave],
+                pct: total ? Math.round((conteo[t.clave] / total) * 100) : 0
+            };
+        })
+    };
+}
+
+
 /* ── PRIORIDAD POR TIEMPO DE ESPERA (punto 9 del prompt maestro) ── */
 
 // Mientras más tiempo lleve un vehículo activo (sin salida), mayor su prioridad.
@@ -294,6 +424,7 @@ export function iconoHistorial(tipo) {
         : tipo === 'salida' ? 'ti-logout'
         : tipo === 'operacion' ? 'ti-transfer-in'
         : tipo === 'canal' ? 'ti-route'
+        : tipo === 'observacion' ? 'ti-message-2'
         : tipo === 'avance' ? 'ti-percentage'
         : tipo === 'autorizacion' ? 'ti-shield-check'
         : 'ti-edit';
@@ -307,6 +438,10 @@ export function tituloHistorial(item) {
 
     if (item.tipo === 'salida') {
         return 'Salida registrada';
+    }
+
+    if (item.tipo === 'observacion') {
+        return 'Observación del operario';
     }
 
     if (item.tipo === 'avance') {

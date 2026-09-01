@@ -236,9 +236,9 @@
                         <div class="form-group full">
                             <label for="f-canal">Canal *</label>
                             <select id="f-canal">
-                                <option value="Sin canal">Sin canal</option>
                                 <option value="MQ">MQ</option>
                                 <option value="3PD">3PD</option>
+                                <option value="Otro">Otro</option>
                             </select>
                         </div>
 
@@ -330,6 +330,25 @@
     </div>
 </div>
 
+<!-- MODAL: OBSERVACIÓN RÁPIDA -->
+<div class="modal-backdrop" id="modal-observacion">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title"><i class="ti ti-message-plus"></i> Agregar observación</div>
+            <button class="modal-close" data-close="modal-observacion"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-info-box" id="modal-observacion-info"></div>
+        <div class="form-group full">
+            <label for="o-texto">Observación</label>
+            <textarea id="o-texto" placeholder="Qué está pasando con este vehículo…"></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" data-close="modal-observacion">Cancelar</button>
+            <button class="btn btn-primary" id="btn-confirmar-observacion"><i class="ti ti-check"></i> Guardar observación</button>
+        </div>
+    </div>
+</div>
+
 <!-- MODAL: EDITAR UBICACIÓN -->
 <div class="modal-backdrop" id="modal-editar">
     <div class="modal">
@@ -352,9 +371,9 @@
         <div class="form-group full" style="margin-top:10px;">
             <label for="e-canal">Canal</label>
             <select id="e-canal">
-                <option value="Sin canal">Sin canal</option>
                 <option value="MQ">MQ</option>
                 <option value="3PD">3PD</option>
+                <option value="Otro">Otro</option>
             </select>
         </div>
         <div class="form-group full" style="margin-top:10px;">

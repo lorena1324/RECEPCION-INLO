@@ -204,6 +204,38 @@ export async function actualizarUbicacion(id, cambios, operador) {
 
 
 /* =========================================================
+   AGREGAR UNA OBSERVACIÓN (sin mover el vehículo)
+
+   El operario ve algo que vale la pena dejar por escrito —el
+   conductor se fue a almorzar, el muelle está esperando montacargas,
+   la mercancía llegó mal estibada— y no tiene por qué pasar por el
+   modal de mover ubicación para anotarlo. Antes ese era el único
+   camino, así que o se abría un modal que pedía ubicación y canal
+   para no cambiarlos, o la observación no se escribía.
+
+   `obsUbicacion` queda con la última observación (es el campo que
+   los paneles muestran como "motivo" en la columna de patio), y el
+   texto completo se apila en el historial, que es lo que nunca se
+   pierde.
+   ========================================================= */
+
+export async function agregarObservacion(id, texto, operador) {
+
+    const entrada = {
+        fecha: nowLocal(),
+        tipo: "observacion",
+        operador: operador,
+        texto: texto
+    };
+
+    await updateDoc(doc(db, COLECCION, id), {
+        obsUbicacion: texto,
+        historial: arrayUnion(entrada)
+    });
+}
+
+
+/* =========================================================
    AGREGAR LA OPERACIÓN QUE LE FALTABA (Cargue o Descargue → Ambos)
 
    El operario detecta en muelle que un vehículo que solo iba a
@@ -334,7 +366,7 @@ export async function avanzarAFaseCargue(id, cambios, operador) {
 
 
 /* =========================================================
-   AUTORIZAR SALIDA ANTICIPADA (solo Cargue, mínimo 75%)
+   AUTORIZAR SALIDA ANTICIPADA (solo Cargue, desde MINIMO_CARGUE_ANTICIPADO)
 
    Un supervisor autoriza que un vehículo salga sin haber
    llegado al 100% de cargue, dejando constancia del motivo en
@@ -451,35 +483,50 @@ export function puedeDespachar(r) {
      - Descargue: sin excepción, debe llegar al 100% para salir.
        Ni el operario ni el supervisor pueden saltarse esto.
      - Cargue: puede salir por debajo del 100% SOLO si (a) llegó
-       al menos al 75% y (b) un supervisor autorizó la salida
-       explicando el motivo (autorizarSalidaAnticipada). Por
-       debajo del 75% no hay ninguna excepción posible.
+       al menos a MINIMO_CARGUE_ANTICIPADO y (b) un supervisor
+       autorizó la salida explicando el motivo
+       (autorizarSalidaAnticipada). Por debajo de ese mínimo no
+       hay ninguna excepción posible.
      - Un vehículo "Ambos" sin que el supervisor haya elegido
        todavía cuál de los dos está midiendo (avanceTipo null)
        se trata como Descargue: 100% sin excepción, porque no
        hay forma de saber si aplica la excepción de Cargue.
+
+   EL MÍNIMO SE CAMBIA AQUÍ Y EN NINGÚN OTRO LADO. Todo el resto
+   de la app (paneles de operario, supervisor, cliente y admin,
+   textos de las alertas, herramienta de backfill) lo lee de esta
+   constante: si vuelve a aparecer un número suelto en otro
+   archivo, es un error esperando a que alguien cambie el umbral.
    ========================================================= */
+
+// Mínimo de cargue para que un supervisor pueda siquiera autorizar
+// una salida anticipada. Subió de 75% a 95% por decisión del
+// cliente: la ventana de excepción ahora es 95–99%.
+export const MINIMO_CARGUE_ANTICIPADO = 95;
+
+// Avance con el que un vehículo sale sin necesitar autorización.
+export const MINIMO_SALIDA = 100;
 
 export function requiereAvanceCompleto(r) {
     return r.avancePorcentaje !== undefined && r.avancePorcentaje !== null;
 }
 
 export function avanceCompleto(r) {
-    return (r.avancePorcentaje || 0) >= 100;
+    return (r.avancePorcentaje || 0) >= MINIMO_SALIDA;
 }
 
 export function puedeAutorizarSalidaAnticipada(r) {
     if (!requiereAvanceCompleto(r)) return false;
     if (avanceCompleto(r)) return false;
     if (r.avanceTipo !== "Cargue") return false;
-    return (r.avancePorcentaje || 0) >= 75;
+    return (r.avancePorcentaje || 0) >= MINIMO_CARGUE_ANTICIPADO;
 }
 
 export function puedeRegistrarSalida(r) {
     if (!requiereAvanceCompleto(r)) return true;
     if (avanceCompleto(r)) return true;
     if (r.avanceTipo !== "Cargue") return false;
-    if ((r.avancePorcentaje || 0) < 75) return false;
+    if ((r.avancePorcentaje || 0) < MINIMO_CARGUE_ANTICIPADO) return false;
     return !!(r.autorizacionSalida && r.autorizacionSalida.motivo);
 }
 
@@ -504,12 +551,9 @@ export function puedeRegistrarSalida(r) {
      faltante    puntos que faltan para ese mínimo (0 si ninguno)
 
    `minimo`/`faltante` van en null cuando el bloqueo no se
-   resuelve subiendo el porcentaje (p. ej. ya está en el 75% y
-   lo único que falta es la firma del supervisor).
+   resuelve subiendo el porcentaje (p. ej. ya pasó el mínimo de
+   cargue y lo único que falta es la firma del supervisor).
    ========================================================= */
-
-export const MINIMO_CARGUE_ANTICIPADO = 75;
-export const MINIMO_SALIDA = 100;
 
 export function diagnosticoSalida(r) {
 
@@ -573,7 +617,7 @@ export function diagnosticoSalida(r) {
         };
     }
 
-    // Cargue por debajo del 75%: ni siquiera es autorizable.
+    // Cargue por debajo del mínimo: ni siquiera es autorizable.
     if (pct < MINIMO_CARGUE_ANTICIPADO) {
         return {
             puedeSalir: false, nivel: 'bloqueo',
@@ -584,7 +628,7 @@ export function diagnosticoSalida(r) {
         };
     }
 
-    // Cargue entre 75% y 99%: solo falta la firma del supervisor.
+    // Cargue entre el mínimo y el 99%: solo falta la firma del supervisor.
     return {
         puedeSalir: false, nivel: 'espera',
         titulo: 'Falta la autorización del supervisor',

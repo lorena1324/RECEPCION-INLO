@@ -27,13 +27,14 @@ import {
     suscribirseARegistros,
     actualizarUbicacion,
     registrarSalida,
+    agregarObservacion,
     eliminarRegistro as eliminarRegistroFirestore,
     getMuellesOcupacion,
     getMuellesLibres,
     getRegistrosEnMuelle,
     getRegistrosEnPatio,
-    puedeRegistrarSalida,
     requiereAvanceCompleto,
+    diagnosticoSalida,
     avanceCompleto,
     agregarOperacionFaltante,
     actualizarAvance,
@@ -43,6 +44,7 @@ import {
 } from "../shared/services/vehiculos.js";
 
 import {
+    canalDe,
     getDestino,
     getHistorial,
     getLocationDurations,
@@ -51,13 +53,12 @@ import {
     promedioMinutos,
     ordenarPorPrioridad,
     tituloHistorial,
-    nivelPrioridad,
-    getDiaOperativo,
-    diaConMasMovimiento
+    getDiaOperativo
 } from "../shared/services/eventos.js";
 
-import { nowLocal, today, fmtDt, formatDuration, fechaDentroDeRango, todayOperativo, diaOperativo } from "../shared/utils/tiempos.js";
+import { nowLocal, today, fmtDt, formatDuration, fechaDentroDeRango, todayOperativo, sumarDias } from "../shared/utils/tiempos.js";
 import { exportarExcel } from "../shared/utils/excel.js";
+import { renderPanelEstadisticas } from "../shared/services/estadisticas.js";
 
 /* Configuración por bodega. El admin no está atado a una sola
    operación: el selector del topbar cambia `operacionActual` y
@@ -331,7 +332,8 @@ function renderDashboard() {
                       renderAvance(rec) +
                       '<div style="margin-top:6px;display:flex;gap:4px;">' +
                         '<button class="btn btn-sm btn-primary" data-editar="' + rec.id + '">Mover</button>' +
-                        '<button class="btn btn-sm btn-danger" data-salida="' + rec.id + '">Salida</button>' +
+                        '<button class="btn btn-sm" data-observacion="' + rec.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
+                        '<button class="btn btn-sm btn-danger" data-salida="' + rec.id + '"' + attrsBotonSalida(rec) + '>Salida</button>' +
                         '<button class="btn btn-sm" data-detalle="' + rec.id + '"><i class="ti ti-info-circle"></i></button>' +
                       '</div>'
                     : '<div class="muelle-card-empty">Disponible</div>') +
@@ -354,6 +356,7 @@ function renderDashboard() {
                 '<td>' + fmtDt(r.horaEntrada) + '</td>' +
                 '<td>' + (r.operadorEntrada || '—') + '</td>' +
                 '<td><button class="btn btn-sm btn-primary" data-editar="' + r.id + '">Mover</button> ' +
+                    '<button class="btn btn-sm" data-observacion="' + r.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button> ' +
                     '<button class="btn btn-sm" data-detalle="' + r.id + '"><i class="ti ti-info-circle"></i></button></td>' +
             '</tr>';
         }).join('');
@@ -377,7 +380,7 @@ function badgeEstado(r) {
 
 function celdaMotivoPatio(r) {
     if (r.horaSalida || r.ubicacion !== 'Patio') return '<span style="color:var(--text-3);">—</span>';
-    if (!r.obsUbicacion) return '<span style="color:var(--amber-600);cursor:pointer;text-decoration:underline;" data-editar="' + r.id + '">Sin registrar</span>';
+    if (!r.obsUbicacion) return '<span style="color:var(--amber-600);cursor:pointer;text-decoration:underline;" data-observacion="' + r.id + '">Sin registrar</span>';
     var texto = r.obsUbicacion.length > 30 ? r.obsUbicacion.slice(0, 30) + '…' : r.obsUbicacion;
     return '<span title="' + r.obsUbicacion.replace(/"/g, '&quot;') + '">' + texto + '</span>';
 }
@@ -401,6 +404,21 @@ function renderRegistros() {
     var search = (document.getElementById('search-input').value || '').toLowerCase().trim();
     var list = registros.slice();
 
+    // Rango de fechas: por día operativo, igual que el resto del
+    // panel. Cualquiera de los dos extremos puede ir vacío (solo
+    // "desde" = de ahí en adelante; solo "hasta" = hasta ahí).
+    var desde = document.getElementById('reg-desde').value;
+    var hasta = document.getElementById('reg-hasta').value;
+    if (desde || hasta) {
+        list = list.filter(function (r) {
+            var dia = getDiaOperativo(r, HORA_CORTE);
+            if (!dia) return false;
+            if (desde && dia < desde) return false;
+            if (hasta && dia > hasta) return false;
+            return true;
+        });
+    }
+
     if (currentFilter === 'en_patio') list = list.filter(function (r) { return !r.horaSalida; });
     else if (currentFilter === 'salio') list = list.filter(function (r) { return !!r.horaSalida; });
     else if (currentFilter === 'Cargue' || currentFilter === 'Descargue') list = list.filter(function (r) { return r.tipo === currentFilter || r.tipo === 'Ambos'; });
@@ -418,7 +436,8 @@ function renderRegistros() {
     var tbody = document.getElementById('reg-table');
 
     if (!list.length) {
-        tbody.innerHTML = '<tr><td colspan="17" class="empty-state">Sin registros con estos filtros.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="17" class="empty-state">Sin registros con estos filtros' +
+            ((desde || hasta) ? ' (rango de fechas aplicado)' : '') + '.</td></tr>';
         return;
     }
 
@@ -446,8 +465,9 @@ function renderRegistros() {
             '<td>' + celdaMotivoPatio(r) + '</td>' +
             '<td>' + (r.operadorEntrada || '—') + '</td>' +
             '<td><div class="td-actions">' +
-                (!r.horaSalida ? '<button class="btn btn-sm btn-success" data-salida="' + r.id + '"><i class="ti ti-logout"></i></button>' : '') +
+                (!r.horaSalida ? '<button class="btn btn-sm btn-success" data-salida="' + r.id + '"' + attrsBotonSalida(r) + '><i class="ti ti-logout"></i></button>' : '') +
                 '<button class="btn btn-sm" data-editar="' + r.id + '"><i class="ti ti-edit"></i></button>' +
+                '<button class="btn btn-sm" data-observacion="' + r.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
                 '<button class="btn btn-sm" data-detalle="' + r.id + '"><i class="ti ti-info-circle"></i></button>' +
                 '<button class="btn btn-sm btn-danger" data-eliminar="' + r.id + '"><i class="ti ti-trash"></i></button>' +
             '</div></td>' +
@@ -543,7 +563,7 @@ function limpiarForm() {
     document.getElementById('f-servicio-empresa-text').value = clienteActual();
     document.getElementById('programacion-wrapper').style.display = 'none';
     document.getElementById('servicio-empresa-wrapper').style.display = 'none';
-    document.getElementById('f-canal').value = 'Sin canal';
+    document.getElementById('f-canal').value = 'Otro';
     escribirFechaHora('f-fecha-ingreso', 'f-hora-h', 'f-hora-m', nowLocal());
     document.getElementById('muelle-options').style.display = 'none';
 
@@ -564,8 +584,16 @@ async function registrarEntrada() {
     var canal = document.getElementById('f-canal').value;
     var tipo = getTipoSeleccionado();
     var programado = document.getElementById('f-programado').value;
+    // La cita se captura solo como HH:MM, así que hay que darle una
+    // fecha. Antes se usaba today(), la del día en que se digita: un
+    // camión que llegó ayer 23:00 con cita 22:30, registrado hoy,
+    // quedaba con la cita de HOY y el cumplimiento salía con 24h de
+    // error. La fecha correcta es la de la entrada, que es contra la
+    // que se compara. El cruce de medianoche (cita 23:50, llegada
+    // 00:10) lo corrige clasificarOnTime() en eventos.js.
     var horaProgramacionInput = leerHora('f-hora-programacion-h', 'f-hora-programacion-m');
-    var horaProgramacion = horaProgramacionInput ? (today() + 'T' + horaProgramacionInput) : '';
+    var fechaIngreso = document.getElementById('f-fecha-ingreso').value || today();
+    var horaProgramacion = horaProgramacionInput ? (fechaIngreso + 'T' + horaProgramacionInput) : '';
     var servicioTipo = document.getElementById('f-servicio-tipo').value;
     var servicioEmpresa = servicioTipo === 'Reciclaje' ? document.getElementById('f-servicio-empresa').value
         : servicioTipo === 'Insumos' ? document.getElementById('f-servicio-empresa-text').value : '';
@@ -619,25 +647,76 @@ async function registrarEntrada() {
    MODAL: SALIDA
    ========================================================= */
 
-function mensajeAvanceBloqueado(rec) {
-    if (!requiereAvanceCompleto(rec)) {
-        return '<div style="margin-top:6px;color:var(--amber-600);font-size:12.5px;"><i class="ti ti-alert-triangle"></i> Este vehículo no tiene avance de cargue/descargue registrado (es un registro anterior a esta función) — puede salir sin restricción de %. Verifica manualmente antes de confirmar.</div>';
+/* El aviso de por qué un vehículo no puede salir, con el mínimo y el
+   faltante. Misma alerta que ve el operario, construida sobre el mismo
+   diagnosticoSalida() de shared/services/vehiculos.js: el admin tiene
+   que ver exactamente lo que ve quien está en portería. Antes este
+   panel tenía su propia copia de las frases CON EL UMBRAL ESCRITO A
+   MANO, así que al subirlo de 75% a 95% habría seguido mostrando el
+   número viejo. */
+function attrsBotonSalida(rec) {
+    var d = diagnosticoSalida(rec);
+    if (d.puedeSalir) return '';
+    return ' data-bloqueada="1" title="' + d.titulo +
+        (d.faltante ? ' — faltan ' + d.faltante + '% para el ' + d.minimo + '%' : '') + '"';
+}
+
+function alertaSalida(rec) {
+
+    var d = diagnosticoSalida(rec);
+    if (d.nivel === 'ok') return '';
+
+    var estilo = d.nivel === 'bloqueo' ? 'bloqueo' : (d.nivel === 'espera' ? 'espera' : 'aviso');
+    var icono = d.nivel === 'bloqueo' ? 'ti-ban' : (d.nivel === 'espera' ? 'ti-hourglass-high' : 'ti-alert-triangle');
+
+    var medidor = '';
+    if (d.faltante) {
+        medidor =
+            '<div class="alerta-salida-medidor">' +
+                '<div class="alerta-salida-bar">' +
+                    '<div class="alerta-salida-bar-fill" style="width:' + d.porcentaje + '%"></div>' +
+                    '<div class="alerta-salida-bar-min" style="left:' + d.minimo + '%"></div>' +
+                '</div>' +
+                '<div class="alerta-salida-cifras">' +
+                    '<span>Actual: <strong>' + d.porcentaje + '%</strong></span>' +
+                    '<span>Mínimo: <strong>' + d.minimo + '%</strong></span>' +
+                    '<span class="alerta-salida-falta">Faltan: <strong>' + d.faltante + '%</strong></span>' +
+                '</div>' +
+            '</div>';
     }
 
-    if (puedeRegistrarSalida(rec)) return '';
+    return '<div class="alerta-salida alerta-salida-' + estilo + '">' +
+        '<div class="alerta-salida-top"><i class="ti ' + icono + '"></i>' + d.titulo + '</div>' +
+        '<div class="alerta-salida-detalle">' + d.detalle + '</div>' +
+        medidor +
+        (d.accion ? '<div class="alerta-salida-accion"><i class="ti ti-arrow-narrow-right"></i> ' + d.accion + '</div>' : '') +
+    '</div>';
+}
 
-    var pct = rec.avancePorcentaje || 0;
-    var texto;
+/* Pinta la alerta y habilita o bloquea el botón de confirmar. Se llama
+   al abrir el modal y otra vez en cada snapshot, para que si el avance
+   sube o alguien autoriza la salida mientras el modal está abierto, el
+   botón se destrabe solo. */
+function pintarEstadoSalida(rec) {
 
-    if (rec.avanceTipo !== 'Cargue') {
-        texto = 'El descargue está en ' + pct + '% — debe llegar al 100% para poder salir, sin excepción.';
-    } else if (pct < 75) {
-        texto = 'El cargue está en ' + pct + '% — debe llegar mínimo al 75% para que un supervisor pueda autorizar la salida.';
-    } else {
-        texto = 'El cargue está en ' + pct + '% — un supervisor debe autorizar la salida anticipada (con motivo) antes de poder registrarla.';
-    }
+    var d = diagnosticoSalida(rec);
 
-    return '<div style="margin-top:6px;color:var(--amber-600);font-size:12.5px;"><i class="ti ti-alert-triangle"></i> ' + texto + '</div>';
+    document.getElementById('modal-salida-info').innerHTML =
+        '<strong>' + rec.placa + '</strong> — ' + rec.conductor + alertaSalida(rec);
+
+    var btnConfirmar = document.getElementById('btn-confirmar-salida');
+    btnConfirmar.disabled = !d.puedeSalir;
+    btnConfirmar.title = d.puedeSalir ? '' : (d.accion || d.titulo);
+    btnConfirmar.innerHTML = d.puedeSalir
+        ? '<i class="ti ti-check"></i> Confirmar salida'
+        : '<i class="ti ti-lock"></i> Salida bloqueada';
+}
+
+function refrescarModalSalida() {
+    var modal = document.getElementById('modal-salida');
+    if (!modal.classList.contains('open')) return;
+    var rec = registros.find(function (r) { return r.id === selectedId; });
+    if (rec) pintarEstadoSalida(rec);
 }
 
 function openModalSalida(id) {
@@ -645,18 +724,72 @@ function openModalSalida(id) {
     var rec = registros.find(function (r) { return r.id === id; });
     if (!rec) return;
 
-    document.getElementById('modal-salida-info').innerHTML = '<strong>' + rec.placa + '</strong> — ' + rec.conductor + mensajeAvanceBloqueado(rec);
+    pintarEstadoSalida(rec);
     escribirFechaHora('m-fecha-salida', 'm-hora-salida-h', 'm-hora-salida-m', nowLocal());
     document.getElementById('m-obs-salida').value = '';
     document.getElementById('modal-salida').classList.add('open');
+}
+
+
+/* =========================================================
+   MODAL: OBSERVACIÓN RÁPIDA
+
+   Anotar algo no debería obligar a pasar por "Mover": ese modal pide
+   ubicación y canal, y para dejar una nota había que volver a
+   confirmar unos valores que no se querían tocar. Aquí solo se
+   escribe el texto; nada de la ubicación del vehículo se mueve.
+   ========================================================= */
+
+function openModalObservacion(id) {
+    selectedId = id;
+    var rec = registros.find(function (r) { return r.id === id; });
+    if (!rec) return;
+
+    document.getElementById('modal-observacion-info').innerHTML =
+        '<strong>' + rec.placa + '</strong> — ' + rec.conductor + ' · ' + getDestino(rec) +
+        (rec.obsUbicacion
+            ? '<div style="margin-top:6px;font-size:12.5px;color:var(--text-3);">Última observación: ' + rec.obsUbicacion + '</div>'
+            : '');
+
+    // El textarea arranca vacío a propósito: se agrega una observación
+    // nueva, no se edita la anterior (que queda en el historial).
+    document.getElementById('o-texto').value = '';
+    document.getElementById('modal-observacion').classList.add('open');
+    document.getElementById('o-texto').focus();
+}
+
+async function confirmarObservacion() {
+    var rec = registros.find(function (r) { return r.id === selectedId; });
+    if (!rec) return;
+
+    var texto = document.getElementById('o-texto').value.trim();
+    if (!texto) { toast('Escribe la observación antes de guardar', 'red', 'ti-alert-circle'); return; }
+
+    setSyncStatus('syncing');
+    try {
+        await agregarObservacion(rec.id, texto, perfilActual.nombre);
+        setSyncStatus('ok');
+        closeModal('modal-observacion');
+        toast('Observación guardada', 'green', 'ti-message-check');
+    } catch (error) {
+        setSyncStatus('error');
+        toast('No se pudo guardar la observación', 'red', 'ti-x');
+        console.error(error);
+    }
 }
 
 async function confirmarSalida() {
     var rec = registros.find(function (r) { return r.id === selectedId; });
     if (!rec) return;
 
-    if (!puedeRegistrarSalida(rec)) {
-        toast(rec.avanceTipo !== 'Cargue' ? 'El descargue debe llegar al 100% para salir' : 'Falta autorización del supervisor para esta salida', 'red', 'ti-alert-circle');
+    var diag = diagnosticoSalida(rec);
+    if (!diag.puedeSalir) {
+        toast(
+            diag.faltante
+                ? diag.titulo + ': faltan ' + diag.faltante + '% para el mínimo del ' + diag.minimo + '%'
+                : diag.titulo,
+            'red', 'ti-alert-circle'
+        );
         return;
     }
 
@@ -691,7 +824,7 @@ function openModalEditar(id) {
 
     document.getElementById('modal-editar-info').innerHTML = '<strong>' + rec.placa + '</strong> — Ubicación actual: ' + getDestino(rec);
     document.getElementById('e-ubicacion').value = rec.ubicacion || 'Patio';
-    document.getElementById('e-canal').value = rec.canal || 'Sin canal';
+    document.getElementById('e-canal').value = canalDe(rec);
     document.getElementById('e-obs-ubicacion').value = '';
     cambiarUbicacionEdit();
 
@@ -862,9 +995,9 @@ function exportarHoy() {
    AVANCE DE CARGUE/DESCARGUE  (capacidad de supervisor)
 
    Mismas reglas de negocio que en supervisor.js: el descargue
-   debe llegar al 100% sin excepción; el cargue puede salir
-   desde el 75% pero solo con autorización motivada. El admin
-   puede hacer las dos cosas sin cambiar de panel.
+   debe llegar al 100% sin excepción; el cargue puede salir desde
+   MINIMO_CARGUE_ANTICIPADO pero solo con autorización motivada.
+   El admin puede hacer las dos cosas sin cambiar de panel.
    ========================================================= */
 
 function escapar(s) {
@@ -924,6 +1057,7 @@ function renderAvance(r) {
         '</div>' +
         '<div class="avance-bar"><div class="avance-bar-fill" style="width:' + pct + '%"></div></div>' +
         '<div class="avance-btns">' +
+            '<button class="btn btn-sm" data-avance-add="' + r.id + ':1" ' + deshabilitado + '>+1%</button>' +
             '<button class="btn btn-sm" data-avance-add="' + r.id + ':5" ' + deshabilitado + '>+5%</button>' +
             '<button class="btn btn-sm" data-avance-add="' + r.id + ':10" ' + deshabilitado + '>+10%</button>' +
         '</div>' + aviso +
@@ -1050,6 +1184,7 @@ function suscribir() {
         setSyncStatus('ok');
         registros = data;
         renderTodo();
+        refrescarModalSalida();
         if (document.getElementById('muelle-options').style.display !== 'none') {
             poblarSelectMuelles(document.getElementById('f-numeroMuelle'), null);
         }
@@ -1058,118 +1193,138 @@ function suscribir() {
 
 
 /* =========================================================
-   ESTADÍSTICAS (día operativo 6am–6am, igual que supervisor)
+   ESTADÍSTICAS
+
+   El render completo vive en shared/services/estadisticas.js, el
+   mismo que usan supervisor y cliente: las tres vistas muestran
+   exactamente las mismas cifras y no pueden divergir. Aquí solo
+   queda lo propio de este panel — qué periodo está viendo el
+   usuario y qué registros entran.
+
+   El HTML de admin trae TODOS los contenedores (los del supervisor
+   y los del cliente), porque el administrador tiene que ver todo lo
+   que ve cualquier rol. Las funciones del módulo se saltan en
+   silencio los contenedores que un panel no traiga.
    ========================================================= */
 
-var chartDias = null, chartTipos = null, chartCanal = null, chartFranja = null;
+var estadPeriodoActual = 'todo';
+var rangoRecortado = 0;
+var MAX_DIAS_RANGO = 366;
 
-function destruirCharts() {
-    [chartDias, chartTipos, chartCanal, chartFranja].forEach(function (c) { if (c) c.destroy(); });
-    chartDias = chartTipos = chartCanal = chartFranja = null;
+function iniciarPeriodoEstadisticas() {
+    document.querySelectorAll('#view-estadisticas .filter-pills .pill').forEach(function (btn) {
+        btn.addEventListener('click', function () { setPeriodoEstadisticas(btn.dataset.periodo, btn); });
+    });
+    document.getElementById('estad-aplicar-rango').addEventListener('click', renderEstadisticas);
+    document.getElementById('ontime-canal').addEventListener('change', renderEstadisticas);
+}
+
+function setPeriodoEstadisticas(periodo, btn) {
+
+    estadPeriodoActual = periodo;
+    document.querySelectorAll('#view-estadisticas .filter-pills .pill').forEach(function (el) { el.classList.remove('active'); });
+    if (btn) btn.classList.add('active');
+
+    var custom = document.getElementById('estad-rango-custom');
+    if (periodo === 'personalizado') {
+        custom.style.display = 'flex';
+        if (!document.getElementById('estad-hasta').value) {
+            var hoyOp = todayOperativo(HORA_CORTE);
+            document.getElementById('estad-hasta').value = hoyOp;
+            document.getElementById('estad-desde').value = hoyOp;
+        }
+        return; // esperar a que el usuario pulse "Aplicar"
+    }
+
+    custom.style.display = 'none';
+    renderEstadisticas();
+}
+
+function getDiasOperativosDelPeriodo() {
+
+    var hoyOp = todayOperativo(HORA_CORTE);
+
+    if (estadPeriodoActual === 'personalizado') {
+        var desde = document.getElementById('estad-desde').value;
+        var hasta = document.getElementById('estad-hasta').value;
+        return buildDayRange(desde || hoyOp, hasta || hoyOp);
+    }
+
+    if (estadPeriodoActual === 'todo') {
+        var dias = {};
+        registros.forEach(function (r) {
+            var d = getDiaOperativo(r, HORA_CORTE);
+            if (d) dias[d] = true;
+        });
+        var lista = Object.keys(dias);
+        if (!lista.length) lista.push(hoyOp);
+        rangoRecortado = 0;
+        return lista.sort();
+    }
+
+    var nDias = estadPeriodoActual === '3dias' ? 3
+        : estadPeriodoActual === 'semana' ? 7
+        : estadPeriodoActual === 'mes' ? 30 : 1;
+
+    var salida = [];
+    rangoRecortado = 0;
+    for (var i = nDias - 1; i >= 0; i--) salida.push(sumarDias(hoyOp, -i));
+    return salida;
+}
+
+/* El rango personalizado tiene tope (un año) porque cada día es un
+   punto en las gráficas, pero cuando recorta lo dice en vez de
+   dejar al usuario creyendo que vio todo lo que pidió. */
+function buildDayRange(desde, hasta) {
+
+    var dias = [];
+    var cur = desde;
+    while (cur <= hasta && dias.length < MAX_DIAS_RANGO) {
+        dias.push(cur);
+        cur = sumarDias(cur, 1);
+    }
+
+    var pedidos = Math.round(
+        (new Date(hasta + 'T12:00:00Z') - new Date(desde + 'T12:00:00Z')) / 86400000
+    ) + 1;
+    rangoRecortado = Math.max(0, pedidos - dias.length);
+
+    return dias.length ? dias : [todayOperativo(HORA_CORTE)];
+}
+
+function pintarAvisoRango() {
+    var el = document.getElementById('estad-aviso-rango');
+    if (!el) return;
+    if (estadPeriodoActual !== 'personalizado' || !rangoRecortado) {
+        el.style.display = 'none';
+        return;
+    }
+    el.style.display = '';
+    el.textContent = 'El rango pedido es más largo de lo que este panel puede graficar: se están ' +
+        'mostrando los primeros ' + MAX_DIAS_RANGO + ' días y quedaron ' + rangoRecortado + ' por fuera.';
 }
 
 function renderEstadisticas() {
 
     if (!document.getElementById('view-estadisticas').classList.contains('active')) return;
-    if (typeof Chart === 'undefined') return;
 
-    var total = registros.length;
-    var salidas = registros.filter(function (r) { return !!r.horaSalida; }).length;
-    var activos = total - salidas;
+    var dias = getDiasOperativosDelPeriodo();
+    pintarAvisoRango();
+    var diasSet = {};
+    dias.forEach(function (d) { diasSet[d] = true; });
 
-    document.getElementById('es-total').textContent = total;
-    document.getElementById('es-salidas').textContent = salidas;
-    document.getElementById('es-activos').textContent = activos;
+    // El filtro de canal de la caja de on time recorta toda la vista:
+    // así no hay dos universos distintos en la misma pantalla.
+    var selCanal = document.getElementById('ontime-canal');
+    var canal = selCanal ? selCanal.value : '';
+    var base = canal ? registros.filter(function (r) { return canalDe(r) === canal; }) : registros;
 
-    var enPatio = getRegistrosEnPatio(registros);
-    var enAlerta = enPatio.filter(function (r) { return nivelPrioridad(minutosEsperando(r)) === 'alta'; }).length;
-    document.getElementById('es-alerta').textContent = enAlerta;
-
-    var mejor = diaConMasMovimiento(registros, HORA_CORTE);
-    document.getElementById('es-mejor-dia').textContent = mejor ? mejor.dia : '—';
-    document.getElementById('es-mejor-dia-detalle').textContent = mejor
-        ? mejor.total + ' movimientos (' + mejor.entradas + ' entradas · ' + mejor.salidas + ' salidas)'
-        : 'Sin datos todavía';
-
-    // Últimos 7 días operativos
-    var dias = [];
-    for (var i = 6; i >= 0; i--) {
-        var d = new Date();
-        d.setDate(d.getDate() - i);
-        dias.push(diaOperativo(d.toISOString(), HORA_CORTE));
-    }
-
-    var entradasPorDia = dias.map(function (dia) {
-        return registros.filter(function (r) { return getDiaOperativo(r, HORA_CORTE) === dia; }).length;
-    });
-    var salidasPorDia = dias.map(function (dia) {
-        return registros.filter(function (r) { return r.horaSalida && diaOperativo(r.horaSalida, HORA_CORTE) === dia; }).length;
-    });
-
-    destruirCharts();
-
-    chartDias = new Chart(document.getElementById('chart-dias'), {
-        type: 'bar',
-        data: {
-            labels: dias,
-            datasets: [
-                { label: 'Entradas', data: entradasPorDia, backgroundColor: '#2563eb', borderRadius: 4 },
-                { label: 'Salidas', data: salidasPorDia, backgroundColor: '#3B6D11', borderRadius: 4 }
-            ]
-        },
-        options: { plugins: { legend: { position: 'bottom' } }, responsive: true }
-    });
-
-    // Tipos de operación
-    var cont = { Cargue: 0, Descargue: 0, Ambos: 0 };
-    registros.forEach(function (r) { if (cont[r.tipo] !== undefined) cont[r.tipo]++; });
-
-    chartTipos = new Chart(document.getElementById('chart-tipos'), {
-        type: 'doughnut',
-        data: {
-            labels: ['Cargue', 'Descargue', 'Ambos'],
-            datasets: [{ data: [cont.Cargue, cont.Descargue, cont.Ambos], backgroundColor: ['#2563eb', '#854F0B', '#3B6D11'] }]
-        },
-        options: { plugins: { legend: { position: 'bottom' } } }
-    });
-
-    // Canal
-    var canales = {};
-    registros.forEach(function (r) {
-        var c = r.canal || 'Sin canal';
-        canales[c] = (canales[c] || 0) + 1;
-    });
-
-    chartCanal = new Chart(document.getElementById('chart-canal'), {
-        type: 'bar',
-        data: {
-            labels: Object.keys(canales),
-            datasets: [{ label: 'Vehículos', data: Object.keys(canales).map(function (k) { return canales[k]; }), backgroundColor: '#2563eb', borderRadius: 4 }]
-        },
-        options: { plugins: { legend: { display: false } } }
-    });
-
-    // Franja horaria del día operativo actual (eje arranca a las 6am)
-    var diaHoy = todayOperativo(HORA_CORTE);
-    var porHora = new Array(24).fill(0);
-    registros.filter(function (r) { return getDiaOperativo(r, HORA_CORTE) === diaHoy; })
-        .forEach(function (r) {
-            if (!r.horaEntrada) return;
-            var h = new Date(r.horaEntrada).getHours();
-            if (!isNaN(h)) porHora[h]++;
-        });
-
-    var labelsH = [], valoresH = [];
-    for (var j = 0; j < 24; j++) {
-        var hh = (HORA_CORTE + j) % 24;
-        labelsH.push(hh + 'h');
-        valoresH.push(porHora[hh]);
-    }
-
-    chartFranja = new Chart(document.getElementById('chart-franja'), {
-        type: 'bar',
-        data: { labels: labelsH, datasets: [{ label: 'Entradas', data: valoresH, backgroundColor: '#854F0B', borderRadius: 4 }] },
-        options: { plugins: { legend: { display: false } } }
+    renderPanelEstadisticas({
+        recs: base.filter(function (r) { return diasSet[getDiaOperativo(r, HORA_CORTE)]; }),
+        base: base,
+        todos: registros,
+        dias: dias,
+        horaCorte: HORA_CORTE
     });
 }
 
@@ -1183,6 +1338,9 @@ function wireDelegatedClicks() {
 
         var btnEditar = e.target.closest('[data-editar]');
         if (btnEditar) { openModalEditar(btnEditar.getAttribute('data-editar')); return; }
+
+        var btnObservacion = e.target.closest('[data-observacion]');
+        if (btnObservacion) { openModalObservacion(btnObservacion.getAttribute('data-observacion')); return; }
 
         var btnSalida = e.target.closest('[data-salida]');
         if (btnSalida) { openModalSalida(btnSalida.getAttribute('data-salida')); return; }
@@ -1254,6 +1412,18 @@ function iniciarPagina(perfil) {
         cambiarOperacion(e.target.value);
     });
 
+    // Controles propios de la caja de on time (esta vista no tiene
+    // los selectores de periodo y canal que sí trae el supervisor).
+    iniciarPeriodoEstadisticas();
+
+    document.getElementById('reg-desde').addEventListener('change', renderRegistros);
+    document.getElementById('reg-hasta').addEventListener('change', renderRegistros);
+    document.getElementById('btn-limpiar-fechas').addEventListener('click', function () {
+        document.getElementById('reg-desde').value = '';
+        document.getElementById('reg-hasta').value = '';
+        renderRegistros();
+    });
+
     pintarEtiquetasOperacion();
     suscribir();
 
@@ -1283,6 +1453,7 @@ function iniciarPagina(perfil) {
     document.getElementById('e-ubicacion').addEventListener('change', cambiarUbicacionEdit);
     document.getElementById('btn-confirmar-salida').addEventListener('click', confirmarSalida);
     document.getElementById('btn-confirmar-edicion').addEventListener('click', confirmarEdicionUbicacion);
+    document.getElementById('btn-confirmar-observacion').addEventListener('click', confirmarObservacion);
 
     // Exportar
     document.getElementById('btn-export-todos').addEventListener('click', exportarTodos);

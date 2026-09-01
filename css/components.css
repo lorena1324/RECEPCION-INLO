@@ -178,6 +178,41 @@ textarea { resize: vertical; min-height: 64px; }
 .pill:hover { border-color: var(--blue-600); color: var(--blue-600); }
 .pill.active { background: var(--blue-600); color: #fff; border-color: var(--blue-600); }
 
+/* Rango de fechas personalizado de las vistas de estadísticas y de
+   registros. Lo usan supervisor, cliente y admin, así que vive aquí
+   y no en el CSS de un rol. Arranca oculto: solo la pill
+   "Personalizado" lo muestra. */
+.estad-rango-custom {
+    display: none;
+    gap: 14px;
+    align-items: end;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.estad-rango-custom label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--text-2);
+}
+
+/* Rango de fechas dentro de la barra de filtros de Registros. A
+   diferencia del de estadísticas, este siempre está visible: no hay
+   una pill que lo abra, se usa junto a la búsqueda y a los filtros
+   de estado. */
+.rango-registros {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 12.5px;
+    color: var(--text-2);
+}
+
+.rango-registros label { display: flex; align-items: center; gap: 6px; }
+
 /* ── Grilla de muelles ── */
 .muelles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 24px; }
 .muelle-card {
@@ -203,7 +238,11 @@ textarea { resize: vertical; min-height: 64px; }
 .avance-pct { font-weight: 600; font-size: 12.5px; color: var(--text-1); }
 .avance-bar { height: 6px; border-radius: 4px; background: var(--surface-3); overflow: hidden; margin-bottom: 6px; }
 .avance-bar-fill { height: 100%; background: var(--blue-600); border-radius: 4px; transition: width .2s; }
-.avance-btns { display: flex; gap: 4px; }
+/* Tres botones (+1 / +5 / +10) dentro de una tarjeta de muelle que
+   en J3 mide un cuarto de fila: se reparten el ancho y bajan de
+   línea antes que desbordar. */
+.avance-btns { display: flex; flex-wrap: wrap; gap: 4px; }
+.avance-btns .btn-sm { flex: 1 1 auto; padding: 5px 8px; justify-content: center; }
 
 /* Tamaño de la muestra al lado de un promedio de tiempo: cuántos
    vehículos terminados lo sustentan. Un "3h" sobre un solo vehículo
@@ -225,6 +264,11 @@ thead th {
 }
 tbody td { padding: 10px 14px; border-bottom: 0.5px solid var(--border); color: var(--text-2); }
 tbody tr:last-child td { border-bottom: none; }
+tfoot th {
+    text-align: left; padding: 10px 14px; font-size: 12px; font-weight: 600;
+    color: var(--text-1); background: var(--surface-2);
+    border-top: 0.5px solid var(--border-md);
+}
 tbody tr:hover { background: var(--surface-2); }
 .td-placa { font-weight: 600; font-size: 13.5px; letter-spacing: .5px; color: var(--text-1); }
 .td-actions { display: flex; gap: 6px; }
@@ -267,4 +311,317 @@ tbody tr:hover { background: var(--surface-2); }
 /* ── Exportar ── */
 .export-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 20px 24px; margin-bottom: 16px; }
 .export-row { display: flex; gap: 10px; flex-wrap: wrap; }
-.danger-card { background: var(--red-50); border: 0.5px solid #F09595; border-radius: var(--radius-lg); padding: 20px 24px; }
+.danger-card { background: var(--red-50); border: 0.5px solid #F09595; border-radius: var(--radius-lg); padding: 20px 24px; }/* ── Cumplimiento de cita (on time) ──
+   Tabla y barras horizontales lado a lado; en pantalla angosta la
+   gráfica baja debajo de la tabla en vez de espicharse. */
+.ontime-layout {
+    display: grid;
+    grid-template-columns: minmax(240px, 340px) 1fr;
+    gap: 18px;
+    align-items: start;
+}
+
+@media (max-width: 820px) {
+    .ontime-layout { grid-template-columns: 1fr; }
+}
+
+.ontime-grafica { min-height: 210px; }
+
+.ontime-controles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 12.5px;
+    color: var(--text-2);
+}
+
+.ontime-controles label { display: flex; align-items: center; gap: 6px; }
+
+/* Punto de color del tramo, para que la tabla se lea igual que la
+   barra sin tener que cruzar la mirada entre las dos. */
+.ontime-punto {
+    display: inline-block;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    margin-right: 7px;
+    vertical-align: middle;
+}
+
+.ontime-rojo     { background: #dc2626; }
+.ontime-amarillo { background: #f59e0b; }
+.ontime-verde    { background: #10b981; }
+
+/* =========================================================
+   ALERTA DE SALIDA BLOQUEADA
+
+   La usan el panel del operario y el del administrador: los dos
+   abren el mismo modal de salida y tienen que ver exactamente la
+   misma explicación de por qué el vehículo no puede despacharse.
+   Por eso vive aquí y no en el CSS de un rol.
+   ========================================================= */
+
+
+.alerta-salida {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 0.5px solid var(--border-md);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.alerta-salida-bloqueo { background: var(--red-50);   border-color: var(--red-600);   color: var(--red-600); }
+.alerta-salida-espera  { background: var(--amber-50); border-color: var(--amber-600); color: var(--amber-800); }
+.alerta-salida-aviso   { background: var(--amber-50); border-color: var(--amber-600); color: var(--amber-800); }
+
+.alerta-salida-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.alerta-salida-detalle { color: var(--text-2); }
+
+.alerta-salida-accion {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 0.5px dashed var(--border-md);
+  font-weight: 600;
+}
+
+/* Medidor: barra de avance con una marca en el mínimo exigido,
+   para que se vea de un vistazo cuánto falta para cruzarlo. */
+.alerta-salida-medidor { margin-top: 8px; }
+
+.alerta-salida-bar {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.alerta-salida-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: currentColor;
+  opacity: 0.55;
+}
+
+.alerta-salida-bar-min {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: currentColor;
+}
+
+.alerta-salida-cifras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+/* Botón de salida de un vehículo bloqueado: sigue siendo
+   clicable (abre el modal con la explicación), pero se marca
+   para que el operario no se lleve la sorpresa al abrirlo. */
+.btn[data-bloqueada] {
+  position: relative;
+  filter: grayscale(0.45);
+}
+
+.btn[data-bloqueada]::after {
+  content: "!";
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--amber-600);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 13px;
+  text-align: center;
+}
+
+
+/* =========================================================
+   PANEL DE ESTADÍSTICAS (compartido)
+
+   Tendencias, árbol de oportunidades, cuadro de pérdida y las
+   tablas del panel. Vivían solo en clientes.css y supervisor.css;
+   ahora el panel de admin muestra los mismos bloques, así que los
+   estilos suben aquí en vez de copiarse una tercera vez.
+   ========================================================= */
+/* ── Tendencias contra el periodo anterior ── */
+
+.tendencias-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.tendencia-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.tendencia-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.tendencia-valor {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.tend-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 20px;
+}
+
+/* Verde = vamos mejor, rojo = vamos peor. En los tiempos y en la
+   pérdida, "mejor" es que el número baje; en las entradas, que suba. */
+.tend-bien  { background: #EAF3DE; color: #3B6D11; }
+
+.tend-mal   { background: #FCEBEB; color: #A32D2D; }
+
+.tend-igual { background: #F1EFE8; color: #5F5E5A; }
+
+/* ── Cuadro de pérdida de operación ── */
+
+.cards-resumen.perdida .card-resumen {
+  border-left: 4px solid #f59e0b;
+}
+
+/* ── Árbol de oportunidades ── */
+
+.arbol {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.arbol-rama {
+  border-left: 3px solid #2563eb;
+  padding-left: 14px;
+}
+
+.arbol-nodo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.arbol-nombre {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.arbol-cifra {
+  font-size: 12.5px;
+  color: #5F5E5A;
+  font-variant-numeric: tabular-nums;
+}
+
+.arbol-barra {
+  height: 8px;
+  background: #F1EFE8;
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 7px 0 4px;
+}
+
+.arbol-barra span {
+  display: block;
+  height: 100%;
+  background: #2563eb;
+  border-radius: 4px;
+}
+
+.arbol-pct {
+  font-size: 11.5px;
+  color: #888780;
+  margin-bottom: 8px;
+}
+
+.arbol-hoja {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  color: #5F5E5A;
+  padding: 5px 0 5px 14px;
+  border-left: 2px solid #e5e7eb;
+  margin-left: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Bloque pendiente de empalme informático ── */
+
+.stat-box.pendiente {
+  background: #FAEEDA;
+  border-color: #f59e0b;
+}
+
+.stat-box.pendiente h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #854F0B;
+}
+
+/* Tablas del panel de estadísticas (distintas de las tablas de
+   registros, que usan el elemento <table> pelado de arriba). */
+.tabla-wrap { overflow-x: auto; }
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.tabla th, .tabla td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 0.5px solid var(--border);
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+
+.tabla th {
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: .03em;
+}

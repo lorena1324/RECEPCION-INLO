@@ -125,3 +125,14 @@
     color: var(--text-3);
     margin: 22px 0 10px;
 }
+/* Una caja que ocupa el ancho completo de la grilla de estadísticas
+   (la de on time: tabla y barras lado a lado necesitan el espacio). */
+.stat-box.full { grid-column: 1 / -1; }
+
+/* Ya existía en supervisor.css y clientes.css; el panel de admin la
+   necesita ahora que comparte la caja de on time con ellos. */
+.texto-ayuda {
+    color: var(--text-3);
+    font-size: 12.5px;
+    margin: 0 0 10px;
+}

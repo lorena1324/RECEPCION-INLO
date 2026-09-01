@@ -253,9 +253,9 @@
                         <div class="form-group full">
                             <label for="f-canal">Canal *</label>
                             <select id="f-canal">
-                                <option value="Sin canal">Sin canal</option>
                                 <option value="MQ">MQ</option>
                                 <option value="3PD">3PD</option>
+                                <option value="Otro">Otro</option>
                             </select>
                         </div>
 
@@ -292,7 +292,13 @@
                         <button class="pill" data-filter="Cargue">Cargue</button>
                         <button class="pill" data-filter="Descargue">Descargue</button>
                     </div>
+                    <div class="rango-registros">
+                        <label>Desde <input type="date" id="reg-desde"></label>
+                        <label>Hasta <input type="date" id="reg-hasta"></label>
+                        <button class="btn btn-sm" id="btn-limpiar-fechas"><i class="ti ti-x"></i> Limpiar</button>
+                    </div>
                 </div>
+                <p class="texto-ayuda">Las fechas van por día operativo (6am a 6am): un vehículo que entró a las 2am aparece en el día anterior.</p>
                 <div class="table-wrap">
                     <table>
                         <thead>
@@ -309,52 +315,191 @@
 
             <!-- ESTADÍSTICAS -->
             <div id="view-estadisticas" class="view">
+                <div class="toolbar">
+                    <div class="filter-pills">
+                        <button class="pill" data-periodo="hoy">Hoy</button>
+                        <button class="pill" data-periodo="3dias">Últimos 3 días</button>
+                        <button class="pill" data-periodo="semana">Última semana</button>
+                        <button class="pill" data-periodo="mes">Último mes</button>
+                        <button class="pill active" data-periodo="todo">Todo</button>
+                        <button class="pill" data-periodo="personalizado">Personalizado</button>
+                    </div>
+                </div>
+                <div id="estad-rango-custom" class="estad-rango-custom">
+                    <label>Desde <input type="date" id="estad-desde"></label>
+                    <label>Hasta <input type="date" id="estad-hasta"></label>
+                    <button class="btn btn-primary" id="estad-aplicar-rango"><i class="ti ti-filter"></i> Aplicar</button>
+                </div>
+                <p class="texto-ayuda">Los días de este panel van de 6am a 6am (turno operativo), no de medianoche a medianoche.</p>
+                <p class="texto-ayuda" id="estad-aviso-rango" style="display:none;"></p>
+
+                <!-- Tendencias: periodo actual contra el anterior del mismo tamaño -->
+                <div class="subtitulo">Tendencia frente al periodo anterior</div>
+                <div class="tendencias-row">
+                  <div class="tendencia-card">
+                    <div class="tendencia-label">Entradas</div>
+                    <div class="tendencia-valor" id="tend-entradas-valor">0</div>
+                    <div class="tend-delta" id="tend-entradas">—</div>
+                  </div>
+                  <div class="tendencia-card">
+                    <div class="tendencia-label">Tiempo promedio en patio</div>
+                    <div class="tendencia-valor" id="tend-patio-valor">0 min</div>
+                    <div class="tend-delta" id="tend-patio">—</div>
+                  </div>
+                  <div class="tendencia-card">
+                    <div class="tendencia-label">Pérdida de operación</div>
+                    <div class="tendencia-valor" id="tend-perdida-valor">0 h</div>
+                    <div class="tend-delta" id="tend-perdida">—</div>
+                  </div>
+                </div>
+
                 <div class="cards-resumen">
-                    <div class="card-resumen destacada">
-                        <div class="card-resumen-valor" id="es-mejor-dia">—</div>
-                        <div class="card-resumen-label"><i class="ti ti-trending-up"></i> Día con más movimiento</div>
-                        <div class="card-resumen-detalle" id="es-mejor-dia-detalle"></div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-total">0</div>
+                    <div class="card-resumen-label"><i class="ti ti-truck"></i> Entradas en el periodo</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-salidas">0</div>
+                    <div class="card-resumen-label"><i class="ti ti-logout"></i> Salidas en el periodo</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-promedio">0 min</div>
+                    <div class="card-resumen-label"><i class="ti ti-clock-hour-4"></i> Tiempo promedio en patio</div>
+                    <div class="card-resumen-detalle" id="es-promedio-nota"></div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-promedio-muelle">0 min</div>
+                    <div class="card-resumen-label"><i class="ti ti-door"></i> Tiempo promedio en muelle</div>
+                    <div class="card-resumen-detalle" id="es-promedio-muelle-nota"></div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-cargue-pct">0%</div>
+                    <div class="card-resumen-label"><i class="ti ti-package-import"></i> Con cargue</div>
+                  </div>
+                  <div class="card-resumen destacada">
+                    <div class="card-resumen-valor" id="es-pico">—</div>
+                    <div class="card-resumen-label"><i class="ti ti-calendar-stats"></i> Día con más movimiento</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-total-general">0</div>
+                    <div class="card-resumen-label"><i class="ti ti-database"></i> Vehículos registrados (general)</div>
+                  </div>
+                </div>
+
+                <!-- Cuadro de pérdida de operación -->
+                <div class="subtitulo">Pérdida de operación</div>
+                <div class="cards-resumen perdida">
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-perdida-horas">0 h</div>
+                    <div class="card-resumen-label"><i class="ti ti-hourglass-low"></i> Tiempo perdido sobre la meta</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-perdida-vehiculos">0</div>
+                    <div class="card-resumen-label"><i class="ti ti-truck-off"></i> Vehículos afectados</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-perdida-promedio">0 min</div>
+                    <div class="card-resumen-label"><i class="ti ti-clock-exclamation"></i> Exceso promedio</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-perdida-pct">0%</div>
+                    <div class="card-resumen-label"><i class="ti ti-percentage"></i> De los vehículos que ya salieron</div>
+                  </div>
+                </div>
+                <div id="es-perdida-detalle"></div>
+
+                <!-- Árbol de oportunidades -->
+                <div class="subtitulo">Árbol de oportunidades</div>
+                <div class="stat-box full">
+                  <p class="texto-ayuda">Dónde se concentra el tiempo perdido: primero por operación (canal), y dentro de cada una por tipo de movimiento. Lo de arriba es lo que más pesa.</p>
+                  <div id="es-arbol-body">Cargando…</div>
+                </div>
+
+                <div class="stats-grid" style="margin-top:18px;">
+                  <div class="stat-box full">
+                    <h3>Entradas y salidas por día</h3>
+                    <canvas id="chart-entradas-dia"></canvas>
+                  </div>
+                  <div class="stat-box full">
+                    <h3>Franja horaria</h3>
+                    <canvas id="chart-franja-horaria"></canvas>
+                  </div>
+                  <div class="stat-box">
+                    <h3>Tipo de operación</h3>
+                    <canvas id="chart-tipo"></canvas>
+                  </div>
+                  <div class="stat-box">
+                    <h3>Vehículos por canal</h3>
+                    <canvas id="chart-canal"></canvas>
+                  </div>
+                  <div class="stat-box">
+                    <h3>Tiempo promedio en patio por día</h3>
+                    <canvas id="chart-tiempo-patio"></canvas>
+                  </div>
+                  <div class="stat-box">
+                    <h3>Tiempo promedio en muelle por día</h3>
+                    <canvas id="chart-tiempo-muelle"></canvas>
+                  </div>
+                  <div class="stat-box full">
+                    <h3>Muelles más usados</h3>
+                    <canvas id="chart-muelles-general"></canvas>
+                  </div>
+                </div>
+
+                <div class="stats-grid" style="margin-top:18px;">
+                  <div class="stat-box full">
+                    <h3>Tiempos por operación y tipo de movimiento</h3>
+                    <p class="texto-ayuda">Cargue y descargue segmentados por canal, con el tiempo en patio y en muelle por separado.</p>
+                    <div id="es-segmentado-body">Cargando…</div>
+                  </div>
+                  <div class="stat-box">
+                    <h3>Promedio por tipo</h3>
+                    <p class="texto-ayuda">Tiempo en patio y muelle por tipo de operación</p>
+                    <div id="estad-por-tipo-body">Cargando…</div>
+                  </div>
+                  <div class="stat-box">
+                    <h3>Promedio por canal</h3>
+                    <p class="texto-ayuda">Tiempo en patio por canal (MQ / 3PD / Otro)</p>
+                    <div id="estad-por-canal-body">Cargando…</div>
+                  </div>
+                </div>
+
+
+                <div class="stats-grid" style="margin-top:18px;">
+                    <div class="stat-box">
+                        <h3>Vehículos por operario</h3>
+                        <p class="texto-ayuda">Cuántos vehículos atendió cada operario en el periodo</p>
+                        <canvas id="chart-operador"></canvas>
                     </div>
-                    <div class="card-resumen">
-                        <div class="card-resumen-valor" id="es-total">0</div>
-                        <div class="card-resumen-label"><i class="ti ti-truck"></i> Vehículos (histórico)</div>
-                    </div>
-                    <div class="card-resumen">
-                        <div class="card-resumen-valor" id="es-activos">0</div>
-                        <div class="card-resumen-label"><i class="ti ti-clock-play"></i> Activos ahora</div>
-                    </div>
-                    <div class="card-resumen">
-                        <div class="card-resumen-valor" id="es-salidas">0</div>
-                        <div class="card-resumen-label"><i class="ti ti-logout"></i> Salidas registradas</div>
-                    </div>
-                    <div class="card-resumen">
-                        <div class="card-resumen-valor" id="es-alerta">0</div>
-                        <div class="card-resumen-label alerta"><i class="ti ti-alert-triangle"></i> En alerta</div>
+                    <div class="stat-box">
+                        <h3>Muelles más usados por operario</h3>
+                        <p class="texto-ayuda">Muelle preferido de cada operario y cuántas veces lo usó</p>
+                        <div id="estad-muelles-operario-body">Cargando…</div>
                     </div>
                 </div>
 
-                <div class="subtitulo">Movimiento y composición</div>
-                <div class="stats-grid">
-                    <div class="stat-box">
-                        <h3>Entradas y salidas por día operativo (últimos 7 días)</h3>
-                        <canvas id="chart-dias"></canvas>
-                    </div>
-                    <div class="stat-box">
-                        <h3>Tipos de operación</h3>
-                        <canvas id="chart-tipos"></canvas>
-                    </div>
-                    <div class="stat-box">
-                        <h3>Vehículos por canal</h3>
-                        <canvas id="chart-canal"></canvas>
-                    </div>
-                    <div class="stat-box">
-                        <h3>Entradas por franja horaria (hoy, 6am–6am)</h3>
-                        <canvas id="chart-franja"></canvas>
+                <div class="stats-grid" style="margin-top:18px;">
+                    <div class="stat-box full">
+                        <h3>Cumplimiento de cita (on time)</h3>
+                        <p class="texto-ayuda">Llegada real contra la hora programada. Solo entran los vehículos que traían cita.</p>
+                        <div class="ontime-controles">
+                            <label>Canal
+                                <select id="ontime-canal">
+                                    <option value="">Todos los canales</option>
+                                    <option value="MQ">MQ</option>
+                                    <option value="3PD">3PD</option>
+                                    <option value="Otro">Otro</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="ontime-layout">
+                            <div id="ontime-tabla">Cargando…</div>
+                            <div class="ontime-grafica"><canvas id="chart-ontime"></canvas></div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- EXPORTAR -->
             <div id="view-exportar" class="view">
                 <div class="export-card">
                     <h3>Exportar a Excel (.xlsx)</h3>
@@ -394,6 +539,25 @@
     </div>
 </div>
 
+<!-- MODAL: OBSERVACIÓN RÁPIDA -->
+<div class="modal-backdrop" id="modal-observacion">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title"><i class="ti ti-message-plus"></i> Agregar observación</div>
+            <button class="modal-close" data-close="modal-observacion"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-info-box" id="modal-observacion-info"></div>
+        <div class="form-group full">
+            <label for="o-texto">Observación</label>
+            <textarea id="o-texto" placeholder="Qué está pasando con este vehículo…"></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" data-close="modal-observacion">Cancelar</button>
+            <button class="btn btn-primary" id="btn-confirmar-observacion"><i class="ti ti-check"></i> Guardar observación</button>
+        </div>
+    </div>
+</div>
+
 <!-- MODAL: EDITAR UBICACIÓN -->
 <div class="modal-backdrop" id="modal-editar">
     <div class="modal">
@@ -416,9 +580,9 @@
         <div class="form-group full" style="margin-top:10px;">
             <label for="e-canal">Canal</label>
             <select id="e-canal">
-                <option value="Sin canal">Sin canal</option>
                 <option value="MQ">MQ</option>
                 <option value="3PD">3PD</option>
+                <option value="Otro">Otro</option>
             </select>
         </div>
         <div class="form-group full" style="margin-top:10px;">

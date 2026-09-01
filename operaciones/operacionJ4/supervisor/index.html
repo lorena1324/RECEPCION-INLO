@@ -81,6 +81,7 @@
           <option value="">Todos los canales</option>
           <option value="MQ">MQ</option>
           <option value="3PD">3PD</option>
+          <option value="Otro">Otro</option>
         </select>
       </div>
     </header>
@@ -288,6 +289,17 @@
         </div>
 
         <div class="stats-grid" style="margin-top:18px;">
+          <div class="stat-box full">
+            <h3>Cumplimiento de cita (on time)</h3>
+            <p class="texto-ayuda">
+              Llegada real contra la hora programada. Solo entran los vehículos que traían cita;
+              usa el periodo de arriba y el filtro de canal de la barra superior.
+            </p>
+            <div class="ontime-layout">
+              <div id="ontime-tabla">Cargando…</div>
+              <div class="ontime-grafica"><canvas id="chart-ontime"></canvas></div>
+            </div>
+          </div>
           <div class="stat-box">
             <h3>Promedio por tipo</h3>
             <p class="texto-ayuda">Tiempo en patio y muelle por tipo de operación</p>
@@ -295,7 +307,7 @@
           </div>
           <div class="stat-box">
             <h3>Promedio por canal</h3>
-            <p class="texto-ayuda">Tiempo en patio por canal (MQ / 3PD)</p>
+            <p class="texto-ayuda">Tiempo en patio por canal (MQ / 3PD / Otro)</p>
             <div id="estad-por-canal-body">Cargando…</div>
           </div>
           <div class="stat-box full">

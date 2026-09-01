@@ -27,6 +27,7 @@ import {
     suscribirseARegistros,
     actualizarUbicacion,
     registrarSalida,
+    agregarObservacion,
     eliminarRegistro as eliminarRegistroFirestore,
     getMuellesOcupacion,
     getMuellesLibres,
@@ -38,6 +39,7 @@ import {
 } from "../../../shared/services/vehiculos.js";
 
 import {
+    canalDe,
     getDestino,
     getHistorial,
     getDiaOperativo,
@@ -305,6 +307,7 @@ function renderDashboard() {
                       renderAvanceSoloLectura(rec, false) +
                       '<div style="margin-top:6px;display:flex;gap:4px;">' +
                         '<button class="btn btn-sm btn-primary" data-editar="' + rec.id + '">Mover</button>' +
+                        '<button class="btn btn-sm" data-observacion="' + rec.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
                         '<button class="btn btn-sm btn-danger" data-salida="' + rec.id + '"' + attrsBotonSalida(rec) + '>Salida</button>' +
                       '</div>'
                     : '<div class="muelle-card-empty">Disponible</div>') +
@@ -327,6 +330,7 @@ function renderDashboard() {
                 '<td>' + fmtDt(r.horaEntrada) + '</td>' +
                 '<td>' + (r.operadorEntrada || '—') + '</td>' +
                 '<td><button class="btn btn-sm btn-primary" data-editar="' + r.id + '">Mover</button> ' +
+                    '<button class="btn btn-sm" data-observacion="' + r.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button> ' +
                     '<button class="btn btn-sm" data-detalle="' + r.id + '"><i class="ti ti-info-circle"></i></button></td>' +
             '</tr>';
         }).join('');
@@ -475,7 +479,7 @@ function badgeEstado(r) {
 
 function celdaMotivoPatio(r) {
     if (r.horaSalida || r.ubicacion !== 'Patio') return '<span style="color:var(--text-3);">—</span>';
-    if (!r.obsUbicacion) return '<span style="color:var(--amber-600);cursor:pointer;text-decoration:underline;" data-editar="' + r.id + '">Sin registrar</span>';
+    if (!r.obsUbicacion) return '<span style="color:var(--amber-600);cursor:pointer;text-decoration:underline;" data-observacion="' + r.id + '">Sin registrar</span>';
     var texto = r.obsUbicacion.length > 30 ? r.obsUbicacion.slice(0, 30) + '…' : r.obsUbicacion;
     return '<span title="' + r.obsUbicacion.replace(/"/g, '&quot;') + '">' + texto + '</span>';
 }
@@ -547,6 +551,7 @@ function renderRegistros() {
             '<td><div class="td-actions">' +
                 (!r.horaSalida ? '<button class="btn btn-sm btn-success" data-salida="' + r.id + '"' + attrsBotonSalida(r) + '><i class="ti ti-logout"></i></button>' : '') +
                 '<button class="btn btn-sm" data-editar="' + r.id + '"><i class="ti ti-edit"></i></button>' +
+                '<button class="btn btn-sm" data-observacion="' + r.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
                 '<button class="btn btn-sm" data-detalle="' + r.id + '"><i class="ti ti-info-circle"></i></button>' +
                 '<button class="btn btn-sm btn-danger" data-eliminar="' + r.id + '"><i class="ti ti-trash"></i></button>' +
             '</div></td>' +
@@ -642,7 +647,7 @@ function limpiarForm() {
     document.getElementById('f-servicio-empresa-text').value = 'Pepsico';
     document.getElementById('programacion-wrapper').style.display = 'none';
     document.getElementById('servicio-empresa-wrapper').style.display = 'none';
-    document.getElementById('f-canal').value = 'Sin canal';
+    document.getElementById('f-canal').value = 'Otro';
     escribirFechaHora('f-fecha-ingreso', 'f-hora-h', 'f-hora-m', nowLocal());
     document.getElementById('muelle-options').style.display = 'none';
 
@@ -663,8 +668,16 @@ async function registrarEntrada() {
     var canal = document.getElementById('f-canal').value;
     var tipo = getTipoSeleccionado();
     var programado = document.getElementById('f-programado').value;
+    // La cita se captura solo como HH:MM, así que hay que darle una
+    // fecha. Antes se usaba today(), la del día en que se digita: un
+    // camión que llegó ayer 23:00 con cita 22:30, registrado hoy,
+    // quedaba con la cita de HOY y el cumplimiento salía con 24h de
+    // error. La fecha correcta es la de la entrada, que es contra la
+    // que se compara. El cruce de medianoche (cita 23:50, llegada
+    // 00:10) lo corrige clasificarOnTime() en eventos.js.
     var horaProgramacionInput = leerHora('f-hora-programacion-h', 'f-hora-programacion-m');
-    var horaProgramacion = horaProgramacionInput ? (today() + 'T' + horaProgramacionInput) : '';
+    var fechaIngreso = document.getElementById('f-fecha-ingreso').value || today();
+    var horaProgramacion = horaProgramacionInput ? (fechaIngreso + 'T' + horaProgramacionInput) : '';
     var servicioTipo = document.getElementById('f-servicio-tipo').value;
     var servicioEmpresa = servicioTipo === 'Reciclaje' ? document.getElementById('f-servicio-empresa').value
         : servicioTipo === 'Insumos' ? document.getElementById('f-servicio-empresa-text').value : '';
@@ -796,6 +809,55 @@ async function confirmarSalida() {
 
 
 /* =========================================================
+   MODAL: OBSERVACIÓN RÁPIDA
+
+   Anotar algo no debería obligar a pasar por "Mover": ese modal
+   pide ubicación y canal, y para dejar una nota había que volver a
+   confirmar unos valores que no se querían tocar. Aquí solo se
+   escribe el texto; nada de la ubicación del vehículo se mueve.
+   ========================================================= */
+
+function openModalObservacion(id) {
+    selectedId = id;
+    var rec = registros.find(function (r) { return r.id === id; });
+    if (!rec) return;
+
+    document.getElementById('modal-observacion-info').innerHTML =
+        '<strong>' + rec.placa + '</strong> — ' + rec.conductor + ' · ' + getDestino(rec) +
+        (rec.obsUbicacion
+            ? '<div style="margin-top:6px;font-size:12.5px;color:var(--text-3);">Última observación: ' + rec.obsUbicacion + '</div>'
+            : '');
+
+    // El textarea arranca vacío a propósito: se agrega una
+    // observación nueva, no se edita la anterior (que queda en el
+    // historial y se puede consultar en Detalle).
+    document.getElementById('o-texto').value = '';
+    document.getElementById('modal-observacion').classList.add('open');
+    document.getElementById('o-texto').focus();
+}
+
+async function confirmarObservacion() {
+    var rec = registros.find(function (r) { return r.id === selectedId; });
+    if (!rec) return;
+
+    var texto = document.getElementById('o-texto').value.trim();
+    if (!texto) { toast('Escribe la observación antes de guardar', 'red', 'ti-alert-circle'); return; }
+
+    setSyncStatus('syncing');
+    try {
+        await agregarObservacion(rec.id, texto, perfilActual.nombre);
+        setSyncStatus('ok');
+        closeModal('modal-observacion');
+        toast('Observación guardada', 'green', 'ti-message-check');
+    } catch (error) {
+        setSyncStatus('error');
+        toast('No se pudo guardar la observación', 'red', 'ti-x');
+        console.error(error);
+    }
+}
+
+
+/* =========================================================
    MODAL: EDITAR UBICACIÓN / CANAL
    ========================================================= */
 
@@ -806,7 +868,7 @@ function openModalEditar(id) {
 
     document.getElementById('modal-editar-info').innerHTML = '<strong>' + rec.placa + '</strong> — Ubicación actual: ' + getDestino(rec);
     document.getElementById('e-ubicacion').value = rec.ubicacion || 'Patio';
-    document.getElementById('e-canal').value = rec.canal || 'Sin canal';
+    document.getElementById('e-canal').value = canalDe(rec);
     document.getElementById('e-obs-ubicacion').value = '';
     cambiarUbicacionEdit();
 
@@ -983,6 +1045,9 @@ function wireDelegatedClicks() {
         var btnEditar = e.target.closest('[data-editar]');
         if (btnEditar) { openModalEditar(btnEditar.getAttribute('data-editar')); return; }
 
+        var btnObservacion = e.target.closest('[data-observacion]');
+        if (btnObservacion) { openModalObservacion(btnObservacion.getAttribute('data-observacion')); return; }
+
         var btnSalida = e.target.closest('[data-salida]');
         if (btnSalida) { openModalSalida(btnSalida.getAttribute('data-salida')); return; }
 
@@ -1067,6 +1132,7 @@ function iniciarPagina(perfil) {
     document.getElementById('e-ubicacion').addEventListener('change', cambiarUbicacionEdit);
     document.getElementById('btn-confirmar-salida').addEventListener('click', confirmarSalida);
     document.getElementById('btn-confirmar-edicion').addEventListener('click', confirmarEdicionUbicacion);
+    document.getElementById('btn-confirmar-observacion').addEventListener('click', confirmarObservacion);
 
     // Exportar
     document.getElementById('btn-export-todos').addEventListener('click', exportarTodos);

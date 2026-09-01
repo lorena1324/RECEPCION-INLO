@@ -209,22 +209,6 @@ body.cargando .layout { visibility: hidden; }
   color: #fff;
 }
 
-.estad-rango-custom {
-  display: none;
-  gap: 14px;
-  align-items: end;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.estad-rango-custom label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  color: #374151;
-}
-
 .stat-box.full {
   grid-column: 1 / -1;
 }

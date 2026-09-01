@@ -31,7 +31,7 @@ import {
     getDocs
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
-import { actualizarAvance } from "../shared/services/vehiculos.js";
+import { actualizarAvance, MINIMO_CARGUE_ANTICIPADO } from "../shared/services/vehiculos.js";
 
 let perfilActual = null;
 let pendientes = [];
@@ -47,6 +47,11 @@ protegerPagina({ rolesPermitidos: ["administrador"] })
     });
 
 function iniciarEventos() {
+    // El umbral del texto explicativo también sale de la constante:
+    // si mañana cambia, esta página no queda mintiendo.
+    const spanMinimo = document.getElementById("minimo-cargue");
+    if (spanMinimo) spanMinimo.textContent = MINIMO_CARGUE_ANTICIPADO;
+
     document.getElementById("btn-escanear").addEventListener("click", escanear);
     document.getElementById("btn-aplicar").addEventListener("click", aplicarBackfill);
     document.getElementById("btn-salir").addEventListener("click", async function () {
@@ -129,8 +134,8 @@ async function aplicarBackfill() {
 
     const confirmado = window.confirm(
         "Vas a fijar el avance en 0% para " + pendientes.length + " vehículo(s) activo(s) que hoy no tienen " +
-        "ninguna restricción de salida. A partir de esto quedarán sujetos a la regla del 100% (o 75% + " +
-        "autorización, en Cargue). Esto escribe directamente en Firestore y no se puede deshacer automáticamente. " +
+        "ninguna restricción de salida. A partir de esto quedarán sujetos a la regla del 100% (o " +
+        MINIMO_CARGUE_ANTICIPADO + "% + autorización, en Cargue). Esto escribe directamente en Firestore y no se puede deshacer automáticamente. " +
         "¿Continuar?"
     );
     if (!confirmado) return;
