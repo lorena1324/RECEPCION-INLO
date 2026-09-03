@@ -73,6 +73,16 @@ const OPERACIONES = {
 const HORA_CORTE = 6;
 const STORAGE_OPERACION = "inlotrans_admin_operacion";
 
+// chartjs-plugin-datalabels viene cargado desde dashboard.html. Se
+// registra una vez, deshabilitado por defecto: cada gráfica lo
+// activa explícitamente en su config (options.plugins.datalabels).
+// Sin esto las cifras solo salían en el tooltip — el tooltip es de
+// Chart.js, pero rotular la barra es cosa del plugin.
+if (typeof Chart !== "undefined" && typeof ChartDataLabels !== "undefined") {
+    Chart.register(ChartDataLabels);
+    Chart.defaults.set("plugins.datalabels", { display: false });
+}
+
 // Operación que se está viendo. Se recuerda entre recargas para
 // que el admin no tenga que volver a elegirla en cada visita.
 let operacionActual = localStorage.getItem(STORAGE_OPERACION) || "J3";
