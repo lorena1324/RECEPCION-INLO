@@ -353,6 +353,67 @@ tbody tr:hover { background: var(--surface-2); }
 .ontime-amarillo { background: #f59e0b; }
 .ontime-verde    { background: #10b981; }
 
+/* ── Acompañantes del on time ──
+
+   Tres cajas del mismo ancho debajo del cumplimiento de cita: los
+   cinco que más se adelantaron, los cinco que más se retrasaron y
+   el listado completo del periodo. */
+.ontime-detalle {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    align-items: start;
+    margin-top: 20px;
+}
+
+/* Tres tablas en una pantalla de portátil quedan demasiado
+   estrechas para leerlas; por debajo de este ancho se apilan. */
+@media (max-width: 1150px) {
+    .ontime-detalle { grid-template-columns: 1fr; }
+}
+
+.ontime-detalle-col > h4 {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-1);
+    margin: 0 0 4px;
+}
+
+.ontime-detalle-col > .texto-ayuda { margin-bottom: 8px; }
+
+/* El alto lo fijan los top 5: cinco filas y el encabezado. El
+   listado, que trae todo el periodo, se desplaza dentro de ese
+   mismo alto en vez de estirar la fila y empujar el resto del
+   panel hacia abajo. */
+.ontime-detalle .tabla-wrap {
+    max-height: 262px;
+    overflow: auto;
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+/* El `overflow: hidden` que .tabla usa para redondear sus esquinas
+   la convierte en su propio contenedor de scroll, y entonces el
+   encabezado pegajoso no tiene contra qué pegarse: se iría hacia
+   arriba con las filas. Aquí el redondeo y el borde los pone el
+   envoltorio, que es el que de verdad se desplaza. */
+.ontime-detalle .tabla {
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+}
+
+.ontime-detalle .tabla thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+/* Un vehículo sin cita no tiene desfase que mostrar, y esa celda
+   vacía se lee como un dato que falta. El texto en gris deja claro
+   que está fuera del indicador a propósito. */
+.sin-cita { color: var(--text-3); }
+
 /* =========================================================
    ALERTA DE SALIDA BLOQUEADA
 
