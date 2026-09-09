@@ -58,6 +58,8 @@ import {
   numerosDeMuelle,
   umbralesPatio,
   tiemposDe,
+  modalidadDe,
+  distingueModalidad,
   obtenerTarifas,
   tarifasPorDefecto,
   desglosarTarifa,
@@ -403,7 +405,7 @@ function umbralesDePatio() {
 function nivelMuelle(r) {
   return nivelContraMeta(
     minutosEnMuelle(r),
-    tiemposDe(configBodega, r.tipologia, faseActual(r))
+    tiemposDe(configBodega, r.tipologia, faseActual(r), modalidadDe(r))
   );
 }
 
@@ -422,7 +424,7 @@ function nivelMuelle(r) {
 */
 function avisoMetaMuelle(r) {
 
-  const meta = tiemposDe(configBodega, r.tipologia, faseActual(r));
+  const meta = tiemposDe(configBodega, r.tipologia, faseActual(r), modalidadDe(r));
   const min = minutosEnMuelle(r);
 
   if (!meta) {
@@ -1476,6 +1478,7 @@ function openModalNovedades(id) {
         conductor: etiquetaCampo(configBodega, "conductor"),
         cedula: etiquetaCampo(configBodega, "cedula")
       },
+      distingueModalidad: distingueModalidad(configBodega),
       mostrarOperarios: true,
 
       // El desglose del cobro solo aquí: es el único panel cuyo rol

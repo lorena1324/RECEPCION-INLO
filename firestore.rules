@@ -141,6 +141,17 @@ service cloud.firestore {
       // anticipadas y registra los cobros, así que no es un
       // permiso nuevo en la práctica, es el mismo que ya tenía por
       // otra vía.
+      //
+      // `modalidad` —si la mercancía viene arrumada o paletizada— es
+      // del supervisor porque es quien ve el camión abierto: en la
+      // fila de entrada no siempre se sabe. Faltaba en esta lista, y
+      // como J3 (la única bodega que hoy lo distingue) no está en
+      // `bodegasConSupervisorEditor`, sus botones de modalidad
+      // fallaban contra el servidor con permission-denied: la
+      // interfaz ofrecía marcarla y el guardado se rechazaba. Es un
+      // campo de clasificación, no de dinero ni de autorización: de
+      // él cuelga contra qué meta de tiempo se mide el muelle, que
+      // es justo lo que este rol tiene que poder ajustar.
       function camposDeSupervisor() {
         return request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly([
@@ -148,7 +159,8 @@ service cloud.firestore {
                  'autorizacionSalida', 'historial', 'pagoRegistrado',
                  'pickingCargue', 'auditoriaCargue',
                  'pickingDescargue', 'auditoriaDescargue',
-                 'cancelado', 'cancelacion', 'horaSalida', 'operadorSalida'
+                 'cancelado', 'cancelacion', 'horaSalida', 'operadorSalida',
+                 'modalidad'
                ]);
       }
 

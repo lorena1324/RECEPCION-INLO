@@ -16,8 +16,13 @@
 
 import { fmtDt, formatDuration, duracion, today } from "./tiempos.js";
 import { getHistorial, getLocationDurations, tituloHistorial } from "../services/eventos.js";
+import { modalidadDe } from "../services/config.js";
 
-const ANCHOS_COLUMNAS = [14, 22, 16, 12, 10, 10, 10, 10, 10, 16, 18, 18, 18, 18, 18, 18, 16, 12, 18, 18, 18, 38, 12, 12, 14, 30];
+/* Un ancho por columna, en el mismo orden que las arma
+   buildExcelData(). Al agregar una columna hay que agregar aquí su
+   ancho: si la lista queda corta, las últimas salen con el ancho
+   por defecto de SheetJS y la hoja se lee torcida. */
+const ANCHOS_COLUMNAS = [14, 22, 16, 18, 16, 12, 10, 10, 10, 10, 10, 16, 18, 18, 18, 18, 18, 18, 16, 12, 18, 18, 18, 38, 12, 12, 14, 30];
 
 
 /*
@@ -49,6 +54,25 @@ export function buildExcelData(registros, getStateLabel, etiquetas) {
         fila[rotuloCedula] = r.cedula || '';
 
         return Object.assign(fila, {
+
+            /* La tipología y cómo vino la mercancía. Son los dos
+               datos de los que cuelga la meta de tiempo en muelle, y
+               ninguno de los dos salía en la hoja: quien recibía el
+               archivo veía "Duración muelle: 3h 10min" sin nada
+               contra qué compararlo, y la modalidad solo se podía
+               deducir leyendo la columna de historial completo, que
+               es un párrafo por vehículo.
+
+               La modalidad se escribe siempre que el registro la
+               traiga; sin marcar se deja en blanco en vez de poner
+               "Arrumado", porque en la hoja no hay forma de
+               distinguir lo confirmado de lo supuesto y una columna
+               llena de "Arrumado" inventados se leería como dato
+               medido. Esa distinción sí está en la ficha del
+               vehículo. */
+            'Tipología': r.tipologiaNombre || '',
+            'Mercancía': r.modalidad ? modalidadDe(r) : '',
+
             'Ubicación': r.ubicacion,
             'Muelle': r.numeroMuelle || '',
             'Bahía': r.bahia || '',

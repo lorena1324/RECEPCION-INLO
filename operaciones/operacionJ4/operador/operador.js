@@ -65,6 +65,8 @@ import {
     numerosDeMuelle,
     umbralesPatio,
     tiemposDe,
+    modalidadDe,
+    distingueModalidad,
     etiquetaCampo,
     formatoCampo,
     limpiarSegunFormato,
@@ -152,7 +154,7 @@ function umbralesDePatio() {
 function nivelMuelle(r) {
     return nivelContraMeta(
         minutosEnMuelle(r),
-        tiemposDe(configBodega, r.tipologia, faseActual(r))
+        tiemposDe(configBodega, r.tipologia, faseActual(r), modalidadDe(r))
     );
 }
 
@@ -166,7 +168,7 @@ function nivelMuelle(r) {
    asignada — que es justo lo que hay que ir a corregir. */
 function avisoMetaMuelle(r) {
 
-    var meta = tiemposDe(configBodega, r.tipologia, faseActual(r));
+    var meta = tiemposDe(configBodega, r.tipologia, faseActual(r), modalidadDe(r));
     var min = minutosEnMuelle(r);
 
     if (!meta) {
@@ -1370,6 +1372,7 @@ function openModalDetalle(id) {
     document.getElementById('modal-detalle-body').innerHTML =
         fichaVehiculo(rec, {
             etiquetas: etiquetasCampos(),
+            distingueModalidad: distingueModalidad(configBodega),
             mostrarOperarios: true,
 
             // El avance va aparte, aquí abajo: la barra con el

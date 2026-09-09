@@ -1267,6 +1267,14 @@ function openModalCorregir(id) {
 
     pintarSelectTipologiaCorreccion(rec.tipologia);
 
+    /* Cómo vino la mercancía. El desplegable solo se ofrece donde la
+       bodega lo distingue, pero se muestra igual si el registro ya
+       trae una marcada: si no, apagar el interruptor dejaría ese dato
+       sin forma de corregirse. */
+    document.getElementById('ed-modalidad').value = rec.modalidad || '';
+    document.getElementById('grupo-ed-modalidad').style.display =
+        (distingueModalidad(cfgGuardada) || rec.modalidad) ? '' : 'none';
+
     var entrada = partirHora(rec.horaEntrada);
     document.getElementById('ed-fecha-entrada').value = entrada.fecha;
     document.getElementById('ed-hora-h').value = entrada.h;
@@ -1361,6 +1369,13 @@ async function confirmarCorreccion() {
         canal: document.getElementById('ed-canal').value,
         tipologia: tipologiaId,
         tipologiaNombre: tipologia ? tipologia.nombre : '',
+
+        // Cadena vacía = sin marcar, que es lo que hace regir el
+        // supuesto (arrumado). No se omite del objeto: corregirRegistro
+        // compara campo por campo, y omitirlo haría imposible DESmarcar
+        // una modalidad puesta por error.
+        modalidad: document.getElementById('ed-modalidad').value,
+
         horaEntrada: horaEntrada,
         programado: programado,
         horaProgramacion: programado && hayCita ? horaEntrada.slice(0, 10) + 'T' + citaHora + ':' + citaMin : '',
@@ -2236,6 +2251,7 @@ function openModalDetalle(id) {
     document.getElementById('modal-detalle-body').innerHTML =
         fichaVehiculo(rec, {
             etiquetas: etiquetasCampos(),
+            distingueModalidad: distingueModalidad(cfgGuardada),
             mostrarOperarios: true,
 
             // El administrador puede leer los cobros completos —las

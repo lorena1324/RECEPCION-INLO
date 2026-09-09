@@ -52,7 +52,9 @@ import {
   etiquetaCampo,
   numerosDeMuelle,
   umbralesPatio,
-  tiemposDe
+  tiemposDe,
+  modalidadDe,
+  distingueModalidad
 } from "../../../shared/services/config.js";
 
 import { fichaVehiculo } from "../../../shared/services/detalleVehiculo.js";
@@ -277,7 +279,7 @@ function umbralesDePatio() {
 function nivelMuelle(r) {
   return nivelContraMeta(
     minutosEnMuelle(r),
-    tiemposDe(configBodega, r.tipologia, faseActual(r))
+    tiemposDe(configBodega, r.tipologia, faseActual(r), modalidadDe(r))
   );
 }
 
@@ -286,7 +288,7 @@ function nivelMuelle(r) {
    dato de desempeño del personal, es el estado del vehículo. */
 function avisoMetaMuelle(r) {
 
-  const meta = tiemposDe(configBodega, r.tipologia, faseActual(r));
+  const meta = tiemposDe(configBodega, r.tipologia, faseActual(r), modalidadDe(r));
   const min = minutosEnMuelle(r);
 
   if (!meta) {
@@ -605,6 +607,7 @@ function openModalNovedades(id) {
         conductor: etiquetaCampo(configBodega, "conductor"),
         cedula: etiquetaCampo(configBodega, "cedula")
       },
+      distingueModalidad: distingueModalidad(configBodega),
       mostrarOperarios: true
     }) +
     seccionAutorizacion(rec) +

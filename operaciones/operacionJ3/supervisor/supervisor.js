@@ -78,6 +78,8 @@ import {
   resumenCaja
 } from "../../../shared/services/cobros.js";
 
+import { fichaVehiculo } from "../../../shared/services/detalleVehiculo.js";
+
 import { todayOperativo, sumarDias, formatDuration } from "../../../shared/utils/tiempos.js";
 
 import {
@@ -1284,14 +1286,27 @@ function openModalNovedades(id) {
           </div>
         </div>`).join("");
 
-  document.getElementById("modal-novedades-body").innerHTML = `
-    <div class="detail-row"><span class="detail-lbl">Placa:</span><span class="detail-val">${escapar(rec.placa)}</span></div>
-    <div class="detail-row"><span class="detail-lbl">Conductor:</span><span class="detail-val">${escapar(rec.conductor || "—")}</span></div>
-    <div class="detail-row"><span class="detail-lbl">Ubicación:</span><span class="detail-val">${escapar(getDestino(rec))}</span></div>
-    <div class="detail-row"><span class="detail-lbl">Ingreso:</span><span class="detail-val">${formatearFecha(rec.horaEntrada)}</span></div>
-    <div class="detail-row"><span class="detail-lbl">Programado:</span><span class="detail-val">${rec.programado && rec.horaProgramacion ? formatearFecha(rec.horaProgramacion) : "No"}</span></div>
-    ${seccionAutorizacion(rec)}
-    <div class="detail-section-title">Novedades</div>${histHtml}`;
+  /* La ficha compartida, la misma que ven el administrador y el
+     supervisor de J4. Este modal armaba a mano cinco filas —placa,
+     conductor, ubicación, ingreso y programación— y por eso J3, que
+     es justamente la bodega que distingue cómo viene la mercancía,
+     no mostraba esa modalidad en ninguna parte: el único rastro era
+     la línea del historial de aquí abajo, que se lee como una nota
+     de alguien y no como un dato del vehículo.
+
+     Ver el encabezado de detalleVehiculo.js: la ficha vive en un
+     solo sitio para que los tres roles lean lo mismo. */
+  document.getElementById("modal-novedades-body").innerHTML =
+    fichaVehiculo(rec, {
+      etiquetas: {
+        conductor: etiquetaCampo(configBodega, "conductor"),
+        cedula: etiquetaCampo(configBodega, "cedula")
+      },
+      distingueModalidad: distingueModalidad(configBodega),
+      mostrarOperarios: true
+    }) +
+    seccionAutorizacion(rec) +
+    `<div class="detail-section-title">Novedades</div>${histHtml}`;
 
   document.getElementById("modal-novedades").classList.add("open");
 }

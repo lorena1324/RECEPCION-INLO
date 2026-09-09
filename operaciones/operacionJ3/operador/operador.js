@@ -68,6 +68,8 @@ import {
     errorDeFormato
 } from "../../../shared/services/config.js";
 
+import { fichaVehiculo } from "../../../shared/services/detalleVehiculo.js";
+
 import { nowLocal, today, fmtDt, formatDuration, fechaDentroDeRango, todayOperativo } from "../../../shared/utils/tiempos.js";
 import { exportarExcel } from "../../../shared/utils/excel.js";
 
@@ -1323,14 +1325,26 @@ function openModalDetalle(id) {
                 '</div></div>';
         }).join('');
 
+    /* La ficha compartida, la misma que usa la portería de J4 y que
+       ven el supervisor y el administrador. Este modal armaba a mano
+       siete filas y se quedaba sin tipología, sin los tiempos por
+       ubicación y —lo que más pesa en J3— sin decir si la mercancía
+       vino arrumada o paletizada, que es de donde sale la meta
+       contra la que se está midiendo el muelle.
+
+       Ver el encabezado de detalleVehiculo.js. */
     document.getElementById('modal-detalle-body').innerHTML =
-        '<div class="detail-row"><span class="detail-lbl">Placa:</span><span class="detail-val">' + rec.placa + '</span></div>' +
-        '<div class="detail-row"><span class="detail-lbl">' + escapar(rotulo('conductor')) + ':</span><span class="detail-val">' + escapar(rec.conductor) + '</span></div>' +
-        '<div class="detail-row"><span class="detail-lbl">' + escapar(rotulo('cedula')) + ':</span><span class="detail-val">' + escapar(rec.cedula || '—') + '</span></div>' +
-        '<div class="detail-row"><span class="detail-lbl">Ubicación:</span><span class="detail-val">' + getDestino(rec) + '</span></div>' +
-        '<div class="detail-row"><span class="detail-lbl">Ingreso:</span><span class="detail-val">' + fmtDt(rec.horaEntrada) + '</span></div>' +
-        '<div class="detail-row"><span class="detail-lbl">Salida:</span><span class="detail-val">' + fmtDt(rec.horaSalida) + '</span></div>' +
-        '<div class="detail-row"><span class="detail-lbl">Programado:</span><span class="detail-val">' + (rec.programado && rec.horaProgramacion ? fmtDt(rec.horaProgramacion) : 'No') + '</span></div>' +
+        fichaVehiculo(rec, {
+            etiquetas: etiquetasExport(),
+            distingueModalidad: distingueModalidad(configBodega),
+            mostrarOperarios: true,
+
+            // El avance va aparte, aquí abajo: la barra con el
+            // diagnóstico de salida es lo que el operario necesita
+            // para decidir si despacha, y dos cifras del mismo dato
+            // en la misma pantalla solo generan duda.
+            mostrarAvance: false
+        }) +
         '<div class="detail-section-title">Avance de la operación</div>' + renderAvanceSoloLectura(rec, false) +
         (!rec.horaSalida ? alertaSalida(rec) : '') +
         '<div class="detail-section-title">Historial</div>' + histHtml;

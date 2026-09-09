@@ -1434,6 +1434,20 @@
                 <select id="ed-tipologia"></select>
             </div>
 
+            <!-- Cómo vino la mercancía. Es un campo del registro como
+                 cualquier otro, así que se corrige aquí y no solo con
+                 los botones de la tarjeta del muelle, que dejan de
+                 existir en cuanto el vehículo sale. El grupo se oculta
+                 donde la bodega no distingue modalidad. -->
+            <div class="form-group" id="grupo-ed-modalidad">
+                <label for="ed-modalidad">Mercancía</label>
+                <select id="ed-modalidad">
+                    <option value="">Sin marcar (se asume arrumado)</option>
+                    <option value="Arrumado">Arrumado</option>
+                    <option value="Paletizado">Paletizado</option>
+                </select>
+            </div>
+
             <div class="form-group">
                 <label for="ed-fecha-entrada">Fecha de entrada</label>
                 <input type="date" id="ed-fecha-entrada">

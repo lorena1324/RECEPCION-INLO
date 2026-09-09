@@ -36,6 +36,7 @@
 import { fmtDt, formatDuration, duracion } from "../utils/tiempos.js";
 import { getDestino, getLocationDurations, canalDe } from "./eventos.js";
 import { estaCancelado, llegoAunqueCancelado } from "./vehiculos.js";
+import { modalidadDe } from "./config.js";
 
 
 function escapar(txt) {
@@ -110,6 +111,33 @@ function servicioDe(rec) {
     return rec.servicioEmpresa ? tipo + " — " + rec.servicioEmpresa : tipo;
 }
 
+/*
+    Cómo vino la mercancía: arrumada o paletizada.
+
+    Es un CAMPO del registro, no una nota. Estaba guardado como
+    campo desde el principio (`modalidad` en vehiculos.js), pero en
+    la ficha solo aparecía cuando alguien lo había marcado a mano,
+    así que en la práctica el único rastro era la línea del
+    historial —"Mercancía marcada como Paletizado"—, que se lee
+    como una observación de alguien y no como un dato del vehículo.
+
+    Ahora se muestra siempre que la bodega distinga modalidad,
+    marcado o no, porque SIEMPRE hay una que rige: sin marcar rige
+    "Arrumado" (ver MODALIDADES en config.js), y es contra esa meta
+    que se está midiendo el tiempo en muelle. Ocultar la fila no
+    hacía que el vehículo no tuviera modalidad; hacía que nadie
+    supiera cuál se le estaba aplicando.
+
+    La diferencia entre confirmado y supuesto sí se dice, porque no
+    es lo mismo: un "Arrumado" que alguien vio y marcó vale como
+    dato, y uno que nadie tocó es un supuesto que puede estar mal y
+    que conviene ir a confirmar al muelle.
+*/
+function textoModalidad(rec) {
+    const m = modalidadDe(rec);
+    return rec.modalidad ? m : m + " (sin marcar — se asume)";
+}
+
 
 /* =========================================================
    BLOQUES
@@ -120,7 +148,7 @@ function servicioDe(rec) {
     los llame la bodega (`etiquetas`): en J3 y B9 son conductor y
     cédula; en J4, proveedor y número de cita.
 */
-function bloqueIdentificacion(rec, etiquetas) {
+function bloqueIdentificacion(rec, etiquetas, distingueModalidad) {
     return titulo("Identificación") +
         fila("Placa", rec.placa || "—") +
         fila(etiquetas.conductor, rec.conductor || "—") +
@@ -131,10 +159,12 @@ function bloqueIdentificacion(rec, etiquetas) {
         // sin metas de tiempo, y quien abre la ficha debe notarlo.
         fila("Tipología", rec.tipologiaNombre || "Sin asignar") +
 
-        // Solo donde se marcó: en las bodegas que no distinguen
-        // modalidad este campo no existe, y una fila vacía haría
-        // pensar que falta un dato que nadie tenía que llenar.
-        filaSiHay("Mercancía", rec.modalidad) +
+        /* La modalidad va donde la bodega la distingue, esté marcada
+           o no — ver textoModalidad(). Se muestra también, aunque la
+           bodega ya no la distinga, si el registro trae una guardada:
+           apagar el interruptor no debe borrar de la vista un dato
+           que alguien sí llegó a marcar. */
+        (distingueModalidad || rec.modalidad ? fila("Mercancía", textoModalidad(rec)) : "") +
 
         fila("Operación", rec.tipo || "—") +
         fila("Canal", rec.canal || canalDe(rec)) +
@@ -275,6 +305,10 @@ function bloquePago(rec) {
    opciones:
       etiquetas          { conductor, cedula } — cómo llama esta
                          bodega a los dos campos libres
+      distingueModalidad si esta bodega pregunta cómo viene la
+                         mercancía (arrumada o paletizada). En false
+                         la fila solo sale si el registro ya trae
+                         una marcada
       mostrarOperarios   quién recibió y quién despachó
       mostrarAvance      fase y porcentaje. En false para el panel
                          que ya pinta su propia barra de avance
@@ -294,7 +328,7 @@ export function fichaVehiculo(rec, opciones) {
     return bloqueIdentificacion(rec, {
         conductor: etiquetas.conductor || "Conductor",
         cedula: etiquetas.cedula || "Cédula / documento"
-    }) +
+    }, !!o.distingueModalidad) +
         bloqueTrazabilidad(rec, o.mostrarOperarios !== false) +
         (o.mostrarAvance !== false ? bloqueAvance(rec) : "") +
         bloqueObservaciones(rec) +
