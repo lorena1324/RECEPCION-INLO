@@ -139,6 +139,23 @@ const OPERACIONES = {
 const HORA_CORTE_POR_DEFECTO = 6;
 const STORAGE_OPERACION = "inlotrans_admin_operacion";
 
+/* chartjs-plugin-datalabels viene cargado desde dashboard.html. Se
+   registra UNA vez, deshabilitado por defecto: cada gráfica lo
+   activa explícitamente en su config (options.plugins.datalabels),
+   que es lo que ya hacen las de estadisticas.js.
+
+   Sin esto las cifras solo salían en el tooltip — el tooltip es de
+   Chart.js, pero rotular la barra es cosa del plugin—, y las mismas
+   gráficas se veían con menos información aquí que en supervisor y
+   cliente, que sí lo registraban.
+
+   Una sola vez: registrar el mismo plugin dos veces hace que
+   Chart.js avise por consola. */
+if (typeof Chart !== "undefined" && typeof ChartDataLabels !== "undefined") {
+    Chart.register(ChartDataLabels);
+    Chart.defaults.set("plugins.datalabels", { display: false });
+}
+
 // Operación que se está viendo. Se recuerda entre recargas para
 // que el admin no tenga que volver a elegirla en cada visita.
 let operacionActual = localStorage.getItem(STORAGE_OPERACION) || "J3";
@@ -246,17 +263,6 @@ function fmtDiaCorto(diaOp) {
     return new Date(diaOp + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit' });
 }
 const RUTA_LOGIN = "../index.html";
-
-/* chartjs-plugin-datalabels viene cargado desde el <head>. Se
-   registra una vez, deshabilitado por defecto: cada gráfica lo
-   activa explícitamente en su config (options.plugins.datalabels),
-   que es lo que ya hacen las de estadisticas.js. Sin este registro
-   esas opciones no las leía nadie y las mismas gráficas salían con
-   menos información aquí que en supervisor y cliente. */
-if (typeof Chart !== "undefined" && typeof ChartDataLabels !== "undefined") {
-    Chart.register(ChartDataLabels);
-    Chart.defaults.set("plugins.datalabels", { display: false });
-}
 
 let registros = [];
 let selectedId = null;

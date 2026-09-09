@@ -32,9 +32,10 @@
                  chart-tipo, chart-operador, chart-tiempo-patio,
                  chart-canal, chart-muelles-general,
                  chart-tiempo-muelle, chart-ontime
-     Tablas      ontime-tabla, estad-por-canal-body,
-                 estad-por-tipo-body, estad-muelles-operario-body,
-                 es-segmentado-body
+     Tablas      ontime-tabla, ontime-top-temprano,
+                 ontime-top-tarde, ontime-listado,
+                 estad-por-canal-body, estad-por-tipo-body,
+                 estad-muelles-operario-body, es-segmentado-body
      Análisis    tend-entradas, tend-patio, tend-perdida,
                  es-perdida-horas, es-perdida-vehiculos,
                  es-perdida-promedio, es-perdida-pct,
@@ -55,6 +56,7 @@
 
 import {
     canalDe,
+    clasificarOnTime,
     diaConMasMovimiento,
     getDestino,
     getDiaOperativo,
@@ -193,6 +195,24 @@ export function renderPanelEstadisticas(opts) {
     /* ── Análisis: no dependen de Chart.js, van antes del early-return ── */
     renderOnTime(operativos);
 
+    /* Las tres cajas que acompañan al on time. Van aparte de
+       renderOnTime() a propósito: esa se sale temprano cuando
+       ningún vehículo del periodo traía cita, y el listado
+       completo sí tiene que verse en ese caso.
+
+       Sobre `operativos` y no sobre `recs`, igual que la tabla de
+       arriba: una cita cancelada se guarda con `horaEntrada` igual
+       a la hora de la cita (ver crearCitaCancelada en
+       vehiculos.js), así que clasifica con cero minutos de desfase
+       y el listado la pintaría en verde, como una llegada
+       perfectamente puntual de un camión que nunca llegó. Además
+       el pie del listado cuenta vehículos, y con los cancelados
+       adentro no cuadraría con la tarjeta "Total de entradas" de
+       esta misma pantalla. Lo cancelado tiene su propio bloque. */
+    renderTopDesfase("ontime-top-temprano", operativos, -1);
+    renderTopDesfase("ontime-top-tarde", operativos, 1);
+    renderListadoVehiculos("ontime-listado", operativos);
+
     const diasPrev = new Set(diasPeriodoAnterior(dias));
     const recsPrev = baseOperativa.filter((r) => diasPrev.has(getDiaOperativo(r, HORA_CORTE)));
     renderTendencias(operativos, recsPrev);
@@ -231,7 +251,8 @@ export function renderPanelEstadisticas(opts) {
         options: {
             plugins: {
                 legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } },
-                datalabels: { display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, anchor: "end", align: "top", offset: 2, color: "#3A3A38", font: { size: 10, weight: "600" }, formatter: (v) => v }
+                tooltip: { callbacks: { label: tooltipConPct } },
+                datalabels: { display: mostrarSiHayDato, anchor: "end", align: "top", offset: 2, color: "#3A3A38", font: { size: 10, weight: "600" }, formatter: etiquetaConPct }
             },
             scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
         }
@@ -247,7 +268,7 @@ export function renderPanelEstadisticas(opts) {
     renderChart("chart-tipo", {
         type: "doughnut",
         data: { labels: ["Cargue", "Descargue", "Ambos"], datasets: [{ data: [soloCargue, soloDescargue, ambos], backgroundColor: [ESTAD_COLORS.azul, ESTAD_COLORS.ambar, ESTAD_COLORS.teal] }] },
-        options: { plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } }, datalabels: { display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, color: "#fff", font: { size: 11, weight: "700" }, formatter: (v) => v } } }
+        options: { plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: tooltipConPct } }, datalabels: { display: mostrarSiHayDato, color: "#fff", font: { size: 11, weight: "700" }, formatter: etiquetaConPct } } }
     });
 
     /* ── Por operador ── */
@@ -257,7 +278,7 @@ export function renderPanelEstadisticas(opts) {
     renderChart("chart-operador", {
         type: "bar",
         data: { labels: opLabels, datasets: [{ label: "Vehículos atendidos", data: opLabels.map((k) => porOperador[k]), backgroundColor: ESTAD_COLORS.teal, borderRadius: 4 }] },
-        options: { indexAxis: "y", plugins: { legend: { display: false }, datalabels: { display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, anchor: "end", align: "right", color: "#3A3A38", font: { size: 10, weight: "600" }, formatter: (v) => v } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+        options: { indexAxis: "y", layout: { padding: { right: 52 } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: tooltipConPct } }, datalabels: { display: mostrarSiHayDato, anchor: "end", align: "right", color: "#3A3A38", font: { size: 10, weight: "600" }, formatter: etiquetaConPct } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
     });
 
     /* ── Tiempo promedio en patio por día ── */
@@ -269,8 +290,15 @@ export function renderPanelEstadisticas(opts) {
     );
     renderChart("chart-tiempo-patio", {
         type: "line",
-        data: { labels: dias.map(fmtDiaCorto), datasets: [{ label: "Minutos promedio", data: tiempoPorDia, borderColor: ESTAD_COLORS.ambar, backgroundColor: "rgba(245,158,11,0.15)", fill: true, tension: 0.3, pointRadius: 3 }] },
-        options: { plugins: { legend: { display: false }, datalabels: { display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, align: "top", color: "#854F0B", font: { size: 10, weight: "600" }, formatter: (v) => v } }, scales: { y: { beginAtZero: true } } }
+        data: { labels: dias.map(fmtDiaCorto), datasets: [{ label: "Tiempo promedio", data: tiempoPorDia, borderColor: ESTAD_COLORS.ambar, backgroundColor: "rgba(245,158,11,0.15)", fill: true, tension: 0.3, pointRadius: 3 }] },
+        options: {
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: (ctx) => formatearMinutos(ctx.raw) } },
+                datalabels: { display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, align: "top", color: "#854F0B", font: { size: 10, weight: "600" }, formatter: (v) => formatearMinutos(v) }
+            },
+            scales: { y: ejeTiempo() }
+        }
     });
 
     /* ── Por canal ── */
@@ -280,7 +308,7 @@ export function renderPanelEstadisticas(opts) {
     renderChart("chart-canal", {
         type: "bar",
         data: { labels: canalLabels, datasets: [{ label: "Vehículos", data: canalLabels.map((k) => porCanal[k]), backgroundColor: ESTAD_COLORS.azulClaro, borderRadius: 4 }] },
-        options: { plugins: { legend: { display: false }, datalabels: { display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, anchor: "end", align: "top", color: "#3A3A38", font: { size: 10, weight: "600" }, formatter: (v) => v } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+        options: { plugins: { legend: { display: false }, tooltip: { callbacks: { label: tooltipConPct } }, datalabels: { display: mostrarSiHayDato, anchor: "end", align: "top", color: "#3A3A38", font: { size: 10, weight: "600" }, formatter: etiquetaConPct } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
     });
 
     /* ── Muelles más usados ── */
@@ -294,7 +322,7 @@ export function renderPanelEstadisticas(opts) {
     renderChart("chart-muelles-general", {
         type: "bar",
         data: { labels: muelleLabels, datasets: [{ label: "Veces usado", data: muelleLabels.map((k) => porMuelle[k]), backgroundColor: ESTAD_COLORS.teal, borderRadius: 4 }] },
-        options: { indexAxis: "y", plugins: { legend: { display: false }, datalabels: { display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, anchor: "end", align: "right", color: "#3A3A38", font: { size: 10, weight: "600" }, formatter: (v) => v } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+        options: { indexAxis: "y", layout: { padding: { right: 52 } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: tooltipConPct } }, datalabels: { display: mostrarSiHayDato, anchor: "end", align: "right", color: "#3A3A38", font: { size: 10, weight: "600" }, formatter: etiquetaConPct } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
     });
 
     /* ── Tiempo promedio en muelle por día ── */
@@ -303,14 +331,77 @@ export function renderPanelEstadisticas(opts) {
     );
     renderChart("chart-tiempo-muelle", {
         type: "line",
-        data: { labels: dias.map(fmtDiaCorto), datasets: [{ label: "Minutos promedio", data: muellePorDia, borderColor: ESTAD_COLORS.teal, backgroundColor: "rgba(13,148,136,0.15)", fill: true, tension: 0.3, pointRadius: 3 }] },
-        options: { plugins: { legend: { display: false }, datalabels: { display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, align: "top", color: "#0d5a52", font: { size: 10, weight: "600" }, formatter: (v) => v } }, scales: { y: { beginAtZero: true } } }
+        data: { labels: dias.map(fmtDiaCorto), datasets: [{ label: "Tiempo promedio", data: muellePorDia, borderColor: ESTAD_COLORS.teal, backgroundColor: "rgba(13,148,136,0.15)", fill: true, tension: 0.3, pointRadius: 3 }] },
+        options: {
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: (ctx) => formatearMinutos(ctx.raw) } },
+                datalabels: { display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, align: "top", color: "#0d5a52", font: { size: 10, weight: "600" }, formatter: (v) => formatearMinutos(v) }
+            },
+            scales: { y: ejeTiempo() }
+        }
     });
 
     /* ── Tablas ── */
     renderTablaPorCanal(operativos, canalLabels);
     renderTablaPorTipo(operativos);
     renderTablaMuellesPorOperario(operativos);
+}
+
+
+/* =========================================================
+   ETIQUETAS CON PORCENTAJE
+
+   Toda gráfica de conteo rotula el número y su peso sobre el
+   total: "12" no dice si eso es mucho o poco, "12 (30%)" sí. El
+   total se calcula sobre los datos que la gráfica está pintando,
+   que son los del periodo elegido, así que el porcentaje se
+   mueve con el filtro de fechas como el resto del panel.
+
+   Es el total de la SERIE, no el de la gráfica entera. En las de
+   una sola serie son la misma cifra. En las de varias (entradas
+   por día, franja horaria) lo que se quiere leer es el día o la
+   hora contra su propia serie — "el 15% de las entradas a patio
+   del periodo fueron ese día" —, no contra la suma de series que
+   miden cosas distintas.
+
+   Las dos gráficas de tiempo promedio quedan fuera a propósito:
+   sus valores son promedios en minutos, y el porcentaje de un
+   promedio sobre la suma de los promedios de los otros días no
+   significa nada.
+   ========================================================= */
+
+function totalSerie(ctx) {
+    return (ctx.dataset.data || []).reduce((a, v) => a + (Number(v) || 0), 0);
+}
+
+function pctSerie(valor, ctx) {
+    const total = totalSerie(ctx);
+    return total ? Math.round(((Number(valor) || 0) / total) * 100) : 0;
+}
+
+function etiquetaConPct(valor, ctx) {
+    const total = totalSerie(ctx);
+    return total ? valor + " (" + pctSerie(valor, ctx) + "%)" : String(valor);
+}
+
+/* "auto" en vez de true: con el porcentaje al lado la etiqueta
+   mide casi el doble, y en un periodo largo o en las barras
+   apiladas de la franja horaria se pisarían unas con otras hasta
+   volverse ilegibles. Así el plugin esconde la que no cabe; el
+   dato completo sigue estando en el tooltip, que nunca se
+   esconde. */
+function mostrarSiHayDato(ctx) {
+    return ctx.dataset.data[ctx.dataIndex] > 0 ? "auto" : false;
+}
+
+/* El tooltip lleva siempre número y porcentaje, quepa o no la
+   etiqueta sobre la barra. En la dona no hay nombre de serie y el
+   título del tooltip ya trae el de la porción, así que ahí se
+   queda solo la cifra en vez de repetirlo. */
+function tooltipConPct(ctx) {
+    const serie = ctx.dataset.label ? ctx.dataset.label + ": " : "";
+    return serie + ctx.raw + " (" + pctSerie(ctx.raw, ctx) + "%)";
 }
 
 
@@ -377,7 +468,8 @@ export function renderChartFranjaHoraria(canvasId, registros, horaCorte) {
     options: {
       plugins: {
         legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } },
-        datalabels: { display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, anchor: "center", align: "center", color: "#2B2B29", font: { size: 9, weight: "600" }, formatter: (v) => v }
+        tooltip: { callbacks: { label: tooltipConPct } },
+        datalabels: { display: mostrarSiHayDato, anchor: "center", align: "center", color: "#2B2B29", font: { size: 9, weight: "600" }, formatter: etiquetaConPct }
       },
       scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } }
     }
@@ -406,7 +498,7 @@ function renderTablaPorCanal(recs, canalLabels) {
     cont.innerHTML = '<div class="texto-ayuda">No hay datos para el periodo.</div>';
     return;
   }
-  let html = '<table class="tabla"><thead><tr><th>Canal</th><th>Promedio patio</th><th># Vehículos</th><th>Finalizados</th></tr></thead><tbody>';
+  let html = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Canal</th><th>Promedio patio</th><th># Vehículos</th><th>Finalizados</th></tr></thead><tbody>';
   let descartadas = 0, sinPaso = 0;
   canalLabels.forEach((k) => {
     const grupo = recs.filter((r) => canalDe(r) === k);
@@ -415,7 +507,7 @@ function renderTablaPorCanal(recs, canalLabels) {
     sinPaso += prom.sinPaso;
     html += `<tr><td>${escapar(k)}</td><td>${celdaPromedio(prom)}</td><td>${grupo.length}</td><td>${finalizadosDe(prom)}</td></tr>`;
   });
-  html += "</tbody></table>";
+  html += "</tbody></table></div>";
   html += notaPromedios(descartadas, sinPaso);
   cont.innerHTML = html;
 }
@@ -424,7 +516,7 @@ function renderTablaPorTipo(recs) {
   const cont = document.getElementById("estad-por-tipo-body");
   if (!cont) return;
   const tipos = ["Cargue", "Descargue", "Ambos"];
-  let html = '<table class="tabla"><thead><tr><th>Tipo</th><th>Promedio patio</th><th>Promedio muelle</th><th># Vehículos</th><th>Finalizados</th></tr></thead><tbody>';
+  let html = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Tipo</th><th>Promedio patio</th><th>Promedio muelle</th><th># Vehículos</th><th>Finalizados</th></tr></thead><tbody>';
   let descartadas = 0, sinPaso = 0;
   tipos.forEach((t) => {
     const grupo = recs.filter((r) => r.tipo === t);
@@ -434,9 +526,27 @@ function renderTablaPorTipo(recs) {
     sinPaso += promP.sinPaso;
     html += `<tr><td>${t}</td><td>${celdaPromedio(promP)}</td><td>${celdaPromedio(promM)}</td><td>${grupo.length}</td><td>${finalizadosDe(promP)}</td></tr>`;
   });
-  html += "</tbody></table>";
+  html += "</tbody></table></div>";
   html += notaPromedios(descartadas, sinPaso);
   cont.innerHTML = html;
+}
+
+/* Eje vertical de las gráficas de tiempo: los valores se guardan en
+   minutos, pero se rotulan en horas y minutos. Sin esto, "138" en el
+   eje hay que dividirlo mentalmente para saber que son 2h 18m.
+
+   `precision: 0` evita que Chart.js invente marcas decimales cuando
+   el rango es pequeño (0,1 · 0,2 · 0,3…), que con este formato se
+   verían todas como "0 min". El guardia de Number.isInteger es por si
+   alguna aun así se cuela. */
+function ejeTiempo() {
+  return {
+    beginAtZero: true,
+    ticks: {
+      precision: 0,
+      callback: (v) => (Number.isInteger(v) ? formatearMinutos(v) : "")
+    }
+  };
 }
 
 function formatearMinutos(min) {
@@ -691,7 +801,7 @@ function renderTablaSegmentada(recs) {
     return;
   }
 
-  let html = '<table class="tabla"><thead><tr><th>Canal</th><th>Tipo</th><th># Veh.</th><th>Finalizados</th><th>Prom. patio</th><th>Prom. muelle</th><th>Total en planta</th></tr></thead><tbody>';
+  let html = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Canal</th><th>Tipo</th><th># Veh.</th><th>Finalizados</th><th>Prom. patio</th><th>Prom. muelle</th><th>Total en planta</th></tr></thead><tbody>';
   let descartadas = 0, sinPaso = 0;
   canales.forEach((canal) => {
     tipos.forEach((tipo) => {
@@ -708,7 +818,7 @@ function renderTablaSegmentada(recs) {
       html += `<tr><td>${escapar(canal)}</td><td>${tipo}</td><td>${g.length}</td><td>${finalizadosDe(pp)}</td><td>${celdaPromedio(pp)}</td><td>${celdaPromedio(pm)}</td><td>${total}</td></tr>`;
     });
   });
-  html += "</tbody></table>";
+  html += "</tbody></table></div>";
   html += notaPromedios(descartadas, sinPaso);
   cont.innerHTML = html;
 }
@@ -737,7 +847,7 @@ function renderTablaMuellesPorOperario(recs) {
     return totalB - totalA;
   });
 
-  let html = '<table class="tabla"><thead><tr><th>Operario</th><th>Muelle más usado</th><th>Veces</th><th>Total usos de muelle</th></tr></thead><tbody>';
+  let html = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Operario</th><th>Muelle más usado</th><th>Veces</th><th>Total usos de muelle</th></tr></thead><tbody>';
   operarios.forEach((op) => {
     const muelles = porOperarioMuelle[op];
     const muelleKeys = Object.keys(muelles).sort((a, b) => muelles[b] - muelles[a]);
@@ -745,7 +855,7 @@ function renderTablaMuellesPorOperario(recs) {
     const totalOp = muelleKeys.reduce((s, k) => s + muelles[k], 0);
     html += `<tr><td>${escapar(op)}</td><td>${escapar(top)}</td><td>${muelles[top]}</td><td>${totalOp}</td></tr>`;
   });
-  html += "</tbody></table>";
+  html += "</tbody></table></div>";
   cont.innerHTML = html;
 }
 
@@ -1144,12 +1254,12 @@ function renderOnTime(recs) {
     return;
   }
 
-  let html = '<table class="tabla"><thead><tr><th>Tramo</th><th>Vehículos</th><th>%</th></tr></thead><tbody>';
+  let html = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Tramo</th><th>Vehículos</th><th>%</th></tr></thead><tbody>';
   r.tramos.forEach((t) => {
     html += `<tr><td><span class="ontime-punto ontime-${t.color}"></span>${t.etiqueta}</td>` +
             `<td>${t.n}</td><td>${t.pct}%</td></tr>`;
   });
-  html += `</tbody><tfoot><tr><th>Con cita</th><th>${r.total}</th><th>100%</th></tr></tfoot></table>`;
+  html += `</tbody><tfoot><tr><th>Con cita</th><th>${r.total}</th><th>100%</th></tr></tfoot></table></div>`;
   html += '<p class="texto-ayuda" style="margin-top:8px;">Los porcentajes son sobre los ' + r.total +
     " vehículo(s) que traían cita. Otros " + r.sinCita + " del periodo entraron sin hora programada " +
     "y quedan fuera del indicador.</p>";
@@ -1168,6 +1278,7 @@ function renderOnTime(recs) {
     },
     options: {
       indexAxis: "y",
+      layout: { padding: { right: 52 } },
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: (ctx) => ctx.raw + " vehículo(s) · " + r.tramos[ctx.dataIndex].pct + "%" } },
@@ -1183,3 +1294,117 @@ function renderOnTime(recs) {
   });
 }
 
+
+
+/* =========================================================
+   ACOMPAÑANTES DEL ON TIME
+
+   Tres cajas del mismo tamaño debajo del cumplimiento de cita:
+   los cinco que más se adelantaron, los cinco que más se
+   retrasaron y el listado completo del periodo para revisar el
+   dato crudo.
+
+   Las tres reciben `recs`, que es la misma lista ya recortada
+   por periodo y por canal que usa el resto del panel: se mueven
+   con los filtros de fecha sin necesidad de nada más.
+   ========================================================= */
+
+/* `sentido` es -1 (llegó antes de la cita) o +1 (llegó después).
+   Se ordena por magnitud del desfase, no por hora: lo que se
+   busca aquí es el peor caso, y ese va primero.
+
+   El desfase de 0 min no cae en ninguna de las dos: Math.sign(0)
+   es 0 y no coincide con ningún sentido. Llegar clavado a la hora
+   no es ni adelanto ni retraso. */
+function renderTopDesfase(id, recs, sentido) {
+  const cont = document.getElementById(id);
+  if (!cont) return;
+
+  const filas = recs
+    .map((r) => ({ rec: r, ot: clasificarOnTime(r) }))
+    .filter((f) => f.ot && Math.sign(f.ot.minutos) === sentido)
+    .sort((a, b) => Math.abs(b.ot.minutos) - Math.abs(a.ot.minutos))
+    .slice(0, 5);
+
+  if (!filas.length) {
+    cont.innerHTML = '<div class="texto-ayuda">Ningún vehículo con cita del periodo llegó ' +
+      (sentido < 0 ? "antes" : "después") + " de su hora programada.</div>";
+    return;
+  }
+
+  const columna = sentido < 0 ? "Adelanto" : "Retraso";
+  let html = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Placa</th><th>Cita</th>' +
+    "<th>Llegada</th><th>" + columna + "</th></tr></thead><tbody>";
+  filas.forEach((f) => {
+    html += `<tr><td>${escapar(f.rec.placa)}</td>` +
+            `<td>${fmtFechaHoraCorta(f.rec.horaProgramacion)}</td>` +
+            `<td>${fmtFechaHoraCorta(f.rec.horaEntrada)}</td>` +
+            `<td><span class="ontime-punto ontime-${f.ot.color}"></span>` +
+            `${formatearMinutos(Math.abs(f.ot.minutos))}</td></tr>`;
+  });
+  html += "</tbody></table></div>";
+  cont.innerHTML = html;
+}
+
+/* Los vehículos que OPERARON en el periodo, traigan cita o no: es
+   la caja para revisar el dato crudo, y uno sin cita también hay
+   que poder verlo. El más reciente arriba, que es por donde se
+   empieza a mirar.
+
+   Quien la llama le pasa la lista ya sin cancelados, por la misma
+   razón que el resto del panel: un vehículo que no llegó no tiene
+   desfase que mostrar. Ver el comentario en renderPanelEstadisticas().
+
+   La caja no crece con los datos — el alto lo fija el CSS y la
+   lista se desplaza dentro. Por eso el conteo va en el pie: con
+   scroll no se puede saber cuántos son contando filas. */
+function renderListadoVehiculos(id, recs) {
+  const cont = document.getElementById(id);
+  if (!cont) return;
+
+  if (!recs.length) {
+    cont.innerHTML = '<div class="texto-ayuda">No hay vehículos registrados en el periodo.</div>';
+    return;
+  }
+
+  const filas = recs.slice().sort((a, b) =>
+    String(b.horaEntrada || "").localeCompare(String(a.horaEntrada || ""))
+  );
+
+  let html = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Placa</th>' +
+    "<th>Entrada</th><th>Desfase</th></tr></thead><tbody>";
+  filas.forEach((r) => {
+    const ot = clasificarOnTime(r);
+    const desfase = ot
+      ? '<span class="ontime-punto ontime-' + ot.color + '"></span>' + textoDesfase(ot.minutos)
+      : '<span class="sin-cita">Sin cita</span>';
+    html += `<tr><td>${escapar(r.placa)}</td>` +
+            `<td>${fmtFechaHoraCorta(r.horaEntrada)}</td>` +
+            `<td>${desfase}</td></tr>`;
+  });
+  html += "</tbody></table></div>";
+  html += '<p class="texto-ayuda" style="margin-top:8px;">' + filas.length +
+    " vehículo(s) registrados en el periodo.</p>";
+  cont.innerHTML = html;
+}
+
+/* El signo es la mitad del dato: "45 min" no dice si llegó antes
+   o después. Se usa el menos tipográfico (−), que a este tamaño
+   no se confunde con un guion de separación. */
+function textoDesfase(min) {
+  if (min === 0) return "En hora";
+  return (min < 0 ? "−" : "+") + formatearMinutos(Math.abs(min));
+}
+
+/* Día y hora sin año: las tres cajas viven dentro de un periodo ya
+   elegido, así que el año es ruido, pero el día no se puede quitar
+   — un periodo de una semana tiene siete "08:15" distintos. */
+function fmtFechaHoraCorta(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d)) return "—";
+  return d.toLocaleString("es-CO", {
+    day: "2-digit", month: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false
+  });
+}
