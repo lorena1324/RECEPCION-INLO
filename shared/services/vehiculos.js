@@ -95,6 +95,23 @@ export async function crearRegistro(operacion, datos, operador) {
 
         tipo: datos.tipo,
 
+        // Tipo de vehículo (id de la lista que el administrador
+        // configura por bodega en config/{operacion}). De él salen
+        // la tarifa y las metas de tiempo en muelle.
+        //
+        // Se guarda el ID y no el nombre porque el nombre se puede
+        // corregir después ("Tracto mula" → "Tractomula") y los
+        // registros viejos no deben quedar apuntando a una tipología
+        // que ya no existe. `tipologiaNombre` va al lado como copia
+        // congelada, para que un registro exportado a Excel siga
+        // siendo legible aunque la tipología se borre.
+        //
+        // Puede venir vacío: mientras el administrador no haya
+        // configurado ninguna tipología, el vehículo entra sin ella.
+        // Lo que no puede es SALIR sin ella (ver puedeRegistrarSalida).
+        tipologia: datos.tipologia || "",
+        tipologiaNombre: datos.tipologiaNombre || "",
+
         // Avance de cargue/descargue: si el tipo ya es uno solo, el
         // "avanceTipo" queda fijo desde la entrada. Si es "Ambos", el
         // vehículo siempre arranca en Descargue — es un orden fijo del
@@ -106,6 +123,13 @@ export async function crearRegistro(operacion, datos, operador) {
 
         cedula: datos.cedula || "",
         obs: datos.obs || "",
+
+        // Cómo viene la mercancía: arrumada o paletizada. Solo lo
+        // usan las bodegas que lo distinguen (hoy J3), y lo marca el
+        // supervisor desde el muelle, no la portería. Vacío al
+        // entrar significa el estándar (arrumado) — ver MODALIDADES
+        // en config.js.
+        modalidad: datos.modalidad || "",
 
         servicioTipo: datos.servicioTipo || "Normal",
         servicioEmpresa: datos.servicioEmpresa || "",
@@ -200,6 +224,103 @@ export async function actualizarUbicacion(id, cambios, operador) {
     }
 
     await updateDoc(doc(db, COLECCION, id), cambiosDoc);
+}
+
+
+/* =========================================================
+   CORREGIR LOS DATOS DEL VEHÍCULO
+
+   Para quien puede editar el registro completo: hoy el
+   administrador y el supervisor de J4 (ver la regla
+   `bodegasConSupervisorEditor` en firestore.rules). No es lo
+   mismo que actualizarUbicacion(): aquí se corrige lo que se
+   digitó mal en la entrada —placa, proveedor, número de cita,
+   tipo de operación, tipología, hora de llegada, cita—, no se
+   mueve el vehículo por la planta.
+
+   ── QUÉ QUEDA EN EL HISTORIAL ──
+
+   Una entrada con el detalle campo por campo de lo que cambió,
+   con el valor viejo y el nuevo. Corregir un registro es
+   reescribir lo que pasó, y sin la huella de quién lo reescribió
+   y qué había antes, el historial dejaría de servir justo para
+   lo que existe. Por eso la lista de cambios la arma el
+   servicio y no la pantalla: así ninguna pantalla puede
+   guardar una corrección sin dejar rastro.
+
+   `CAMPOS_EDITABLES` acota qué se deja tocar por esta vía. El
+   avance, las autorizaciones, los cobros y las cancelaciones NO
+   están: cada uno tiene su propio flujo, con sus validaciones y
+   su propia entrada de historial.
+   ========================================================= */
+
+const CAMPOS_EDITABLES = {
+    placa: "Placa",
+    conductor: "Conductor / proveedor",
+    cedula: "Cédula / número de cita",
+    tipo: "Tipo de operación",
+    canal: "Canal",
+    tipologia: "Tipología",
+    tipologiaNombre: "Tipología",
+    modalidad: "Cómo viene la mercancía",
+    horaEntrada: "Hora de entrada",
+    programado: "Programado",
+    horaProgramacion: "Hora de la cita",
+    servicioTipo: "Tipo de servicio",
+    servicioEmpresa: "Empresa del servicio",
+    obs: "Observaciones de entrada"
+};
+
+function describirCambio(campo, antes, despues) {
+    const nombre = CAMPOS_EDITABLES[campo] || campo;
+    const vacio = (v) => (v === null || v === undefined || v === "" ? "(vacío)" : String(v));
+    return nombre + ': "' + vacio(antes) + '" → "' + vacio(despues) + '"';
+}
+
+export async function corregirRegistro(id, actual, cambios, quien) {
+
+    const cambiosDoc = {};
+    const detalle = [];
+
+    Object.keys(cambios).forEach(function (campo) {
+
+        if (!Object.prototype.hasOwnProperty.call(CAMPOS_EDITABLES, campo)) return;
+
+        const nuevo = cambios[campo];
+        const viejo = actual ? actual[campo] : undefined;
+
+        // Comparación laxa a propósito: el formulario devuelve
+        // strings y el documento puede traer números o booleanos.
+        // Sin esto, reabrir el modal y guardar sin tocar nada
+        // registraría "cambios" que nadie hizo.
+        if (String(viejo == null ? "" : viejo) === String(nuevo == null ? "" : nuevo)) return;
+
+        cambiosDoc[campo] = nuevo;
+
+        // `tipologiaNombre` viaja junto a `tipologia` pero es una
+        // copia del mismo dato: anunciarlo dos veces en el
+        // historial haría ver dos correcciones donde hubo una.
+        if (campo !== "tipologiaNombre") detalle.push(describirCambio(campo, viejo, nuevo));
+    });
+
+    if (!detalle.length && !Object.keys(cambiosDoc).length) return false;
+
+    // La fecha del día operativo cuelga de la hora de entrada: si se
+    // corrige la hora y no la fecha, el vehículo queda contado en un
+    // día y ordenado en otro.
+    if (cambiosDoc.horaEntrada) {
+        cambiosDoc.fecha = String(cambiosDoc.horaEntrada).slice(0, 10);
+    }
+
+    cambiosDoc.historial = arrayUnion({
+        fecha: nowLocal(),
+        tipo: "correccion",
+        operador: quien || "",
+        texto: "Registro corregido — " + detalle.join(" · ")
+    });
+
+    await updateDoc(doc(db, COLECCION, id), cambiosDoc);
+    return true;
 }
 
 
@@ -311,6 +432,149 @@ export async function registrarSalida(id, horaSalida, obsSalida, operador) {
 
 
 /* =========================================================
+   VEHÍCULO CANCELADO
+
+   Un vehículo cancelado es uno cuya operación no se hizo. Hay
+   dos maneras de llegar ahí y las dos quedan en el mismo sitio,
+   distinguidas por `cancelacion.llego`:
+
+     llego: true   entró, estuvo en patio o muelle, y se fue sin
+                   cargar ni descargar. Lo cierra cancelarVehiculo().
+
+     llego: false  la cita se canceló y el vehículo nunca vino.
+                   Lo crea crearCitaCancelada(), sin ubicación ni
+                   paso por muelle.
+
+   Se guardan juntos —y no en una colección aparte— porque son la
+   misma pregunta contada de dos formas: cuánto de lo programado
+   no se ejecutó. Separarlos obligaría a cruzar dos colecciones
+   para responderla.
+
+   UN CANCELADO NO ES UNA SALIDA NORMAL. Lleva `horaSalida` para
+   que todo lo que ya pregunta "¿sigue adentro?" siga funcionando
+   sin tocarse, pero `cancelado` en true es lo que impide que se
+   cuele en los promedios de desempeño: un vehículo que no operó
+   no tardó cero minutos en muelle, simplemente no estuvo.
+
+   El motivo es obligatorio. Sin él la cifra de cancelados sería
+   un número sin explicación, que es justo lo que nadie puede
+   accionar.
+   ========================================================= */
+
+export function estaCancelado(r) {
+    return !!(r && r.cancelado);
+}
+
+export function llegoAunqueCancelado(r) {
+    return estaCancelado(r) && !!(r.cancelacion && r.cancelacion.llego);
+}
+
+/*
+    Cancela un vehículo que YA ESTÁ REGISTRADO. Lo cierra con la
+    hora en que se cancela: a partir de ahí deja de ocupar patio o
+    muelle, que es lo que la portería necesita ver.
+*/
+export async function cancelarVehiculo(id, datos, supervisor) {
+
+    const motivo = (datos && datos.motivo ? String(datos.motivo) : "").trim();
+    if (!motivo) throw new Error("La cancelación necesita un motivo.");
+
+    const fecha = (datos && datos.fecha) || nowLocal();
+
+    const entrada = {
+        fecha: fecha,
+        tipo: "cancelacion",
+        operador: supervisor || "",
+        texto: "Operación cancelada — " + motivo
+    };
+
+    await updateDoc(doc(db, COLECCION, id), {
+        cancelado: true,
+        cancelacion: {
+            motivo: motivo,
+            fecha: fecha,
+            canceladoPor: supervisor || "",
+            llego: true
+        },
+        horaSalida: fecha,
+        operadorSalida: supervisor || "",
+        historial: arrayUnion(entrada)
+    });
+}
+
+/*
+    Registra una cita cancelada de un vehículo que NUNCA LLEGÓ.
+
+    Nace cerrada: entrada y salida a la misma hora, sin ubicación
+    ni muelle. Esa hora es la de la cita cuando se conoce, y no la
+    del momento en que alguien se acuerda de registrarla, porque
+    la cancelación pertenece al día que se dejó de operar — no al
+    día en que se anotó.
+*/
+export async function crearCitaCancelada(operacion, datos, supervisor) {
+
+    const motivo = (datos.motivo ? String(datos.motivo) : "").trim();
+    if (!motivo) throw new Error("La cancelación necesita un motivo.");
+
+    const momento = datos.horaProgramacion || datos.fecha || nowLocal();
+
+    const rec = {
+        operacion: operacion,
+
+        conductor: datos.conductor || "",
+        cedula: datos.cedula || "",
+        placa: datos.placa || "",
+
+        horaEntrada: momento,
+        horaSalida: momento,
+        fecha: momento.slice(0, 10),
+
+        programado: !!datos.horaProgramacion,
+        horaProgramacion: datos.horaProgramacion || "",
+
+        // Nunca estuvo en ningún lado. `ubicacion` vacía es lo que
+        // lo mantiene fuera de los tableros de patio y de muelle.
+        ubicacion: "",
+        numeroMuelle: "",
+        bahia: "",
+        destino: "",
+        canal: datos.canal || "Otro",
+
+        tipo: datos.tipo || "",
+        tipologia: datos.tipologia || "",
+        tipologiaNombre: datos.tipologiaNombre || "",
+
+        servicioTipo: "Normal",
+        servicioEmpresa: "",
+        obs: datos.obs || "",
+
+        cancelado: true,
+        cancelacion: {
+            motivo: motivo,
+            fecha: nowLocal(),
+            canceladoPor: supervisor || "",
+            llego: false
+        },
+
+        operadorEntrada: supervisor || "",
+        operadorSalida: supervisor || "",
+
+        historial: [{
+            fecha: nowLocal(),
+            tipo: "cancelacion",
+            operador: supervisor || "",
+            texto: "Cita cancelada — el vehículo no llegó. " + motivo
+        }],
+
+        creadoEn: serverTimestamp()
+    };
+
+    const ref = await addDoc(collection(db, COLECCION), rec);
+    return ref.id;
+}
+
+
+/* =========================================================
    ACTUALIZAR AVANCE (porcentaje de cargue/descargue)
 
    `cambios.avanceTipo` fija cuál de los dos está midiendo el
@@ -333,6 +597,36 @@ export async function actualizarAvance(id, cambios, operador) {
     await updateDoc(doc(db, COLECCION, id), {
         avanceTipo: cambios.avanceTipo,
         avancePorcentaje: porcentaje,
+        historial: arrayUnion(entrada)
+    });
+}
+
+
+/* =========================================================
+   CÓMO VIENE LA MERCANCÍA (arrumada o paletizada)
+
+   Solo en las bodegas cuya configuración lo distingue (hoy J3).
+   Lo marca el supervisor desde la tarjeta del muelle, porque es
+   quien ve el camión abierto: en la portería, con el vehículo
+   todavía en la fila, no siempre se sabe.
+
+   De este dato cuelga la meta de tiempo en muelle —la misma mula
+   tarda 3h30 arrumada y 45 minutos paletizada— así que cambiarlo
+   cambia la alerta del muelle en el acto. Por eso queda en el
+   historial: es una decisión que mueve el indicador, no una nota.
+   ========================================================= */
+
+export async function actualizarModalidad(id, modalidad, operador) {
+
+    const entrada = {
+        fecha: nowLocal(),
+        tipo: "modalidad",
+        operador: operador || "",
+        texto: "Mercancía marcada como " + modalidad
+    };
+
+    await updateDoc(doc(db, COLECCION, id), {
+        modalidad: modalidad,
         historial: arrayUnion(entrada)
     });
 }
@@ -415,31 +709,63 @@ export async function eliminarRegistro(id) {
    (operador.js), aquí solo se calcula el dato.
    ========================================================= */
 
-export function getMuellesOcupacion(registrosActivosEnMuelle, numMuelles) {
+/*
+    `muelles` es la LISTA de números de muelle de la bodega —los de
+    J4 son el 9, el 10 y el 11, no el 1, 2 y 3—. Se sigue aceptando
+    un número suelto, que significa "1..N": es como llamaban estas
+    funciones todos los paneles antes de que la numeración fuera
+    configurable, y hay llamadas que todavía lo hacen.
+
+    Pídele la lista a `numerosDeMuelle()` en config.js.
+*/
+function listaDeMuelles(muelles) {
+
+    if (Array.isArray(muelles)) return muelles;
+
+    const lista = [];
+    for (let n = 1; n <= (Number(muelles) || 0); n++) lista.push(n);
+    return lista;
+}
+
+export function getMuellesOcupacion(registrosActivosEnMuelle, muelles) {
 
     const ocupacion = {};
 
-    for (let n = 1; n <= numMuelles; n++) {
+    listaDeMuelles(muelles).forEach(function (n) {
         ocupacion[n] = registrosActivosEnMuelle.find(function (r) {
             return String(r.numeroMuelle) === String(n);
         }) || null;
-    }
+    });
+
+    /* Vehículos parados en un muelle que ya no está en la
+       numeración. Pasa el día que la bodega se renumera: los que
+       entraron antes quedaron con el número viejo, y si el tablero
+       solo mirara la lista nueva, esos camiones DESAPARECERÍAN de
+       la pantalla con el vehículo todavía en el muelle. Se agregan
+       al final para que sigan a la vista hasta que salgan. */
+    registrosActivosEnMuelle.forEach(function (r) {
+        const n = r.numeroMuelle;
+        if (n === "" || n === null || n === undefined) return;
+        if (!Object.prototype.hasOwnProperty.call(ocupacion, n)) ocupacion[n] = r;
+    });
 
     return ocupacion;
 }
 
-export function getMuellesLibres(ocupacion, numMuelles, muelleActual) {
+export function getMuellesLibres(ocupacion, muelles, muelleActual) {
 
     const libres = [];
 
-    for (let n = 1; n <= numMuelles; n++) {
+    // Solo los de la numeración vigente: un muelle que ya no existe
+    // no se le puede asignar a nadie más, aunque siga ocupado.
+    listaDeMuelles(muelles).forEach(function (n) {
         const ocupante = ocupacion[n];
         const esElActual = muelleActual != null && String(n) === String(muelleActual);
 
         if (!ocupante || esElActual) {
             libres.push(n);
         }
-    }
+    });
 
     return libres;
 }
@@ -480,23 +806,31 @@ export function puedeDespachar(r) {
    aunque sea en 0) quedan sujetos a ella.
 
    Reglas de negocio (definidas por el cliente):
-     - Descargue: sin excepción, debe llegar al 100% para salir.
-       Ni el operario ni el supervisor pueden saltarse esto.
-     - Cargue: puede salir por debajo del 100% SOLO si (a) llegó
-       al menos a MINIMO_CARGUE_ANTICIPADO y (b) un supervisor
-       autorizó la salida explicando el motivo
-       (autorizarSalidaAnticipada). Por debajo de ese mínimo no
-       hay ninguna excepción posible.
+     - Cada fase (Cargue y Descargue) tiene su propio mínimo, y
+       cada bodega los suyos: se configuran en config/{operacion}
+       y se leen con umbralesSalida().
+     - Por encima del mínimo pero por debajo del 100%, la salida
+       exige que un supervisor la autorice explicando el motivo
+       (autorizarSalidaAnticipada). Por debajo del mínimo no hay
+       ninguna excepción posible.
+     - Un mínimo de 100 significa "sin excepción": la franja
+       autorizable desaparece sola. Así es como J3 y B9 mantienen
+       el descargue al 100%, mientras J4 lo autoriza desde el 95%.
      - Un vehículo "Ambos" sin que el supervisor haya elegido
        todavía cuál de los dos está midiendo (avanceTipo null)
-       se trata como Descargue: 100% sin excepción, porque no
-       hay forma de saber si aplica la excepción de Cargue.
+       se trata como Descargue: es la fase que va primero, y
+       suponer la otra sería regalarle una excepción que quizá
+       no le corresponde.
 
-   EL MÍNIMO SE CAMBIA AQUÍ Y EN NINGÚN OTRO LADO. Todo el resto
-   de la app (paneles de operario, supervisor, cliente y admin,
-   textos de las alertas, herramienta de backfill) lo lee de esta
-   constante: si vuelve a aparecer un número suelto en otro
-   archivo, es un error esperando a que alguien cambie el umbral.
+   LOS MÍNIMOS NO SE ESCRIBEN EN NINGÚN OTRO ARCHIVO. Todo el
+   resto de la app (paneles de operario, supervisor, cliente y
+   admin, textos de las alertas, herramienta de backfill) los
+   obtiene de estas funciones pasándoles la configuración de su
+   bodega: si vuelve a aparecer un número suelto en otro archivo,
+   es un error esperando a que alguien cambie el umbral.
+
+   Las constantes de abajo son solo el valor por defecto de una
+   bodega sin configurar — no la última palabra.
    ========================================================= */
 
 // Mínimo de cargue para que un supervisor pueda siquiera autorizar
@@ -507,6 +841,53 @@ export const MINIMO_CARGUE_ANTICIPADO = 95;
 // Avance con el que un vehículo sale sin necesitar autorización.
 export const MINIMO_SALIDA = 100;
 
+/* =========================================================
+   UMBRALES POR BODEGA
+
+   Los dos números de arriba dejaron de ser la última palabra: son
+   el valor por defecto de una bodega que no ha configurado nada.
+   Cada bodega define los suyos en config/{operacion}, porque J4
+   pidió bajar el descargue al 95% —allí no siempre se llega al
+   100%— y eso no aplica a J3 ni a B9, donde el descargue sigue
+   exigiendo el 100% sin excepción.
+
+   La regla es una sola para las dos fases, y el número la
+   parametriza:
+
+     avance >= 100            sale, sin más
+     avance >= minimo         sale SOLO con autorización motivada
+                              de un supervisor
+     avance <  minimo         no sale, sin excepción posible
+
+   Cuando el mínimo es 100 la franja de excepción desaparece sola,
+   que es exactamente el comportamiento que tenía el descargue
+   antes de esto. Por eso no hace falta un caso especial: el
+   descargue "sin excepción" es simplemente minimo = 100.
+
+   Todas las funciones aceptan `config` como segundo argumento y
+   siguen funcionando sin él — un llamador que todavía no lo pase
+   obtiene el comportamiento anterior, no un error.
+   ========================================================= */
+
+export function umbralesSalida(config) {
+    return {
+        Cargue: config && config.minimoCargue != null ? config.minimoCargue : MINIMO_CARGUE_ANTICIPADO,
+        Descargue: config && config.minimoDescargue != null ? config.minimoDescargue : MINIMO_SALIDA
+    };
+}
+
+/*
+    El mínimo que le aplica a ESTE vehículo, según la fase que esté
+    midiendo. Un "Ambos" al que el supervisor todavía no le eligió
+    fase se trata como descargue: es la fase que va primero, y
+    suponer la otra sería regalarle una excepción que quizá no le
+    corresponde.
+*/
+export function minimoDe(r, config) {
+    const u = umbralesSalida(config);
+    return r && r.avanceTipo === "Cargue" ? u.Cargue : u.Descargue;
+}
+
 export function requiereAvanceCompleto(r) {
     return r.avancePorcentaje !== undefined && r.avancePorcentaje !== null;
 }
@@ -515,18 +896,27 @@ export function avanceCompleto(r) {
     return (r.avancePorcentaje || 0) >= MINIMO_SALIDA;
 }
 
-export function puedeAutorizarSalidaAnticipada(r) {
+export function puedeAutorizarSalidaAnticipada(r, config) {
     if (!requiereAvanceCompleto(r)) return false;
     if (avanceCompleto(r)) return false;
-    if (r.avanceTipo !== "Cargue") return false;
-    return (r.avancePorcentaje || 0) >= MINIMO_CARGUE_ANTICIPADO;
+
+    const minimo = minimoDe(r, config);
+
+    // Con el mínimo en 100 no hay franja que autorizar: la única
+    // forma de salir es completar el avance.
+    if (minimo >= MINIMO_SALIDA) return false;
+
+    return (r.avancePorcentaje || 0) >= minimo;
 }
 
-export function puedeRegistrarSalida(r) {
+export function puedeRegistrarSalida(r, config) {
     if (!requiereAvanceCompleto(r)) return true;
     if (avanceCompleto(r)) return true;
-    if (r.avanceTipo !== "Cargue") return false;
-    if ((r.avancePorcentaje || 0) < MINIMO_CARGUE_ANTICIPADO) return false;
+
+    const minimo = minimoDe(r, config);
+    if (minimo >= MINIMO_SALIDA) return false;
+    if ((r.avancePorcentaje || 0) < minimo) return false;
+
     return !!(r.autorizacionSalida && r.autorizacionSalida.motivo);
 }
 
@@ -555,7 +945,7 @@ export function puedeRegistrarSalida(r) {
    cargue y lo único que falta es la firma del supervisor).
    ========================================================= */
 
-export function diagnosticoSalida(r) {
+export function diagnosticoSalida(r, config) {
 
     if (!r) {
         return {
@@ -595,44 +985,49 @@ export function diagnosticoSalida(r) {
 
     var autorizada = !!(r.autorizacionSalida && r.autorizacionSalida.motivo);
 
-    if (esCargue && pct >= MINIMO_CARGUE_ANTICIPADO && autorizada) {
+    // El mínimo sale de la configuración de la bodega: J4 permite
+    // autorizar el descargue desde el 95%, J3 y B9 exigen el 100%.
+    var minimo = minimoDe(r, config);
+    var etiqueta = esCargue ? 'cargue' : 'descargue';
+
+    if (pct >= minimo && autorizada) {
         return {
             puedeSalir: true, nivel: 'ok',
             titulo: 'Salida anticipada autorizada',
-            detalle: 'El cargue está en ' + pct + '%, pero un supervisor autorizó la salida anticipada' +
+            detalle: 'El ' + etiqueta + ' está en ' + pct + '%, pero un supervisor autorizó la salida anticipada' +
                      (r.autorizacionSalida.autorizadoPor ? ' (' + r.autorizacionSalida.autorizadoPor + ')' : '') + '.',
             accion: '',
-            porcentaje: pct, minimo: MINIMO_CARGUE_ANTICIPADO, faltante: 0
+            porcentaje: pct, minimo: minimo, faltante: 0
         };
     }
 
-    // Descargue (y "Ambos" sin fase definida): 100% sin excepción.
-    if (!esCargue) {
+    // Mínimo en 100: no hay excepción posible en esta fase.
+    if (minimo >= MINIMO_SALIDA) {
         return {
             puedeSalir: false, nivel: 'bloqueo',
-            titulo: 'El descargue debe llegar al 100%',
-            detalle: 'El descargue está en ' + pct + '% y debe llegar al ' + MINIMO_SALIDA + '% para poder salir. No hay excepción posible: ni el operario ni el supervisor pueden saltarse esta regla.',
-            accion: 'Faltan ' + (MINIMO_SALIDA - pct) + ' puntos de descargue. Espera a que el muelle lo complete.',
+            titulo: 'El ' + etiqueta + ' debe llegar al 100%',
+            detalle: 'El ' + etiqueta + ' está en ' + pct + '% y debe llegar al ' + MINIMO_SALIDA + '% para poder salir. No hay excepción posible: ni el operario ni el supervisor pueden saltarse esta regla.',
+            accion: 'Faltan ' + (MINIMO_SALIDA - pct) + ' puntos de ' + etiqueta + '. Espera a que el muelle lo complete.',
             porcentaje: pct, minimo: MINIMO_SALIDA, faltante: MINIMO_SALIDA - pct
         };
     }
 
-    // Cargue por debajo del mínimo: ni siquiera es autorizable.
-    if (pct < MINIMO_CARGUE_ANTICIPADO) {
+    // Por debajo del mínimo: ni siquiera es autorizable.
+    if (pct < minimo) {
         return {
             puedeSalir: false, nivel: 'bloqueo',
-            titulo: 'El cargue no llega al mínimo autorizable',
-            detalle: 'El cargue está en ' + pct + '% y debe llegar mínimo al ' + MINIMO_CARGUE_ANTICIPADO + '% para que un supervisor siquiera pueda autorizar una salida anticipada.',
-            accion: 'Faltan ' + (MINIMO_CARGUE_ANTICIPADO - pct) + ' puntos para el mínimo del ' + MINIMO_CARGUE_ANTICIPADO + '%, o ' + (MINIMO_SALIDA - pct) + ' para completar el cargue y salir sin autorización.',
-            porcentaje: pct, minimo: MINIMO_CARGUE_ANTICIPADO, faltante: MINIMO_CARGUE_ANTICIPADO - pct
+            titulo: 'El ' + etiqueta + ' no llega al mínimo autorizable',
+            detalle: 'El ' + etiqueta + ' está en ' + pct + '% y debe llegar mínimo al ' + minimo + '% para que un supervisor siquiera pueda autorizar una salida anticipada.',
+            accion: 'Faltan ' + (minimo - pct) + ' puntos para el mínimo del ' + minimo + '%, o ' + (MINIMO_SALIDA - pct) + ' para completar el ' + etiqueta + ' y salir sin autorización.',
+            porcentaje: pct, minimo: minimo, faltante: minimo - pct
         };
     }
 
-    // Cargue entre el mínimo y el 99%: solo falta la firma del supervisor.
+    // Entre el mínimo y el 99%: solo falta la firma del supervisor.
     return {
         puedeSalir: false, nivel: 'espera',
         titulo: 'Falta la autorización del supervisor',
-        detalle: 'El cargue está en ' + pct + '% (ya pasó el mínimo del ' + MINIMO_CARGUE_ANTICIPADO + '%), pero por debajo del 100% un supervisor debe autorizar la salida anticipada indicando el motivo.',
+        detalle: 'El ' + etiqueta + ' está en ' + pct + '% (ya pasó el mínimo del ' + minimo + '%), pero por debajo del 100% un supervisor debe autorizar la salida anticipada indicando el motivo.',
         accion: 'Pídele al supervisor que autorice la salida, o espera los ' + (MINIMO_SALIDA - pct) + ' puntos que faltan para el 100%.',
         porcentaje: pct, minimo: null, faltante: null
     };

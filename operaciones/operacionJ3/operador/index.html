@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-operacion="J3">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -100,6 +100,19 @@
                     </div>
                 </div>
 
+                <!-- Alerta de muelle. Es distinta de la de arriba: aquella
+                     mide la espera en patio contra el límite general de la
+                     bodega, y esta mide lo que cada vehículo lleva EN MUELLE
+                     contra la meta que el administrador le fijó a su
+                     tipología en Configuración. -->
+                <div id="alerta-muelle-banner" class="local-banner" style="display:none; background:#FDECEC; border-color:#F0A9A9; color:#7F1D1D;">
+                    <i class="ti ti-clock-exclamation"></i>
+                    <div>
+                        <strong>Vehículos por encima de su meta de muelle</strong>
+                        <span id="alerta-muelle-detalle"></span>
+                    </div>
+                </div>
+
                 <div class="stats-row">
                     <div class="stat-card">
                         <div class="stat-ico blue"><i class="ti ti-truck"></i></div>
@@ -123,8 +136,10 @@
                     </div>
                 </div>
 
+                <!-- El número lo pone operador.js con el que traiga la
+                     configuración de la bodega, no está fijo aquí. -->
                 <div class="section-header">
-                    <div class="section-title">Muelles (1 a 8)</div>
+                    <div class="section-title" id="muelles-titulo">Muelles</div>
                 </div>
                 <div id="muelles-grid" class="muelles-grid"></div>
 
@@ -136,7 +151,7 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>Prioridad</th><th>Placa</th><th>Conductor</th><th>Tipo</th><th>Ingreso</th><th>Operador</th><th>Acción</th>
+                                <th>Prioridad</th><th>Placa</th><th class="th-conductor">Conductor</th><th>Tipo</th><th>Ingreso</th><th>Operador</th><th>Acción</th>
                             </tr>
                         </thead>
                         <tbody id="dash-table"></tbody>
@@ -150,7 +165,7 @@
                     <div class="form-grid">
 
                         <div class="form-group">
-                            <label for="f-conductor">Conductor *</label>
+                            <label for="f-conductor" id="lbl-conductor">Conductor *</label>
                             <input type="text" id="f-conductor" placeholder="Nombre completo del conductor" autocomplete="off">
                         </div>
 
@@ -242,8 +257,18 @@
                             </select>
                         </div>
 
+                        <!-- Las opciones las llena operador.js desde la
+                             configuración de la bodega (config/J3), en
+                             vivo: si el administrador agrega una
+                             tipología, aparece aquí sin recargar. -->
                         <div class="form-group full">
-                            <label for="f-cedula">Cédula / documento conductor</label>
+                            <label for="f-tipologia">Tipología del vehículo</label>
+                            <select id="f-tipologia"></select>
+                            <span class="form-hint" id="f-tipologia-hint"></span>
+                        </div>
+
+                        <div class="form-group full">
+                            <label for="f-cedula" id="lbl-cedula">Cédula / documento</label>
                             <input type="text" id="f-cedula" placeholder="Número de documento" autocomplete="off">
                         </div>
 
@@ -280,7 +305,7 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>Prioridad</th><th>Placa</th><th>Conductor</th><th>Ubicación</th><th>Tipo</th><th>Canal</th>
+                                <th>Prioridad</th><th>Placa</th><th class="th-conductor">Conductor</th><th>Ubicación</th><th>Tipo</th><th>Canal</th>
                                 <th>Ingreso</th><th>Salida</th><th>Estado</th><th>Avance</th><th>Programado</th><th>Hora programada</th><th>Servicio</th>
                                 <th>T. patio</th><th>T. muelle</th><th>Motivo patio</th><th>Operador</th><th>Acciones</th>
                             </tr>
@@ -345,6 +370,34 @@
         <div class="modal-footer">
             <button class="btn" data-close="modal-observacion">Cancelar</button>
             <button class="btn btn-primary" id="btn-confirmar-observacion"><i class="ti ti-check"></i> Guardar observación</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: TIPOLOGÍA OBLIGATORIA
+
+     Se abre al intentar registrar una entrada sin tipología, cuando
+     la bodega ya tiene tipologías configuradas. No es solo un aviso:
+     trae el mismo desplegable para resolverlo aquí y seguir, sin
+     perder nada de lo ya digitado en el formulario. -->
+<div class="modal-backdrop" id="modal-tipologia">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title"><i class="ti ti-truck"></i> Falta la tipología del vehículo</div>
+            <button class="modal-close" data-close="modal-tipologia"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-info-box">
+            No se puede registrar la entrada sin indicar qué tipo de vehículo es.
+            De la tipología dependen los tiempos con los que se mide la operación.
+        </div>
+        <div class="form-group full">
+            <label for="m-tipologia">Tipología del vehículo *</label>
+            <select id="m-tipologia"></select>
+            <span class="form-hint aviso" id="m-tipologia-error"></span>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" data-close="modal-tipologia">Cancelar</button>
+            <button class="btn btn-primary" id="btn-confirmar-tipologia"><i class="ti ti-check"></i> Continuar con el registro</button>
         </div>
     </div>
 </div>

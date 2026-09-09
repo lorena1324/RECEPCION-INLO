@@ -17,7 +17,7 @@
 import { fmtDt, formatDuration, duracion, today } from "./tiempos.js";
 import { getHistorial, getLocationDurations, tituloHistorial } from "../services/eventos.js";
 
-const ANCHOS_COLUMNAS = [14, 22, 16, 12, 10, 10, 10, 10, 10, 16, 18, 18, 18, 18, 18, 18, 16, 12, 18, 18, 18, 38, 12, 12];
+const ANCHOS_COLUMNAS = [14, 22, 16, 12, 10, 10, 10, 10, 10, 16, 18, 18, 18, 18, 18, 18, 16, 12, 18, 18, 18, 38, 12, 12, 14, 30];
 
 
 /*
@@ -25,17 +25,30 @@ const ANCHOS_COLUMNAS = [14, 22, 16, 12, 10, 10, 10, 10, 10, 16, 18, 18, 18, 18,
     definición de estados de cada operación (hoy es la misma
     lógica en J3/J4, pero se deja inyectable por si una
     operación futura define estados distintos).
+
+    `etiquetas` trae cómo llama esta bodega a los dos campos
+    libres del registro. Sin él la hoja saldría con "Conductor" y
+    "Cédula" en una operación que anota proveedores y números de
+    cita, y quien reciba el archivo leería mal dos columnas
+    enteras sin manera de notarlo.
 */
-export function buildExcelData(registros, getStateLabel) {
+export function buildExcelData(registros, getStateLabel, etiquetas) {
+
+    const rotuloConductor = (etiquetas && etiquetas.conductor) || 'Conductor';
+    const rotuloCedula = (etiquetas && etiquetas.cedula) || 'Cédula';
 
     return registros.map(function (r) {
 
         var duraciones = getLocationDurations(r);
 
-        return {
-            'Placa': r.placa,
-            'Conductor': r.conductor,
-            'Cédula': r.cedula || '',
+        var fila = {
+            'Placa': r.placa
+        };
+
+        fila[rotuloConductor] = r.conductor;
+        fila[rotuloCedula] = r.cedula || '';
+
+        return Object.assign(fila, {
             'Ubicación': r.ubicacion,
             'Muelle': r.numeroMuelle || '',
             'Bahía': r.bahia || '',
@@ -58,18 +71,24 @@ export function buildExcelData(registros, getStateLabel) {
             'Historial completo': getHistorial(r).map(function (h) {
                 return fmtDt(h.fecha) + ' (' + (h.operador || '—') + '): ' + tituloHistorial(h) + (h.texto ? ' — ' + h.texto : '');
             }).join(' | '),
-            'Fecha': r.fecha
-        };
+            'Fecha': r.fecha,
+
+            // Una columna para cada mitad: si el vehículo se canceló
+            // y, cuando se canceló, por qué. Van al final para no
+            // correr las columnas de las hojas que ya se usan.
+            'Cancelado': r.cancelado ? (r.cancelacion && r.cancelacion.llego === false ? 'Sí — no llegó' : 'Sí') : 'No',
+            'Motivo cancelación': (r.cancelacion && r.cancelacion.motivo) || ''
+        });
     });
 }
 
-export function exportarExcel(registros, getStateLabel, nombreArchivo, nombreHoja) {
+export function exportarExcel(registros, getStateLabel, nombreArchivo, nombreHoja, etiquetas) {
 
     if (!registros.length) {
         return false;
     }
 
-    var ws = XLSX.utils.json_to_sheet(buildExcelData(registros, getStateLabel));
+    var ws = XLSX.utils.json_to_sheet(buildExcelData(registros, getStateLabel, etiquetas));
     ws['!cols'] = ANCHOS_COLUMNAS.map(function (w) { return { wch: w }; });
 
     var wb = XLSX.utils.book_new();

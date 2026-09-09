@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es" data-operacion="J4">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inlotrans | Revisión de datos</title>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/layout.css">
+    <link rel="stylesheet" href="../css/components.css">
+
+    <style>
+        .rev-wrap { max-width: 920px; margin: 32px auto; padding: 0 20px 60px; }
+        .rev-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        .rev-header h1 { font-size: 20px; font-weight: 600; color: var(--text-1); margin: 0; }
+        .rev-actions { display: flex; gap: 8px; align-items: flex-end; margin: 16px 0 20px; }
+        .rev-actions label { font-size: 12px; color: var(--text-3); display: block; margin-bottom: 4px; }
+
+        .resumen { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
+        .resumen .t { flex: 1 1 130px; background: var(--surface); border: 0.5px solid var(--border);
+                      border-radius: var(--radius-lg); padding: 12px 14px; }
+        .resumen .t-valor { font-size: 22px; font-weight: 600; color: var(--text-1); }
+        .resumen .t-label { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+
+        .hallazgo { border: 0.5px solid var(--border); border-left-width: 3px; border-radius: var(--radius-lg);
+                    padding: 14px 16px; margin-bottom: 12px; background: var(--surface); }
+        .hallazgo h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; color: var(--text-1);
+                       display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+        .hallazgo p { margin: 0 0 6px; font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+        .hallazgo .cuenta { font-size: 12px; font-weight: 600; white-space: nowrap; }
+        .hallazgo .ejemplos { color: var(--text-3); font-size: 12px; }
+
+        .hallazgo.grave { border-left-color: #dc2626; }
+        .hallazgo.grave .cuenta { color: #dc2626; }
+        .hallazgo.aviso { border-left-color: #f59e0b; }
+        .hallazgo.aviso .cuenta { color: #b45309; }
+        .hallazgo.ok { border-left-color: #10b981; }
+
+        .nota { font-size: 12.5px; color: var(--text-3); margin: 0 0 18px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+
+<div class="rev-wrap">
+
+    <div class="rev-header">
+        <div>
+            <h1><i class="ti ti-stethoscope"></i> Revisión de datos</h1>
+            <div style="color:var(--text-3);font-size:12.5px;margin-top:4px;">Conectado como <strong id="nombre-usuario">—</strong></div>
+        </div>
+        <button class="btn btn-sm" id="btn-salir"><i class="ti ti-logout"></i> Salir</button>
+    </div>
+
+    <div class="export-card">
+        <p style="font-size:13.5px;color:var(--text-2);margin:0 0 8px;">
+            Cuando los registros no se crean desde la portería sino que se <strong>inyectan por fuera</strong>
+            (consola de Firebase, un script, una carga masiva), es fácil que lleguen sin alguno de los campos
+            de los que cuelgan los indicadores. El panel de estadísticas está escrito para no romperse con datos
+            incompletos — y por eso mismo el síntoma es un “—” o un cero, sin decir por qué.
+        </p>
+        <p style="font-size:13.5px;color:var(--text-2);margin:0;">
+            Esta página revisa los datos reales de una bodega y dice <strong>cuántos registros fallan cada
+            revisión, qué indicador deja sin datos cada problema, y con qué placas comprobarlo</strong>.
+            No escribe nada: es solo lectura.
+        </p>
+    </div>
+
+    <div class="rev-actions">
+        <div>
+            <label for="op">Bodega</label>
+            <!-- El color de la página sigue a esta selección (los
+                 colores por bodega viven en css/base.css): el informe
+                 de abajo es de UNA bodega, y leer el de J3 creyendo
+                 que es el de J4 es perseguir problemas que no existen
+                 en la que se está mirando. -->
+            <select id="op">
+                <option value="J4" selected>J4</option>
+                <option value="J3">J3</option>
+                <option value="B9">B9</option>
+            </select>
+        </div>
+        <button class="btn btn-primary" id="btn-escanear"><i class="ti ti-search"></i> Escanear</button>
+    </div>
+
+    <div id="informe">
+        <p class="nota">Elige la bodega y pulsa <strong>Escanear</strong>.</p>
+    </div>
+
+</div>
+
+<script type="module" src="revision-datos.js"></script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-operacion="B9">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -41,6 +41,12 @@
       </button>
       <button class="nav-item" data-view="estadisticas">
         <i class="ti ti-chart-histogram"></i> Estadísticas
+      </button>
+      <!-- Solo aparece en las bodegas que cobran (config.cobraVehiculos).
+           supervisor.js lo oculta en las demás. -->
+      <button class="nav-item" data-view="cobros" id="nav-cobros" style="display:none;">
+        <i class="ti ti-cash"></i> Cobros
+        <span class="nav-pendientes" id="nav-cobros-badge" style="display:none;">0</span>
       </button>
       <div class="nav-label">Herramientas</div>
       <button class="nav-item" data-view="exportar">
@@ -90,6 +96,20 @@
 
       <!-- DASHBOARD -->
       <div id="view-dashboard" class="view active">
+
+        <!-- Alerta de muelle. Es distinta del KPI "En alerta": ese
+             cuenta la cola de patio contra el límite general de la
+             bodega, y esta avisa del vehículo que ya está operando y
+             se pasó de la meta que el administrador le fijó a su
+             tipología en Configuración. -->
+        <div id="alerta-muelle-banner" class="local-banner" style="display:none; background:#FDECEC; border-color:#F0A9A9; color:#7F1D1D;">
+          <i class="ti ti-clock-exclamation"></i>
+          <div>
+            <strong>Vehículos por encima de su meta de muelle</strong>
+            <span id="alerta-muelle-detalle"></span>
+          </div>
+        </div>
+
         <div class="cards-resumen">
           <div class="card-resumen destacada">
             <div class="card-resumen-valor" id="kpi-mejor-dia-fecha">—</div>
@@ -114,7 +134,9 @@
           </div>
         </div>
 
-        <div class="subtitulo">Muelles (1 a 4)</div>
+        <!-- El número lo pone supervisor.js con el que traiga la
+             configuración de la bodega, no está fijo aquí. -->
+        <div class="subtitulo" id="muelles-titulo">Muelles</div>
         <div class="muelles-grid" id="grid-muelles"></div>
 
         <div class="subtitulo">Vehículos en patio</div>
@@ -123,7 +145,7 @@
             <thead>
               <tr>
                 <th>Placa</th>
-                <th>Conductor</th>
+                <th class="th-conductor">Conductor</th>
                 <th>Tipo</th>
                 <th>Canal</th>
                 <th>Ingreso</th>
@@ -149,7 +171,7 @@
             <thead>
               <tr>
                 <th>Placa</th>
-                <th>Conductor</th>
+                <th class="th-conductor">Conductor</th>
                 <th>Entrada</th>
                 <th>Ubicación</th>
                 <th>Esperando</th>
@@ -171,6 +193,13 @@
             <option value="finalizado">Finalizados</option>
           </select>
           <input type="date" id="f-fecha">
+
+          <!-- Un vehículo que nunca llegó no puede registrarlo la
+               portería, porque no pasó por ahí. Solo se ve donde la
+               bodega maneja cancelaciones. -->
+          <button class="btn-primario" id="btn-cita-cancelada" style="display:none;">
+            <i class="ti ti-calendar-x"></i> Registrar cita cancelada
+          </button>
         </div>
         <div class="tabla-wrap">
           <table class="tabla">
@@ -178,7 +207,7 @@
               <tr>
                 <th>Prioridad</th>
                 <th>Placa</th>
-                <th>Conductor</th>
+                <th class="th-conductor">Conductor</th>
                 <th>Ubicación</th>
                 <th>Tipo</th>
                 <th>Canal</th>
@@ -318,6 +347,95 @@
         </div>
       </div>
 
+      <!-- ═══════════ COBROS ═══════════
+           Solo se usa en bodegas con cobraVehiculos en true.
+           La tarifa la fija la tipología del vehículo desde la
+           configuración del administrador; aquí solo se registra
+           por qué medio se pagó. -->
+      <div id="view-cobros" class="view">
+
+        <div class="caja-resumen">
+          <div class="caja-card">
+            <div class="caja-valor" id="caja-total">$0</div>
+            <div class="caja-label"><i class="ti ti-cash"></i> Recaudado hoy</div>
+          </div>
+          <div class="caja-card">
+            <div class="caja-valor" id="caja-efectivo">$0</div>
+            <div class="caja-label"><i class="ti ti-coins"></i> En efectivo</div>
+          </div>
+          <div class="caja-card">
+            <div class="caja-valor" id="caja-qr">$0</div>
+            <div class="caja-label"><i class="ti ti-qrcode"></i> Por QR</div>
+          </div>
+          <div class="caja-card">
+            <div class="caja-valor" id="caja-vehiculos">0</div>
+            <div class="caja-label"><i class="ti ti-truck"></i> Vehículos cobrados</div>
+            <div class="caja-detalle" id="caja-desglose"></div>
+            <div class="caja-detalle" id="caja-soportes"></div>
+          </div>
+        </div>
+
+        <!-- El reparto del valor antes de IVA. No es plata distinta
+             de la de arriba: es la misma, vista por a quién le toca.
+             El IVA sí es aparte — solo se liquida donde hubo
+             factura. -->
+        <div class="caja-resumen">
+          <div class="caja-card">
+            <div class="caja-valor" id="caja-iva">$0</div>
+            <div class="caja-label"><i class="ti ti-receipt-tax"></i> IVA liquidado</div>
+            <div class="caja-detalle">Solo lo cobrado con factura</div>
+          </div>
+          <div class="caja-card">
+            <div class="caja-valor" id="caja-cuadrilla">$0</div>
+            <div class="caja-label"><i class="ti ti-users"></i> Total a pagar cuadrilla</div>
+          </div>
+          <div class="caja-card">
+            <div class="caja-valor" id="caja-inlo">$0</div>
+            <div class="caja-label"><i class="ti ti-building-warehouse"></i> Ganancia INLO</div>
+          </div>
+        </div>
+
+        <div class="subtitulo">Pendientes de cobro</div>
+        <p class="texto-ayuda">Vehículos que siguen adentro y todavía no tienen el pago registrado. <strong>Ninguno puede salir hasta que se registre.</strong></p>
+        <div id="cobros-aviso-sin-tipologia"></div>
+        <div class="tabla-wrap">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th>Placa</th>
+                <th class="th-conductor">Conductor</th>
+                <th>Tipología</th>
+                <th>Tarifa</th>
+                <th>Ingreso</th>
+                <th>Adentro</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tabla-pendientes-body"></tbody>
+          </table>
+        </div>
+
+        <div class="subtitulo">Cobros registrados hoy</div>
+        <div class="tabla-wrap">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th>Placa</th>
+                <th>Tipología</th>
+                <th>Soporte</th>
+                <th>Medio</th>
+                <th>Efectivo</th>
+                <th>QR</th>
+                <th>Total</th>
+                <th>Registró</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tabla-cobros-body"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- EXPORTAR -->
       <div id="view-exportar" class="view">
         <p class="texto-ayuda">Exporta los registros a Excel filtrando por rango de fechas.</p>
@@ -343,6 +461,163 @@
     </div>
     <div id="modal-novedades-body"></div>
     <div class="modal-footer"><button class="btn" data-close="modal-novedades">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- CANCELAR UN VEHÍCULO QUE YA ENTRÓ
+
+     El motivo es obligatorio: una cifra de cancelados sin razones
+     detrás no le sirve a nadie para corregir nada. -->
+<div class="modal-backdrop" id="modal-cancelar">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="ti ti-ban"></i> Cancelar la operación</div>
+      <button class="modal-close" data-close="modal-cancelar"><i class="ti ti-x"></i></button>
+    </div>
+
+    <div class="modal-info-box" id="cancelar-info"></div>
+
+    <p class="texto-ayuda">El vehículo queda cerrado con la hora de ahora y marcado como cancelado. Deja de ocupar patio o muelle, y no entra en los promedios de desempeño.</p>
+
+    <div class="form-group full">
+      <label for="cancelar-motivo">Motivo *</label>
+      <textarea id="cancelar-motivo" rows="3" placeholder="Por qué no se hizo la operación"></textarea>
+    </div>
+
+    <div class="cobro-errores" id="cancelar-errores" style="display:none;"></div>
+
+    <div class="modal-footer">
+      <button class="btn" data-close="modal-cancelar">Cancelar</button>
+      <button class="btn btn-primario" id="btn-confirmar-cancelar"><i class="ti ti-check"></i> Marcar como cancelado</button>
+    </div>
+  </div>
+</div>
+
+<!-- CITA CANCELADA DE UN VEHÍCULO QUE NUNCA LLEGÓ
+
+     Nace cerrada, sin ubicación ni paso por muelle. La fecha es la
+     de la cita y no la de hoy, porque la cancelación pertenece al
+     día que se dejó de operar. -->
+<div class="modal-backdrop" id="modal-cita-cancelada">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="ti ti-calendar-x"></i> Registrar cita cancelada</div>
+      <button class="modal-close" data-close="modal-cita-cancelada"><i class="ti ti-x"></i></button>
+    </div>
+
+    <p class="texto-ayuda">Para un vehículo que <strong>no llegó</strong>. Queda registrado en el día de la cita, sin entrada ni salida reales.</p>
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="cita-placa">Placa *</label>
+        <input type="text" id="cita-placa" placeholder="Ej: ABC-123" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label for="cita-conductor" id="lbl-cita-conductor">Conductor</label>
+        <input type="text" id="cita-conductor" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label for="cita-cedula" id="lbl-cita-cedula">Cédula</label>
+        <input type="text" id="cita-cedula" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label for="cita-fecha">Fecha de la cita *</label>
+        <input type="date" id="cita-fecha">
+      </div>
+      <div class="form-group">
+        <label for="cita-hora">Hora de la cita</label>
+        <input type="time" id="cita-hora">
+      </div>
+    </div>
+
+    <div class="form-group full">
+      <label for="cita-motivo">Motivo *</label>
+      <textarea id="cita-motivo" rows="3" placeholder="Por qué se canceló la cita"></textarea>
+    </div>
+
+    <div class="cobro-errores" id="cita-errores" style="display:none;"></div>
+
+    <div class="modal-footer">
+      <button class="btn" data-close="modal-cita-cancelada">Cancelar</button>
+      <button class="btn btn-primario" id="btn-confirmar-cita"><i class="ti ti-check"></i> Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- REGISTRAR COBRO
+
+     La tarifa no se digita: la trae la tipología del vehículo desde
+     la configuración del administrador. Lo único que se captura es
+     por qué medio se pagó, y cuando fue mixto, cuánto entró en
+     efectivo — el QR se calcula solo con el resto, para que la suma
+     no pueda quedar descuadrada. -->
+<div class="modal-backdrop" id="modal-cobro">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="ti ti-cash"></i> Registrar cobro</div>
+      <button class="modal-close" data-close="modal-cobro"><i class="ti ti-x"></i></button>
+    </div>
+
+    <div class="modal-info-box" id="cobro-info"></div>
+
+    <!-- El soporte va PRIMERO porque es lo que decide cuánto se
+         cobra: con recibo de caja menor el valor sin IVA, con
+         factura el valor con IVA. Es otra cosa que el medio de
+         pago — se puede pagar por QR y llevarse una factura. -->
+    <div class="form-group full">
+      <label>Soporte de pago *</label>
+      <div class="soportes-pago" id="cobro-soportes">
+        <button type="button" class="soporte-btn" data-soporte="Recibo Caja Menor">
+          <i class="ti ti-receipt"></i> Recibo Caja Menor
+        </button>
+        <button type="button" class="soporte-btn" data-soporte="Factura">
+          <i class="ti ti-file-invoice"></i> Factura
+        </button>
+        <button type="button" class="soporte-btn" data-soporte="Facturado al cliente">
+          <i class="ti ti-building-bank"></i> Se le factura al cliente
+        </button>
+      </div>
+    </div>
+
+    <div class="cobro-tarifa">
+      <span class="cobro-tarifa-label" id="cobro-tarifa-label">Se cobra el valor antes de IVA</span>
+      <span class="cobro-tarifa-valor" id="cobro-tarifa">$0</span>
+      <span class="cobro-tarifa-detalle" id="cobro-tarifa-detalle"></span>
+    </div>
+
+    <div class="form-group full" id="cobro-medio-wrap">
+      <label>Medio de pago *</label>
+      <div class="medios-pago" id="cobro-medios">
+        <button type="button" class="medio-btn" data-medio="Efectivo">
+          <i class="ti ti-coins"></i> Efectivo
+        </button>
+        <button type="button" class="medio-btn" data-medio="QR">
+          <i class="ti ti-qrcode"></i> QR
+        </button>
+        <button type="button" class="medio-btn" data-medio="Ambos">
+          <i class="ti ti-arrows-split"></i> Ambos
+        </button>
+      </div>
+    </div>
+
+    <!-- Solo visible con "Ambos" seleccionado -->
+    <div id="cobro-split" style="display:none;">
+      <div class="form-group full">
+        <label for="cobro-efectivo">¿Cuánto pagó en efectivo?</label>
+        <input type="number" id="cobro-efectivo" min="0" step="1" placeholder="0">
+      </div>
+      <div class="cobro-derivado">
+        <span>Se cobra por QR</span>
+        <strong id="cobro-qr-calculado">$0</strong>
+      </div>
+    </div>
+
+    <div class="cobro-errores" id="cobro-errores" style="display:none;"></div>
+
+    <div class="modal-footer">
+      <button class="btn" data-close="modal-cobro">Cancelar</button>
+      <button class="btn btn-primario" id="btn-confirmar-cobro"><i class="ti ti-check"></i> Registrar cobro</button>
+    </div>
   </div>
 </div>
 

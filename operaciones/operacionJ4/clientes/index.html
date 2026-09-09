@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-operacion="J4">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -96,6 +96,20 @@
            de su carga, no quién la atendió. El detalle del personal
            está en la vista de Registros. -->
       <div id="view-dashboard" class="view active">
+
+        <!-- Alerta de muelle. Es distinta del KPI "En alerta": ese
+             cuenta la cola de patio contra el límite general de la
+             bodega, y esta avisa del vehículo que ya está operando y
+             se pasó de la meta que el administrador le fijó a su
+             tipología en Configuración. -->
+        <div id="alerta-muelle-banner" class="local-banner" style="display:none; background:#FDECEC; border-color:#F0A9A9; color:#7F1D1D;">
+          <i class="ti ti-clock-exclamation"></i>
+          <div>
+            <strong>Vehículos por encima de su meta de muelle</strong>
+            <span id="alerta-muelle-detalle"></span>
+          </div>
+        </div>
+
         <div class="cards-resumen">
           <div class="card-resumen destacada">
             <div class="card-resumen-valor" id="kpi-mejor-dia-fecha">—</div>
@@ -136,7 +150,9 @@
           </div>
         </div>
 
-        <div class="subtitulo">Muelles (1 a 3)</div>
+        <!-- El número lo pone clientes.js con el que traiga la
+             configuración de la bodega, no está fijo aquí. -->
+        <div class="subtitulo" id="muelles-titulo">Muelles</div>
         <div class="muelles-grid" id="grid-muelles"></div>
 
         <div class="subtitulo">Vehículos en patio</div>
@@ -145,7 +161,7 @@
             <thead>
               <tr>
                 <th>Placa</th>
-                <th>Conductor</th>
+                <th class="th-conductor">Proveedor</th>
                 <th>Tipo</th>
                 <th>Canal</th>
                 <th>Ingreso</th>
@@ -170,7 +186,7 @@
             <thead>
               <tr>
                 <th>Placa</th>
-                <th>Conductor</th>
+                <th class="th-conductor">Proveedor</th>
                 <th>Entrada</th>
                 <th>Ubicación</th>
                 <th>Esperando</th>
@@ -187,7 +203,7 @@
            es la trazabilidad completa de cada vehículo. -->
       <div id="view-registros" class="view">
         <div class="filtros-barra">
-          <input type="text" id="f-placa" placeholder="Buscar por placa o conductor...">
+          <input type="text" id="f-placa" placeholder="Buscar por placa o proveedor...">
           <select id="f-estado">
             <option value="">Todos los estados</option>
             <option value="activo">Activos</option>
@@ -201,7 +217,7 @@
               <tr>
                 <th>Prioridad</th>
                 <th>Placa</th>
-                <th>Conductor</th>
+                <th class="th-conductor">Proveedor</th>
                 <th>Ubicación</th>
                 <th>Tipo</th>
                 <th>Canal</th>
@@ -296,6 +312,54 @@
           </div>
         </div>
 
+        <!-- Cancelaciones. Los cancelados no entran en ningún
+             promedio ni en el cumplimiento de cita, así que este es
+             el único sitio donde se ven. -->
+        <div class="subtitulo">Operaciones canceladas</div>
+        <div class="cards-resumen">
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-total">0</div>
+            <div class="card-resumen-label"><i class="ti ti-ban"></i> Canceladas en el periodo</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-pct">0%</div>
+            <div class="card-resumen-label"><i class="ti ti-percentage"></i> De todo lo esperado</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-llego">0</div>
+            <div class="card-resumen-label"><i class="ti ti-truck-return"></i> Llegaron y no operaron</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-nollego">0</div>
+            <div class="card-resumen-label"><i class="ti ti-calendar-x"></i> Nunca llegaron</div>
+          </div>
+        </div>
+        <div class="stat-box full">
+          <h3>Motivos de cancelación</h3>
+          <div id="es-cancel-motivos">Cargando…</div>
+        </div>
+
+        <!-- Capacidad instalada y nivel de servicio. Sale de la
+             MISMA configuración que usa la portería: si el cliente
+             midiera contra otra capacidad, los dos tableros se
+             contradirían. -->
+        <div class="subtitulo">Capacidad y nivel de servicio</div>
+        <div class="cards-resumen">
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-ocupacion-pico">0%</div>
+            <div class="card-resumen-label"><i class="ti ti-parking"></i> Ocupación pico</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-capacidad-pct">—</div>
+            <div class="card-resumen-label"><i class="ti ti-gauge"></i> Uso de la capacidad diaria</div>
+          </div>
+          <div class="card-resumen destacada">
+            <div class="card-resumen-valor" id="es-nivel-servicio">—</div>
+            <div class="card-resumen-label"><i class="ti ti-award"></i> Índice de nivel de servicio</div>
+          </div>
+        </div>
+        <div id="es-nivel-detalle"></div>
+
         <!-- Cuadro de pérdida de operación -->
         <div class="subtitulo">Pérdida de operación</div>
         <div class="cards-resumen perdida">
@@ -371,6 +435,14 @@
             <h3>Promedio por canal</h3>
             <p class="texto-ayuda">Tiempo en patio por canal (MQ / 3PD / Otro)</p>
             <div id="estad-por-canal-body">Cargando…</div>
+          </div>
+          <div class="stat-box full">
+            <h3>Cumplimiento por tipología</h3>
+            <p class="texto-ayuda">
+              Cada tipología contra la meta de tiempo en muelle configurada para la bodega,
+              que es distinta según la operación sea cargue o descargue.
+            </p>
+            <div id="es-tipologias-body">Cargando…</div>
           </div>
         </div>
 

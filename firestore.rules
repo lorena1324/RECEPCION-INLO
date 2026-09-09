@@ -103,25 +103,86 @@ service cloud.firestore {
       // salida anticipada es justamente el permiso que no puede
       // darse a sí mismo — sin esta regla le bastaría la consola
       // del navegador para saltarse el mínimo de cargue.
+      //
+      // `pagoRegistrado` está aquí por lo mismo: es la llave que
+      // destraba la salida de un vehículo que ya pagó. Si el
+      // operario pudiera escribirla, podría despachar sin cobro
+      // desde la consola, y la regla de negocio no valdría nada.
+      //
       // Ojo: `avanceTipo`/`avancePorcentaje` NO van aquí porque el
       // operario sí los toca legítimamente al agregar la operación
       // faltante (agregarOperacionFaltante reinicia el avance).
+      //
+      // `cancelado`/`cancelacion` está aquí porque cancelar es la
+      // decisión de dar una operación por no hecha: saca al vehículo
+      // de los muelles y lo deja fuera de los indicadores de
+      // cumplimiento. Si el operario pudiera escribirla, tendría a
+      // mano la forma de hacer desaparecer un vehículo que se
+      // demoró, y el incumplimiento con él.
       function camposSoloDeSupervisor() {
         return request.resource.data.diff(resource.data).affectedKeys()
-               .hasAny(['autorizacionSalida']);
+               .hasAny(['autorizacionSalida', 'pagoRegistrado',
+                        'cancelado', 'cancelacion']);
       }
 
       // Campos que un supervisor puede tocar. Todo lo demás
       // (placa, conductor, horas, ubicación, salida) es del
       // operario o del administrador.
+      // `pagoRegistrado` es un booleano sin monto ni medio: lo
+      // escribe el supervisor al cobrar y es lo único que el
+      // operario necesita para saber si puede despachar. El dinero
+      // en sí vive en la colección `cobros`, que el operario no lee.
+      //
+      // `horaSalida`/`operadorSalida` entran aquí SOLO porque
+      // cancelar cierra el registro: un vehículo cancelado deja de
+      // ocupar muelle en el mismo acto. Le da al supervisor la
+      // llave de cerrar un registro sin pasar por portería, y eso
+      // se acepta a conciencia: es el rol que ya autoriza salidas
+      // anticipadas y registra los cobros, así que no es un
+      // permiso nuevo en la práctica, es el mismo que ya tenía por
+      // otra vía.
       function camposDeSupervisor() {
         return request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly([
                  'avanceTipo', 'avancePorcentaje', 'avanceCarguePendiente',
-                 'autorizacionSalida', 'historial',
+                 'autorizacionSalida', 'historial', 'pagoRegistrado',
                  'pickingCargue', 'auditoriaCargue',
-                 'pickingDescargue', 'auditoriaDescargue'
+                 'pickingDescargue', 'auditoriaDescargue',
+                 'cancelado', 'cancelacion', 'horaSalida', 'operadorSalida'
                ]);
+      }
+
+      /* Bodegas cuyo supervisor puede corregir CUALQUIER dato del
+         vehículo, no solo el avance y las autorizaciones.
+
+         Hoy solo J4, y por una razón concreta de esa operación: es
+         la única que cobra y la única que cancela, así que su
+         supervisor es quien responde por el registro completo —una
+         placa mal digitada le descuadra el cobro, y esperar a que
+         un administrador la corrija deja el vehículo trabado en
+         portería.
+
+         Es un permiso amplio y se da a conciencia. Lo que NO se
+         movió: crear entradas normales sigue siendo de la portería
+         (él solo puede crear citas canceladas, ver el `create` de
+         abajo) y borrar sigue fuera de su alcance. Puede corregir
+         lo que ya existe; no puede inventar un vehículo que nadie
+         vio entrar ni hacer desaparecer uno que sí entró.
+
+         La lista está aquí y no en la configuración de la bodega a
+         propósito: `config` la escribe el administrador desde la
+         app, así que si esta regla dependiera de ese documento, un
+         administrador podría ampliarse permisos de escritura sin
+         tocar las reglas. Ampliar esto tiene que costar un
+         despliegue. */
+      function bodegasConSupervisorEditor() {
+        return ['J4'];
+      }
+
+      function supervisorEditaTodo(operacionDoc) {
+        return rol() == 'supervisor' &&
+               enSuOperacion(operacionDoc) &&
+               operacionDoc in bodegasConSupervisorEditor();
       }
 
       // LECTURA — el administrador ve todo; los demás, su bodega.
@@ -131,25 +192,124 @@ service cloud.firestore {
       // supervisor de J3 obtiene los suyos y jamás los de J4.
       allow get, list: if esAdmin() || enSuOperacion(resource.data.operacion);
 
-      // CREAR — solo administrador y operario, y el registro
+      // CREAR — administrador, operario y supervisor, y el registro
       // tiene que nacer dentro de la operación del que lo crea.
+      //
+      // El supervisor entró a esta lista por las CITAS CANCELADAS:
+      // un vehículo que nunca llegó no puede registrarlo la
+      // portería, porque no pasó por ahí. Solo puede crearlo ya
+      // cancelado — un registro normal por esta vía se le rechaza,
+      // que es lo que mantiene la entrada de vehículos donde debe
+      // estar, en manos de quien los ve entrar.
       allow create: if esAdmin() ||
                        (activo() && rol() == 'operario' &&
-                        request.resource.data.operacion == perfil().operacion);
+                        request.resource.data.operacion == perfil().operacion) ||
+                       (activo() && rol() == 'supervisor' &&
+                        request.resource.data.operacion == perfil().operacion &&
+                        request.resource.data.cancelado == true);
 
       // ACTUALIZAR — el administrador sin límite; el operario
       // dentro de su bodega, salvo la autorización de salida
       // anticipada; el supervisor solo los campos de avance y
-      // autorización de su bodega. El cliente, nunca.
+      // autorización de su bodega, SALVO donde su bodega le da la
+      // edición completa (ver bodegasConSupervisorEditor).
+      // El cliente, nunca.
       allow update: if esAdmin() ||
                        (rol() == 'operario' && enSuOperacion(resource.data.operacion)
                         && !camposSoloDeSupervisor()) ||
                        (rol() == 'supervisor' && enSuOperacion(resource.data.operacion)
-                        && camposDeSupervisor());
+                        && (camposDeSupervisor() ||
+                            supervisorEditaTodo(resource.data.operacion)));
 
       // BORRAR — administrador y operario de esa bodega.
       allow delete: if esAdmin() ||
                        (rol() == 'operario' && enSuOperacion(resource.data.operacion));
+    }
+
+    /* ── config ───────────────────────────────────────────────
+       Un documento por bodega (id = "J3" | "J4" | "B9") con los
+       números que gobiernan la operación: límite de patio,
+       capacidad, cortes de ocupación, pesos del nivel de servicio
+       y la lista de tipologías de vehículo con sus tiempos.
+
+       LO LEE TODO EL MUNDO de esa bodega, y tiene que ser así: el
+       operario necesita la lista de tipologías para llenar el
+       formulario de entrada, el supervisor las metas para el
+       avance, y el cliente los mismos números para que sus
+       indicadores digan lo mismo que los de adentro.
+
+       Solo el administrador escribe. Un supervisor que pudiera
+       editar su propio límite de patio podría hacer desaparecer
+       la pérdida de operación de su bodega subiéndolo.
+       ──────────────────────────────────────────────────────── */
+
+    match /config/{operacion} {
+
+      allow get: if esAdmin() || enSuOperacion(operacion);
+
+      // Solo el administrador recorre todas las bodegas de una vez;
+      // a los demás les basta la suya, que piden por id.
+      allow list: if esAdmin();
+
+      allow create, update, delete: if esAdmin();
+
+      /* ── config/{operacion}/privado ───────────────────────────
+         Aquí vive el dinero: el mapa de tarifas por tipología.
+
+         Está en subcolección aparte y no como un campo más del
+         documento de arriba porque las reglas de Firestore
+         autorizan documentos completos, no campos: si la tarifa
+         viviera junto a las tipologías, el operario —que está
+         obligado a leer esa lista— se la llevaría de paso, y
+         ocultarla en la interfaz sería puro adorno.
+         ──────────────────────────────────────────────────────── */
+
+      match /privado/{documento} {
+        allow get, list: if esAdmin() ||
+                            (activo() && rol() == 'supervisor' && enSuOperacion(operacion));
+        allow create, update, delete: if esAdmin();
+      }
+    }
+
+    /* ── cobros ───────────────────────────────────────────────
+       El dinero: cuánto se le cobró a cada vehículo y por qué
+       medio. Un documento por vehículo, con el mismo id.
+
+       EL OPERARIO NO ENTRA AQUÍ, ni a leer. Esa es toda la razón
+       de que esta colección exista separada de `vehiculos`: las
+       reglas autorizan documentos completos, no campos, así que
+       el monto no puede vivir junto a los datos que el operario
+       necesita para trabajar. Lo que él sí ve es el booleano
+       `pagoRegistrado` del vehículo, que no dice ni cuánto ni cómo.
+
+       El cliente tampoco: es la ganancia de INLOTRANS, no un dato
+       de su operación.
+       ──────────────────────────────────────────────────────── */
+
+    match /cobros/{vehiculoId} {
+
+      function esSupervisorDe(operacionDoc) {
+        return activo() && rol() == 'supervisor' && enSuOperacion(operacionDoc);
+      }
+
+      allow get, list: if esAdmin() || esSupervisorDe(resource.data.operacion);
+
+      // Al crear todavía no hay `resource`, así que la operación se
+      // valida contra la que trae el documento entrante.
+      allow create: if esAdmin() ||
+                       (activo() && rol() == 'supervisor' &&
+                        request.resource.data.operacion == perfil().operacion);
+
+      // Corregir un cobro sigue siendo cosa del supervisor de esa
+      // bodega. Que solo se pueda mientras el vehículo no haya
+      // salido es una regla de negocio que vive en la app: aquí no
+      // se puede consultar el estado del vehículo sin pagar una
+      // lectura extra en cada escritura.
+      allow update: if esAdmin() || esSupervisorDe(resource.data.operacion);
+
+      // Un cobro no se borra: se corrige. Solo el administrador,
+      // para casos de registro duplicado.
+      allow delete: if esAdmin();
     }
 
     /* ── Todo lo demás queda cerrado ─────────────────────────

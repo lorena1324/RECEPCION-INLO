@@ -35,7 +35,8 @@ import {
     getRegistrosEnPatio,
     requiereAvanceCompleto,
     diagnosticoSalida,
-    agregarOperacionFaltante
+    agregarOperacionFaltante,
+    estaCancelado
 } from "../../../shared/services/vehiculos.js";
 
 import {
@@ -45,29 +46,82 @@ import {
     getDiaOperativo,
     getLocationDurations,
     minutosEnPatio,
-    minutosEsperando,
+    minutosEnMuelle,
+    nivelContraMeta,
+    faseActual,
     ordenarPorPrioridad,
+    prioridadDe,
+    enMuelleFueraDeMeta,
     promedioMinutos,
     tituloHistorial
 } from "../../../shared/services/eventos.js";
+
+import {
+    suscribirseAConfig,
+    buscarTipologia,
+    tiemposDe,
+    modalidadDe,
+    distingueModalidad,
+    etiquetaCampo,
+    formatoCampo,
+    limpiarSegunFormato,
+    errorDeFormato
+} from "../../../shared/services/config.js";
 
 import { nowLocal, today, fmtDt, formatDuration, fechaDentroDeRango, todayOperativo } from "../../../shared/utils/tiempos.js";
 import { exportarExcel } from "../../../shared/utils/excel.js";
 
 const OPERACION = "B9";
-const NUM_MUELLES = 4;
 const RUTA_LOGIN = "../../../index.html";
 
-// Mismo corte de turno que usan los paneles de supervisor y cliente:
-// el "día" va de 6am a 6am, no de medianoche a medianoche. Sin esto,
-// los promedios del dashboard cortarían el turno por la mitad.
-const HORA_CORTE = 6;
+/* El número de muelles y el corte del turno los fija ahora el
+   administrador en config/{OPERACION}. Estos dos son el valor de
+   partida: el que se usa mientras Firestore responde y el que se
+   mantiene si esa bodega todavía no los tiene configurados.
+
+   El corte del turno es el mismo que usan supervisor y cliente: el
+   "día" va de 6am a 6am, no de medianoche a medianoche. Sin esto,
+   los promedios del dashboard cortarían el turno por la mitad. */
+const MUELLES_POR_DEFECTO = 4;
+const HORA_CORTE_POR_DEFECTO = 6;
+
+/* El nombre del cliente no es decorativo aquí: se guarda en el
+   registro del vehículo como empresa del servicio de insumos. Por
+   eso también sale de la configuración y no de un texto fijo. */
+const CLIENTE_POR_DEFECTO = 'EMMA';
+
+let numMuelles = MUELLES_POR_DEFECTO;
+let horaCorte = HORA_CORTE_POR_DEFECTO;
+
+function clienteBodega() {
+    return (configBodega && configBodega.cliente) || CLIENTE_POR_DEFECTO;
+}
+
+/* Cómo se llaman hoy los dos campos libres de la entrada. En J3 y
+   B9 son el conductor y su cédula; en J4, el proveedor y el número
+   de la cita. Se preguntan aquí y no se escriben sueltos en cada
+   tabla para que renombrarlos sea un solo cambio. */
+function rotulo(campo) {
+    return etiquetaCampo(configBodega, campo);
+}
+
+/* Cómo se titulan esas dos columnas en la hoja de Excel. */
+function etiquetasExport() {
+    return { conductor: rotulo('conductor'), cedula: rotulo('cedula') };
+}
 
 let registros = [];
 let selectedId = null;
 let currentFilter = 'todos';
 let unsubscribeRegistros = null;
+let unsubscribeConfig = null;
 let perfilActual = null;
+
+/* Configuración de la bodega (config/B9). De aquí sale la lista de
+   tipologías del formulario de entrada. Empieza en null: hasta que
+   Firestore responda, el <select> muestra que está cargando en vez
+   de un desplegable vacío que parecería roto. */
+let configBodega = null;
 
 
 /* =========================================================
@@ -112,12 +166,12 @@ function initials(name) {
    valor que no tiene sentido para lo que representa.
    ========================================================= */
 
-function filtrarSoloDigitos(e) {
-    e.target.value = e.target.value.replace(/[^0-9]/g, '');
-}
-
-function filtrarSoloLetras(e) {
-    e.target.value = e.target.value.replace(/[^A-Za-zÁÉÍÓÚÑÜáéíóúñü\s'.-]/g, '');
+/* Los dos campos libres se filtran según lo que su formato admite,
+   y ese formato lo pone el administrador por bodega: el nombre de
+   un conductor no lleva números, pero el de un proveedor sí puede
+   ("Distribuidora 3M S.A.S."). */
+function filtrarSegunFormato(e, campo) {
+    e.target.value = limpiarSegunFormato(e.target.value, formatoCampo(configBodega, campo));
 }
 
 
@@ -254,6 +308,49 @@ function pintarPromedio(id, p) {
 }
 
 
+/* Hasta qué muelle llega el tablero. Lo pinta el JS y no viene fijo
+   en el HTML porque el número sale de la configuración de la bodega
+   y puede cambiar sin desplegar nada. */
+function pintarTituloMuelles() {
+    var el = document.getElementById('muelles-titulo');
+    if (el) el.textContent = 'Muelles (1 a ' + numMuelles + ')';
+}
+
+/*
+    Pone en pantalla los nombres de los dos campos libres: la
+    etiqueta del formulario, el texto de ayuda de cada uno y las
+    cabeceras de las tablas donde se muestran.
+
+    El buscador también los nombra, porque busca por ahí: decirle
+    "Buscar por placa, conductor…" a quien anota proveedores lo
+    manda a buscar un dato que su bodega no captura.
+*/
+function pintarEtiquetasCampos() {
+
+    var conductor = rotulo('conductor');
+    var cedula = rotulo('cedula');
+
+    var lblConductor = document.getElementById('lbl-conductor');
+    if (lblConductor) lblConductor.textContent = conductor + ' *';
+
+    var lblCedula = document.getElementById('lbl-cedula');
+    if (lblCedula) lblCedula.textContent = cedula;
+
+    var inpConductor = document.getElementById('f-conductor');
+    if (inpConductor) inpConductor.placeholder = conductor;
+
+    var inpCedula = document.getElementById('f-cedula');
+    if (inpCedula) inpCedula.placeholder = cedula;
+
+    document.querySelectorAll('.th-conductor').forEach(function (th) {
+        th.textContent = conductor;
+    });
+
+    var buscador = document.getElementById('search-input');
+    if (buscador) buscador.placeholder = 'Buscar por placa, ' + conductor.toLowerCase() + ', muelle…';
+}
+
+
 function renderDashboard() {
 
     if (!document.getElementById('view-dashboard').classList.contains('active')) return;
@@ -275,8 +372,8 @@ function renderDashboard() {
     // adentro. Por eso al lado de "En patio: 0" podía leerse "Tiempo prom.
     // patio: 12h 58min": no era el patio de hoy, era el de toda la
     // historia, y no coincidía con nada de lo que muestra el supervisor.
-    var diaOp = todayOperativo(HORA_CORTE);
-    var deHoy = registros.filter(function (r) { return getDiaOperativo(r, HORA_CORTE) === diaOp; });
+    var diaOp = todayOperativo(horaCorte);
+    var deHoy = registros.filter(function (r) { return getDiaOperativo(r, horaCorte) === diaOp; });
     pintarPromedio('s-tiempo-patio', promedioMinutos(deHoy, 'patio'));
     pintarPromedio('s-tiempo-muelle', promedioMinutos(deHoy, 'muelle'));
 
@@ -291,16 +388,30 @@ function renderDashboard() {
         banner.style.display = 'none';
     }
 
+    // Banner de tiempo en muelle. Es OTRA alerta, no la misma con
+    // otro número: la de arriba mide la espera en patio, y esta mide
+    // lo que cada vehículo lleva EN MUELLE contra la meta de SU
+    // tipología. Un vehículo puede ir bien en una y disparado en la
+    // otra.
+    pintarAlertaMuelle(enMuelle);
+
     // Grilla de muelles
-    var ocupacion = getMuellesOcupacion(enMuelle, NUM_MUELLES);
+    var ocupacion = getMuellesOcupacion(enMuelle, numMuelles);
     var htmlGrid = '';
-    for (var n = 1; n <= NUM_MUELLES; n++) {
+    for (var n = 1; n <= numMuelles; n++) {
         var rec = ocupacion[n];
-        htmlGrid += '<div class="muelle-card ' + (rec ? 'ocupado' : 'libre') + '">' +
+
+        // La alerta del muelle sale de la meta de la tipología del
+        // vehículo, no de un umbral igual para todos.
+        var nivel = rec ? nivelMuelle(rec) : 'normal';
+
+        htmlGrid += '<div class="muelle-card ' + (rec ? 'ocupado' : 'libre') +
+            (nivel !== 'normal' ? ' muelle-' + nivel : '') + '">' +
             '<div class="muelle-card-top">' +
                 '<span class="muelle-card-num">Muelle ' + n + '</span>' +
                 '<span class="muelle-card-status ' + (rec ? 'ocupado' : 'libre') + '">' + (rec ? 'OCUPADO' : 'LIBRE') + '</span>' +
             '</div>' +
+            (rec ? avisoMetaMuelle(rec) : '') +
             '<div class="muelle-card-body">' +
                 (rec
                     ? '<div class="muelle-card-placa">' + rec.placa + '</div><div>' + rec.conductor + '</div>' +
@@ -317,7 +428,7 @@ function renderDashboard() {
 
     // Tabla de patio
     var tbody = document.getElementById('dash-table');
-    var enPatioOrd = ordenarPorPrioridad(enPatio);
+    var enPatioOrd = ordenarPorPrioridad(enPatio, configBodega);
     if (!enPatioOrd.length) {
         tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No hay vehículos en patio actualmente.</td></tr>';
     } else {
@@ -337,11 +448,94 @@ function renderDashboard() {
     }
 }
 
+/* =========================================================
+   ALERTAS DE MUELLE (meta por tipología)
+
+   La segunda alerta del tablero, separada de la de patio a
+   propósito: aquella avisa de la cola de afuera contra el límite
+   general de la bodega; esta avisa del vehículo que YA ESTÁ
+   operando y se pasó de las horas que el administrador le fijó a
+   su tipología en Configuración.
+   ========================================================= */
+
+function nivelMuelle(r) {
+    return nivelContraMeta(
+        minutosEnMuelle(r),
+        tiemposDe(configBodega, r.tipologia, faseActual(r), modalidadDe(r))
+    );
+}
+
+/* Cuánto lleva en muelle y contra qué meta. Se muestra siempre que
+   haya meta, no solo al pasarse: el operario necesita ver que va
+   en 40 de 105 minutos para saber que va bien, no enterarse solo
+   cuando ya es tarde.
+
+   Sin meta lo dice en voz alta: un muelle sin cifra se lee como
+   "va bien", y lo que pasa es que ese vehículo no tiene tipología
+   asignada — que es justo lo que hay que ir a corregir. */
+function avisoMetaMuelle(r) {
+
+    var meta = tiemposDe(configBodega, r.tipologia, faseActual(r), modalidadDe(r));
+    var min = minutosEnMuelle(r);
+
+    if (!meta) {
+        return '<div class="muelle-meta sin-meta"><i class="ti ti-help-circle"></i> ' +
+               formatDuration(min) + ' en muelle · sin meta (falta tipología)</div>';
+    }
+
+    var nivel = nivelContraMeta(min, meta);
+    var icono = nivel === 'alta' ? 'ti-alert-triangle' : nivel === 'media' ? 'ti-clock-exclamation' : 'ti-clock-check';
+
+    return '<div class="muelle-meta ' + nivel + '"><i class="ti ' + icono + '"></i> ' +
+           formatDuration(min) + ' de ' + formatDuration(meta.meta) +
+           (distingueModalidad(configBodega) ? ' · ' + modalidadDe(r).toLowerCase() : '') +
+           (nivel !== 'normal' ? ' · ' + formatDuration(min - meta.meta) + ' por encima' : '') +
+           '</div>';
+}
+
+function pintarAlertaMuelle(enMuelle) {
+
+    var banner = document.getElementById('alerta-muelle-banner');
+    if (!banner) return;
+
+    var fuera = enMuelleFueraDeMeta(enMuelle, configBodega);
+
+    if (!fuera.length) {
+        banner.style.display = 'none';
+        return;
+    }
+
+    banner.style.display = 'flex';
+    document.getElementById('alerta-muelle-detalle').textContent =
+        fuera.length + ' vehículo(s) pasaron la meta de su tipología en muelle: ' +
+        fuera.map(function (r) {
+            var p = prioridadDe(r, configBodega);
+            return r.placa + ' (' + formatDuration(p.minutos) + ' de ' + formatDuration(p.meta) +
+                   ' · ' + formatDuration(p.exceso) + ' por encima)';
+        }).join(', ');
+}
+
+/* El puesto en la fila ya no se decide con el mismo reloj para
+   todos: el que está en muelle corre contra la meta de SU
+   tipología y el que espera afuera contra el límite de patio. El
+   badge muestra el reloj que efectivamente lo está midiendo. Ver
+   prioridadDe() en eventos.js. */
 function badgePrioridad(r, rank) {
     if (r.horaSalida) return '<span class="badge badge-salio">—</span>';
-    var min = minutosEsperando(r);
-    var clase = min >= 240 ? 'badge-amber' : (min >= 120 ? 'badge-descargue' : 'badge-en-patio');
-    return '<span class="badge ' + clase + '"><i class="ti ti-flag-3"></i> #' + rank + ' · ' + formatDuration(min) + '</span>';
+    var p = prioridadDe(r, configBodega);
+    var clase = p.nivel === 'alta' ? 'badge-amber' : (p.nivel === 'media' ? 'badge-descargue' : 'badge-en-patio');
+    return '<span class="badge ' + clase + '" title="' + tituloPrioridad(p) + '">' +
+           '<i class="ti ti-flag-3"></i> #' + rank + ' · ' + formatDuration(p.minutos) + '</span>';
+}
+
+/* Qué hay detrás del puesto en la fila: dónde está el vehículo,
+   contra qué meta se le mide y cuánto lleva por encima. Sin esto
+   el "#3" es un número que nadie puede verificar. */
+function tituloPrioridad(p) {
+    if (!p.referencia) return p.ubicacion + ' · sin meta configurada';
+    return p.ubicacion + ' · ' + formatDuration(p.minutos) + ' de ' + formatDuration(p.referencia) +
+        (p.estimada ? ' (promedio de la bodega — a este vehículo le falta la tipología)' : '') +
+        (p.exceso ? ' · ' + formatDuration(p.exceso) + ' por encima' : '');
 }
 
 /* =========================================================
@@ -372,7 +566,7 @@ function renderAvanceSoloLectura(rec, compacto) {
     var pct = rec.avancePorcentaje || 0;
     var tipo = rec.avanceTipo || rec.tipo || '';
     var claseBadge = tipo === 'Cargue' ? 'badge-cargue' : 'badge-descargue';
-    var d = diagnosticoSalida(rec);
+    var d = diagnosticoSalida(rec, configBodega);
 
     // Un vehículo que ya salió no tiene nada pendiente: decirle
     // "faltan 20%" a un registro cerrado solo confunde.
@@ -427,7 +621,7 @@ function renderAvanceSoloLectura(rec, compacto) {
    que sí lleva es el motivo en el tooltip y un color de aviso,
    para que el operario lo sepa antes de hacer clic. */
 function attrsBotonSalida(rec) {
-    var d = diagnosticoSalida(rec);
+    var d = diagnosticoSalida(rec, configBodega);
     if (d.puedeSalir) return '';
     return ' data-bloqueada="1" title="' + d.titulo +
         (d.faltante ? ' — faltan ' + d.faltante + '% para el ' + d.minimo + '%' : '') + '"';
@@ -435,7 +629,7 @@ function attrsBotonSalida(rec) {
 
 function alertaSalida(rec) {
 
-    var d = diagnosticoSalida(rec);
+    var d = diagnosticoSalida(rec, configBodega);
 
     // Si puede salir y el avance está en regla no hay nada que
     // advertir. El caso 'sin-avance' sí se avisa aunque deje
@@ -470,6 +664,14 @@ function alertaSalida(rec) {
 }
 
 function badgeEstado(r) {
+    // Va antes que "Salió" porque un cancelado también trae hora de
+    // salida. La portería no cancela, pero sí tiene que ver cuál se
+    // fue sin operar: es el vehículo que no va a volver hoy.
+    if (estaCancelado(r)) {
+        var llego = r.cancelacion && r.cancelacion.llego;
+        return '<span class="badge badge-cancelado" title="' + escapar((r.cancelacion && r.cancelacion.motivo) || '') + '">' +
+               '<i class="ti ti-ban"></i> ' + (llego ? 'Cancelado' : 'No llegó') + '</span>';
+    }
     if (r.horaSalida) return '<span class="badge badge-salio">Salió</span>';
     if (!requiereAvanceCompleto(r)) {
         return '<span class="badge badge-amber" title="Sin avance registrado — puede salir sin restricción de %"><i class="ti ti-alert-triangle"></i> Activo</span>';
@@ -515,7 +717,7 @@ function renderRegistros() {
         });
     }
 
-    list = ordenarPorPrioridad(list);
+    list = ordenarPorPrioridad(list, configBodega);
 
     var tbody = document.getElementById('reg-table');
 
@@ -587,12 +789,12 @@ function poblarSelectMuelles(selectEl, muelleActual) {
     if (!selectEl) return 0;
 
     var enMuelle = getRegistrosEnMuelle(registros);
-    var ocupacion = getMuellesOcupacion(enMuelle, NUM_MUELLES);
-    var libres = getMuellesLibres(ocupacion, NUM_MUELLES, muelleActual);
+    var ocupacion = getMuellesOcupacion(enMuelle, numMuelles);
+    var libres = getMuellesLibres(ocupacion, numMuelles, muelleActual);
     var valorPrevio = selectEl.value;
 
     var html = '';
-    for (var n = 1; n <= NUM_MUELLES; n++) {
+    for (var n = 1; n <= numMuelles; n++) {
         var esActual = muelleActual != null && String(n) === String(muelleActual);
         if (libres.indexOf(n) !== -1) {
             html += '<option value="' + n + '">' + n + (esActual ? ' (actual)' : '') + '</option>';
@@ -630,21 +832,143 @@ function cambiarServicioTipo() {
     if (servicioTipo === 'Reciclaje') {
         wrapper.style.display = 'block'; empresaSelect.style.display = 'block'; empresaText.style.display = 'none'; empresaSelect.value = '';
     } else if (servicioTipo === 'Insumos') {
-        wrapper.style.display = 'block'; empresaSelect.style.display = 'none'; empresaText.style.display = 'block'; empresaText.value = 'EMMA';
+        wrapper.style.display = 'block'; empresaSelect.style.display = 'none'; empresaText.style.display = 'block'; empresaText.value = clienteBodega();
     } else {
         wrapper.style.display = 'none'; empresaSelect.style.display = 'none'; empresaText.style.display = 'none';
     }
 }
 
+/* Los nombres de las tipologías los escribe el administrador a
+   mano, así que no pueden ir crudos dentro de un atributo HTML.
+   Misma implementación que en los paneles de supervisor, cliente
+   y administrador. */
+function escapar(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+
+/* =========================================================
+   TIPOLOGÍA DEL VEHÍCULO
+
+   La lista la define el administrador por bodega. Aquí solo se
+   pinta lo que él haya configurado: el operario no puede inventar
+   tipologías, porque de cada una cuelgan una tarifa y unas metas
+   de tiempo que solo tienen sentido si están configuradas.
+
+   Mientras la lista esté vacía el vehículo puede entrar sin
+   tipología —parar la portería por una tabla sin llenar sería
+   peor— pero NO podrá salir hasta que alguien se la asigne. El
+   texto de ayuda lo dice en el momento de registrar, no cuando ya
+   sea tarde.
+   ========================================================= */
+
+function renderSelectTipologia() {
+
+    var sel = document.getElementById('f-tipologia');
+    var hint = document.getElementById('f-tipologia-hint');
+    if (!sel) return;
+
+    var seleccionActual = sel.value;
+
+    if (!configBodega) {
+        sel.innerHTML = '<option value="">Cargando…</option>';
+        sel.disabled = true;
+        hint.textContent = '';
+        hint.className = 'form-hint';
+        return;
+    }
+
+    var lista = configBodega.tipologias || [];
+
+    if (!lista.length) {
+        sel.innerHTML = '<option value="">Sin tipologías configuradas</option>';
+        sel.disabled = true;
+        hint.textContent = 'El administrador todavía no ha configurado las tipologías de esta bodega. ' +
+            'Puedes registrar la entrada, pero el vehículo no podrá salir hasta que se le asigne una.';
+        hint.className = 'form-hint aviso';
+        return;
+    }
+
+    sel.disabled = false;
+    sel.innerHTML = '<option value="">Selecciona la tipología</option>' +
+        lista.map(function (t) {
+            return '<option value="' + escapar(t.id) + '">' + escapar(t.nombre) + '</option>';
+        }).join('');
+
+    // Si el administrador agrega o quita tipologías con el
+    // formulario a medio llenar, se conserva lo que el operario
+    // ya había elegido — salvo que sea justo la que desapareció.
+    if (seleccionActual && buscarTipologia(configBodega, seleccionActual)) {
+        sel.value = seleccionActual;
+    }
+
+    hint.textContent = '';
+    hint.className = 'form-hint';
+}
+
+/* =========================================================
+   MODAL: TIPOLOGÍA OBLIGATORIA
+
+   Bloquea el registro de entrada cuando la bodega ya tiene
+   tipologías configuradas y el operario no eligió ninguna.
+
+   No cierra ni continúa hasta que se elija una: cancelar deja el
+   formulario intacto para que el operario lo revise, pero no
+   registra. Antes esto era un aviso que se desvanecía solo, y un
+   vehículo podía terminar guardado sin el dato solo porque nadie
+   alcanzó a leerlo.
+   ========================================================= */
+
+function abrirModalTipologia() {
+
+    var sel = document.getElementById('m-tipologia');
+    var lista = (configBodega && configBodega.tipologias) || [];
+
+    sel.innerHTML = '<option value="">Selecciona la tipología</option>' +
+        lista.map(function (t) {
+            return '<option value="' + escapar(t.id) + '">' + escapar(t.nombre) + '</option>';
+        }).join('');
+
+    // Si el operario ya había elegido algo en el formulario y lo
+    // borró, no se le impone nada: arranca en blanco a propósito.
+    sel.value = '';
+    document.getElementById('m-tipologia-error').textContent = '';
+
+    document.getElementById('modal-tipologia').classList.add('open');
+    sel.focus();
+}
+
+/*
+    Pasa la elección al formulario y reintenta el registro. Se
+    reintenta llamando a registrarEntrada() en vez de duplicar aquí
+    el guardado: así la entrada sigue pasando por TODAS las
+    validaciones, no solo por la que faltaba.
+*/
+function confirmarTipologia() {
+
+    var sel = document.getElementById('m-tipologia');
+
+    if (!sel.value) {
+        document.getElementById('m-tipologia-error').textContent =
+            'Elige una tipología para poder continuar.';
+        return;
+    }
+
+    document.getElementById('f-tipologia').value = sel.value;
+    closeModal('modal-tipologia');
+    registrarEntrada();
+}
+
 function limpiarForm() {
 
-    ['f-conductor', 'f-placa', 'f-ubicacion', 'f-numeroMuelle', 'f-cedula', 'f-obs', 'f-programado', 'f-servicio-tipo']
+    ['f-conductor', 'f-placa', 'f-ubicacion', 'f-numeroMuelle', 'f-cedula', 'f-obs', 'f-programado', 'f-servicio-tipo', 'f-tipologia']
         .forEach(function (id) { document.getElementById(id).value = ''; });
 
     limpiarHora('f-hora-programacion-h', 'f-hora-programacion-m');
 
     document.getElementById('f-servicio-empresa').value = '';
-    document.getElementById('f-servicio-empresa-text').value = 'EMMA';
+    document.getElementById('f-servicio-empresa-text').value = clienteBodega();
     document.getElementById('programacion-wrapper').style.display = 'none';
     document.getElementById('servicio-empresa-wrapper').style.display = 'none';
     document.getElementById('f-canal').value = 'Otro';
@@ -683,10 +1007,16 @@ async function registrarEntrada() {
         : servicioTipo === 'Insumos' ? document.getElementById('f-servicio-empresa-text').value : '';
     var cedula = document.getElementById('f-cedula').value.trim();
     var obs = document.getElementById('f-obs').value.trim();
+    var tipologiaId = document.getElementById('f-tipologia').value;
+    var tipologia = buscarTipologia(configBodega, tipologiaId);
 
-    if (!conductor) { toast('Ingresa el nombre del conductor', 'red', 'ti-alert-circle'); return; }
-    if (!/^[A-Za-zÁÉÍÓÚÑÜáéíóúñü\s'.-]+$/.test(conductor)) { toast('El nombre del conductor solo puede tener letras', 'red', 'ti-alert-circle'); return; }
-    if (cedula && !/^[0-9]+$/.test(cedula)) { toast('La cédula solo puede tener números', 'red', 'ti-alert-circle'); return; }
+    if (!conductor) { toast('Ingresa ' + rotulo('conductor').toLowerCase(), 'red', 'ti-alert-circle'); return; }
+
+    var errorConductor = errorDeFormato(conductor, formatoCampo(configBodega, 'conductor'), rotulo('conductor'));
+    if (errorConductor) { toast(errorConductor, 'red', 'ti-alert-circle'); return; }
+
+    var errorCedula = errorDeFormato(cedula, formatoCampo(configBodega, 'cedula'), rotulo('cedula'));
+    if (errorCedula) { toast(errorCedula, 'red', 'ti-alert-circle'); return; }
     if (!placa) { toast('Ingresa la placa del vehículo', 'red', 'ti-alert-circle'); return; }
     if (horaFueraDeRango('f-hora-h', 'f-hora-m')) { toast('La hora de ingreso no es válida (horas 0-23, minutos 0-59)', 'red', 'ti-alert-circle'); return; }
     if (!hora) { toast('Selecciona la hora de ingreso', 'red', 'ti-alert-circle'); return; }
@@ -699,6 +1029,19 @@ async function registrarEntrada() {
     if (programado === 'Programado' && !horaProgramacion) { toast('Ingresa hora de programación', 'red', 'ti-alert-circle'); return; }
     if (servicioTipo === 'Reciclaje' && !servicioEmpresa) { toast('Selecciona la empresa de reciclaje', 'red', 'ti-alert-circle'); return; }
 
+    // La tipología solo es obligatoria cuando hay alguna configurada:
+    // si el administrador todavía no llenó la tabla, no se puede
+    // exigir un dato que el formulario no tiene cómo ofrecer.
+    //
+    // Cuando falta, no basta con avisar: el registro se detiene y se
+    // abre el modal, que trae el mismo desplegable para resolverlo
+    // sin salir del paso ni perder lo ya digitado.
+    var hayTipologiasConfiguradas = !!(configBodega && (configBodega.tipologias || []).length);
+    if (hayTipologiasConfiguradas && !tipologia) {
+        abrirModalTipologia();
+        return;
+    }
+
     var activo = registros.find(function (r) { return r.placa === placa && !r.horaSalida; });
     if (activo) { toast('El vehículo ' + placa + ' ya está activo en ' + getDestino(activo), 'amber', 'ti-alert-triangle'); return; }
 
@@ -708,7 +1051,9 @@ async function registrarEntrada() {
         ubicacion: ubicacion, numeroMuelle: numeroMuelle, bahia: 'A', canal: canal,
         destino: computeDestino(ubicacion, numeroMuelle, 'A'),
         tipo: tipo, cedula: cedula, obs: obs,
-        servicioTipo: servicioTipo || 'Normal', servicioEmpresa: servicioEmpresa
+        servicioTipo: servicioTipo || 'Normal', servicioEmpresa: servicioEmpresa,
+        tipologia: tipologia ? tipologia.id : '',
+        tipologiaNombre: tipologia ? tipologia.nombre : ''
     };
 
     setSyncStatus('syncing');
@@ -738,7 +1083,7 @@ async function registrarEntrada() {
    que el operario tenga que cerrar y volver a entrar. */
 function pintarEstadoSalida(rec) {
 
-    var d = diagnosticoSalida(rec);
+    var d = diagnosticoSalida(rec, configBodega);
 
     document.getElementById('modal-salida-info').innerHTML =
         '<strong>' + rec.placa + '</strong> — ' + rec.conductor + alertaSalida(rec);
@@ -777,7 +1122,7 @@ async function confirmarSalida() {
     var rec = registros.find(function (r) { return r.id === selectedId; });
     if (!rec) return;
 
-    var diag = diagnosticoSalida(rec);
+    var diag = diagnosticoSalida(rec, configBodega);
     if (!diag.puedeSalir) {
         toast(
             diag.faltante
@@ -975,7 +1320,8 @@ function openModalDetalle(id) {
 
     document.getElementById('modal-detalle-body').innerHTML =
         '<div class="detail-row"><span class="detail-lbl">Placa:</span><span class="detail-val">' + rec.placa + '</span></div>' +
-        '<div class="detail-row"><span class="detail-lbl">Conductor:</span><span class="detail-val">' + rec.conductor + '</span></div>' +
+        '<div class="detail-row"><span class="detail-lbl">' + escapar(rotulo('conductor')) + ':</span><span class="detail-val">' + escapar(rec.conductor) + '</span></div>' +
+        '<div class="detail-row"><span class="detail-lbl">' + escapar(rotulo('cedula')) + ':</span><span class="detail-val">' + escapar(rec.cedula || '—') + '</span></div>' +
         '<div class="detail-row"><span class="detail-lbl">Ubicación:</span><span class="detail-val">' + getDestino(rec) + '</span></div>' +
         '<div class="detail-row"><span class="detail-lbl">Ingreso:</span><span class="detail-val">' + fmtDt(rec.horaEntrada) + '</span></div>' +
         '<div class="detail-row"><span class="detail-lbl">Salida:</span><span class="detail-val">' + fmtDt(rec.horaSalida) + '</span></div>' +
@@ -1023,14 +1369,14 @@ function getStateLabel(r) {
 }
 
 function exportarTodos() {
-    var ok = exportarExcel(registros, getStateLabel, 'inlotrans_' + OPERACION + '_' + today() + '.xlsx', 'Registros ' + OPERACION);
+    var ok = exportarExcel(registros, getStateLabel, 'inlotrans_' + OPERACION + '_' + today() + '.xlsx', 'Registros ' + OPERACION, etiquetasExport());
     if (!ok) toast('No hay registros para exportar', 'amber', 'ti-alert-circle');
 }
 
 function exportarHoy() {
     var hoy = today();
     var deHoy = registros.filter(function (r) { return (r.fecha || (r.horaEntrada || '').slice(0, 10)) === hoy; });
-    var ok = exportarExcel(deHoy, getStateLabel, 'inlotrans_' + OPERACION + '_hoy_' + hoy + '.xlsx', 'Hoy');
+    var ok = exportarExcel(deHoy, getStateLabel, 'inlotrans_' + OPERACION + '_hoy_' + hoy + '.xlsx', 'Hoy', etiquetasExport());
     if (!ok) toast('No hay registros de hoy para exportar', 'amber', 'ti-alert-circle');
 }
 
@@ -1106,6 +1452,36 @@ function iniciarPagina(perfil) {
         }
     });
 
+    // En vivo y no una sola lectura: si el administrador crea una
+    // tipología con la portería abierta, el desplegable la ofrece
+    // sin que el operario tenga que recargar la página.
+    unsubscribeConfig = suscribirseAConfig(OPERACION, function (config, error) {
+        if (error) {
+            console.error('No se pudo cargar la configuración de ' + OPERACION + ':', error);
+            toast('No se pudo cargar la lista de tipologías', 'amber', 'ti-alert-triangle');
+            return;
+        }
+        configBodega = config;
+
+        // El tablero de muelles y el corte del turno salen de aquí.
+        // Un cambio del administrador reorganiza la portería sin que
+        // el operario tenga que recargar.
+        numMuelles = config.muelles || MUELLES_POR_DEFECTO;
+        horaCorte = config.horaCorte != null ? config.horaCorte : HORA_CORTE_POR_DEFECTO;
+
+        pintarTituloMuelles();
+        pintarEtiquetasCampos();
+        renderSelectTipologia();
+
+        // El nombre del cliente se escribe en el campo de empresa del
+        // servicio de insumos: si cambió, el formulario abierto tiene
+        // que reflejarlo antes de que se registre la próxima entrada.
+        cambiarServicioTipo();
+        renderTodo();
+    });
+
+    renderSelectTipologia();
+
     // Eventos del formulario
     document.getElementById('f-ubicacion').addEventListener('change', cambiarUbicacion);
     document.getElementById('f-programado').addEventListener('change', cambiarProgramado);
@@ -1114,10 +1490,10 @@ function iniciarPagina(perfil) {
     document.getElementById('btn-limpiar').addEventListener('click', limpiarForm);
     document.getElementById('btn-registrar').addEventListener('click', registrarEntrada);
 
-    // Saneamiento en vivo: conductor solo letras, cédula solo números,
-    // horas/minutos nunca fuera de 0-23 / 0-59 mientras se digitan.
-    document.getElementById('f-conductor').addEventListener('input', filtrarSoloLetras);
-    document.getElementById('f-cedula').addEventListener('input', filtrarSoloDigitos);
+    // Saneamiento en vivo: los dos campos libres según el formato que
+    // les fije la bodega, y horas/minutos nunca fuera de 0-23 / 0-59.
+    document.getElementById('f-conductor').addEventListener('input', function (e) { filtrarSegunFormato(e, 'conductor'); });
+    document.getElementById('f-cedula').addEventListener('input', function (e) { filtrarSegunFormato(e, 'cedula'); });
     document.getElementById('f-hora-h').addEventListener('input', function (e) { limitarHora(e, 23); });
     document.getElementById('f-hora-m').addEventListener('input', function (e) { limitarHora(e, 59); });
     document.getElementById('f-hora-programacion-h').addEventListener('input', function (e) { limitarHora(e, 23); });
@@ -1133,6 +1509,7 @@ function iniciarPagina(perfil) {
     document.getElementById('btn-confirmar-salida').addEventListener('click', confirmarSalida);
     document.getElementById('btn-confirmar-edicion').addEventListener('click', confirmarEdicionUbicacion);
     document.getElementById('btn-confirmar-observacion').addEventListener('click', confirmarObservacion);
+    document.getElementById('btn-confirmar-tipologia').addEventListener('click', confirmarTipologia);
 
     // Exportar
     document.getElementById('btn-export-todos').addEventListener('click', exportarTodos);
@@ -1161,4 +1538,5 @@ protegerPagina({
 
 window.addEventListener('beforeunload', function () {
     if (unsubscribeRegistros) unsubscribeRegistros();
+    if (unsubscribeConfig) unsubscribeConfig();
 });

@@ -23,7 +23,8 @@ import {
   getRegistrosEnPatio,
   getRegistrosEnMuelle,
   getMuellesOcupacion,
-  requiereAvanceCompleto
+  requiereAvanceCompleto,
+  estaCancelado
 } from "../../../shared/services/vehiculos.js";
 
 import {
@@ -34,6 +35,11 @@ import {
   getLocationDurations,
   minutosEsperando,
   nivelPrioridad,
+  nivelContraMeta,
+  prioridadDe,
+  enMuelleFueraDeMeta,
+  minutosEnMuelle,
+  faseActual,
   ordenarPorPrioridad,
   diaConMasMovimiento,
   tituloHistorial
@@ -42,17 +48,45 @@ import {
 import { todayOperativo, sumarDias } from "../../../shared/utils/tiempos.js";
 
 import {
+  suscribirseAConfig,
+  etiquetaCampo,
+  numerosDeMuelle,
+  umbralesPatio,
+  tiemposDe
+} from "../../../shared/services/config.js";
+
+import { fichaVehiculo } from "../../../shared/services/detalleVehiculo.js";
+
+import {
   renderPanelEstadisticas,
   renderChartFranjaHoraria
 } from "../../../shared/services/estadisticas.js";
 
 const OPERACION = "J4";
-const NUM_MUELLES = 3;
 const RUTA_LOGIN = "../../../index.html";
 
-// J4 (Alkosto): el "día" del turno va de 6am a 6am, no de
-// medianoche a medianoche. Ver shared/utils/tiempos.js.
-const HORA_CORTE = 6;
+/* El número de muelles y el corte del turno los fija el
+   administrador en config/{OPERACION}. Estos dos son el valor de
+   partida: el que se usa mientras Firestore responde y el que se
+   mantiene si la bodega todavía no los tiene configurados.
+
+   El cliente lee la MISMA configuración que la portería a
+   propósito: si su tablero mostrara otro número de muelles, o
+   contara el día con otro corte, sus indicadores no cuadrarían con
+   los de adentro y no habría forma de saber cuál de los dos miente.
+
+   J4 (Alkosto): el "día" del turno va de 6am a 6am, no de
+   medianoche a medianoche. Ver shared/utils/tiempos.js. */
+const MUELLES_POR_DEFECTO = 3;
+const HORA_CORTE_POR_DEFECTO = 6;
+
+let numMuelles = MUELLES_POR_DEFECTO;
+
+/* Los números REALES de los muelles, en orden. En J4 son el 9, el
+   10 y el 11: la bodega tiene tres, pero dentro de la planta no se
+   llaman 1, 2 y 3. */
+let numerosMuelle = numerosDeMuelle(null, MUELLES_POR_DEFECTO);
+let horaCorte = HORA_CORTE_POR_DEFECTO;
 
 // chartjs-plugin-datalabels ya viene cargado desde el <head>. Se
 // registra una vez, deshabilitado por defecto: cada gráfica lo
@@ -67,7 +101,16 @@ let estadPeriodoActual = "hoy";
 let registros = [];
 let canalFiltro = ""; // "" = todos, "MQ", "3PD" — filtro global (Dashboard + Registros + Estadísticas)
 let unsubscribe = null;
+let unsubscribeConfig = null;
 let perfilActual = null;
+
+/* Configuración de la bodega (config/J4). El cliente no captura
+   nada, pero sí lee: de aquí sale cómo se llaman los dos campos
+   libres del registro para que sus tablas y su exportación digan
+   lo mismo que las de la portería. Empieza en null y el HTML trae
+   los rótulos de esta bodega escritos, así que mientras Firestore
+   responde no se ve una cabecera equivocada. */
+let configBodega = null;
 
 // guard.js no expone una función de logout, así que la armamos aquí
 // con las mismas piezas que usa internamente (auth.js + session.js).
@@ -118,6 +161,25 @@ protegerPagina({ rolesPermitidos: ["cliente"], operacion: OPERACION }).then((per
     renderTodo();
   });
 
+  // De la configuración este panel solo necesita el tamaño del
+  // tablero, el corte del turno y cómo se rotulan los dos campos
+  // libres. Las reglas de Firestore le abren el documento de su
+  // bodega; las tarifas viven en la subcolección restringida y ni
+  // se piden.
+  unsubscribeConfig = suscribirseAConfig(OPERACION, (config, error) => {
+    if (error) {
+      console.error("[clientes] No se pudo leer la configuración:", error);
+      return;
+    }
+    configBodega = config;
+    numMuelles = config.muelles || MUELLES_POR_DEFECTO;
+    numerosMuelle = numerosDeMuelle(config, numMuelles);
+    horaCorte = config.horaCorte != null ? config.horaCorte : HORA_CORTE_POR_DEFECTO;
+    pintarTituloMuelles();
+    pintarEtiquetasCampos();
+    renderTodo();
+  });
+
 }).catch((err) => {
   // protegerPagina() ya redirigió a RUTA_LOGIN por su cuenta, pero
   // nos deja saber por qué antes de irse — muy útil mientras se
@@ -131,6 +193,7 @@ protegerPagina({ rolesPermitidos: ["cliente"], operacion: OPERACION }).then((per
 
 window.addEventListener("beforeunload", () => {
   if (unsubscribe) unsubscribe();
+  if (unsubscribeConfig) unsubscribeConfig();
 });
 
 // Refresco automático cada minuto, sin excepciones — aunque no haya
@@ -192,6 +255,77 @@ function mostrarVista(nombre) {
    RENDER GENERAL (se llama en cada actualización en vivo)
    ========================================================= */
 
+/* Hasta qué muelle llega el tablero. Lo pinta el JS y no viene fijo
+   en el HTML porque el número sale de la configuración de la bodega
+   y puede cambiar sin desplegar nada. */
+/* =========================================================
+   ALERTAS: DE DÓNDE SALEN LOS UMBRALES
+
+   Los MISMOS que ve la portería, a propósito: si el tablero del
+   cliente marcara en rojo con otro criterio, las dos pantallas se
+   contradirían y no habría forma de saber cuál miente.
+
+     PATIO    límite igual para todos, configurado por bodega.
+     MUELLE   la meta de la tipología del vehículo, en la fase en
+              la que va.
+   ========================================================= */
+
+function umbralesDePatio() {
+  return configBodega ? umbralesPatio(configBodega) : null;
+}
+
+function nivelMuelle(r) {
+  return nivelContraMeta(
+    minutosEnMuelle(r),
+    tiemposDe(configBodega, r.tipologia, faseActual(r))
+  );
+}
+
+/* Cuánto lleva en muelle y contra qué meta. El cliente ve el
+   avance de SU carga, así que ve la cifra completa — no es un
+   dato de desempeño del personal, es el estado del vehículo. */
+function avisoMetaMuelle(r) {
+
+  const meta = tiemposDe(configBodega, r.tipologia, faseActual(r));
+  const min = minutosEnMuelle(r);
+
+  if (!meta) {
+    return '<div class="muelle-meta sin-meta"><i class="ti ti-help-circle"></i> ' +
+           formatearMinutos(min) + " en muelle</div>";
+  }
+
+  const nivel = nivelContraMeta(min, meta);
+  const icono = nivel === "alta" ? "ti-alert-triangle" : nivel === "media" ? "ti-clock-exclamation" : "ti-clock-check";
+
+  return `<div class="muelle-meta ${nivel}"><i class="ti ${icono}"></i> ` +
+         `${formatearMinutos(min)} de ${formatearMinutos(meta.meta)}` +
+         (nivel !== "normal" ? ` · ${formatearMinutos(min - meta.meta)} por encima` : "") +
+         "</div>";
+}
+
+function pintarTituloMuelles() {
+  const el = document.getElementById("muelles-titulo");
+  if (!el) return;
+  if (!numerosMuelle.length) { el.textContent = "Muelles"; return; }
+  el.textContent = `Muelles (${numerosMuelle[0]} a ${numerosMuelle[numerosMuelle.length - 1]})`;
+}
+
+/* Los dos campos libres se llaman como los llame esta bodega: en
+   J3 y B9, conductor y cédula; en J4, proveedor y número de cita.
+   El cliente solo los lee, así que aquí basta con rotular las
+   cabeceras y el buscador. */
+function pintarEtiquetasCampos() {
+
+  const conductor = etiquetaCampo(configBodega, "conductor");
+
+  document.querySelectorAll(".th-conductor").forEach((th) => {
+    th.textContent = conductor;
+  });
+
+  const buscador = document.getElementById("f-placa");
+  if (buscador) buscador.placeholder = `Buscar por placa o ${conductor.toLowerCase()}…`;
+}
+
 function renderTodo() {
   renderDashboard();
   renderUbicacion();
@@ -209,16 +343,16 @@ function renderDashboard() {
   const base = registrosFiltrados();
   const enPatio = getRegistrosEnPatio(base);
   const enMuelle = getRegistrosEnMuelle(base);
-  const diaOp = todayOperativo(HORA_CORTE);
-  const entradasHoy = base.filter((r) => getDiaOperativo(r, HORA_CORTE) === diaOp);
-  const enAlerta = enPatio.filter((r) => nivelPrioridad(minutosEsperando(r)) === "alta");
+  const diaOp = todayOperativo(horaCorte);
+  const entradasHoy = base.filter((r) => getDiaOperativo(r, horaCorte) === diaOp);
+  const enAlerta = enPatio.filter((r) => nivelPrioridad(minutosEsperando(r), umbralesDePatio()) === "alta");
 
   document.getElementById("kpi-patio").textContent = enPatio.length;
   document.getElementById("kpi-muelle").textContent = enMuelle.length;
   document.getElementById("kpi-hoy").textContent = entradasHoy.length;
   document.getElementById("kpi-alerta").textContent = enAlerta.length;
 
-  const mejorDia = diaConMasMovimiento(base, HORA_CORTE);
+  const mejorDia = diaConMasMovimiento(base, horaCorte);
   if (mejorDia) {
     document.getElementById("kpi-mejor-dia-fecha").textContent = formatearFechaCorta(mejorDia.dia);
     document.getElementById("kpi-mejor-dia-detalle").textContent =
@@ -230,18 +364,49 @@ function renderDashboard() {
 
   renderPrioridades(enPatio);
 
-  const ultimos = ordenarPorPrioridad(base).slice(0, 15);
+  // Alerta de muelle. Es OTRA alerta, no la misma con otro número:
+  // el KPI "En alerta" cuenta la cola de patio contra el límite
+  // general de la bodega, y esta avisa del vehículo que YA ESTÁ
+  // operando y se pasó de la meta de SU tipología.
+  pintarAlertaMuelle(enMuelle);
+
+  const ultimos = ordenarPorPrioridad(base, configBodega).slice(0, 15);
   const tbody = document.getElementById("tabla-dashboard-body");
   tbody.innerHTML = ultimos.map(filaTabla).join("") || filaVacia(6);
 
   renderChartFranjaHoraria("chart-franja-horaria-dashboard", entradasHoy);
 }
 
+/* Los vehículos que ahora mismo llevan más de la meta de su
+   tipología en muelle. Mismo criterio que ve la portería
+   (enMuelleFueraDeMeta en eventos.js): si el tablero del cliente
+   avisara con otra regla, las dos pantallas se contradirían. */
+function pintarAlertaMuelle(enMuelle) {
+
+  const banner = document.getElementById("alerta-muelle-banner");
+  if (!banner) return;
+
+  const fuera = enMuelleFueraDeMeta(enMuelle, configBodega);
+
+  if (!fuera.length) {
+    banner.style.display = "none";
+    return;
+  }
+
+  banner.style.display = "flex";
+  document.getElementById("alerta-muelle-detalle").textContent =
+    `${fuera.length} vehículo(s) pasaron la meta de su tipología en muelle: ` +
+    fuera.map((r) => {
+      const p = prioridadDe(r, configBodega);
+      return `${r.placa} (${formatearMinutos(p.minutos)} de ${formatearMinutos(p.meta)} · ${formatearMinutos(p.exceso)} por encima)`;
+    }).join(", ");
+}
+
 /* Reparte los vehículos que están esperando en patio según su
    nivel de prioridad (los umbrales viven en eventos.js). */
 function renderPrioridades(enPatio) {
   const conteo = { normal: 0, media: 0, alta: 0 };
-  enPatio.forEach((r) => { conteo[nivelPrioridad(minutosEsperando(r))]++; });
+  enPatio.forEach((r) => { conteo[nivelPrioridad(minutosEsperando(r), umbralesDePatio())]++; });
   document.getElementById("prioridad-normal").textContent = conteo.normal;
   document.getElementById("prioridad-media").textContent = conteo.media;
   document.getElementById("prioridad-alta").textContent = conteo.alta;
@@ -249,10 +414,13 @@ function renderPrioridades(enPatio) {
 
 
 
+/* El reloj de esta fila es el que gobierna al vehículo: el de
+   muelle si está operando, el de patio si está esperando. Medirlos
+   todos contra el de patio ponía a una mula 50 minutos pasada de
+   su meta como "Normal". Ver prioridadDe() en eventos.js. */
 function filaTabla(r) {
   const activo = !r.horaSalida;
-  const min = minutosEsperando(r);
-  const nivel = activo ? nivelPrioridad(min) : "normal";
+  const p = prioridadDe(r, configBodega);
 
   return `
     <tr>
@@ -260,12 +428,22 @@ function filaTabla(r) {
       <td>${escapar(r.conductor || "—")}</td>
       <td>${formatearFecha(r.horaEntrada)}</td>
       <td>${escapar(getDestino(r))}</td>
-      <td>${activo ? formatearMinutos(min) : "—"}</td>
+      <td>${activo ? formatearMinutos(p.minutos) : "—"}</td>
       <td>${activo
-        ? `<span class="badge badge-prioridad-${nivel}">${nivel === "alta" ? "Urgente" : nivel === "media" ? "Atención" : "Normal"}</span>`
+        ? `<span class="badge badge-prioridad-${p.nivel}" title="${tituloPrioridad(p)}">${p.nivel === "alta" ? "Urgente" : p.nivel === "media" ? "Atención" : "Normal"}</span>`
         : `<span class="badge badge-online">Finalizado</span>`}
       </td>
     </tr>`;
+}
+
+/* Qué hay detrás del puesto en la fila: dónde está el vehículo,
+   contra qué meta se le mide y cuánto lleva por encima. Sin esto
+   el "#3" es un número que nadie puede verificar. */
+function tituloPrioridad(p) {
+  if (!p.referencia) return `${p.ubicacion} · sin meta configurada`;
+  return `${p.ubicacion} · ${formatearMinutos(p.minutos)} de ${formatearMinutos(p.referencia)}` +
+    (p.estimada ? " (promedio de la bodega — a este vehículo le falta la tipología)" : "") +
+    (p.exceso ? ` · ${formatearMinutos(p.exceso)} por encima` : "");
 }
 
 function filaVacia(cols) {
@@ -284,20 +462,27 @@ function filaVacia(cols) {
 function renderUbicacion() {
   const base = registrosFiltrados();
   const enMuelle = getRegistrosEnMuelle(base);
-  const ocupacion = getMuellesOcupacion(enMuelle, NUM_MUELLES);
+  const ocupacion = getMuellesOcupacion(enMuelle, numerosMuelle);
 
   const grid = document.getElementById("grid-muelles");
   let html = "";
 
-  for (let n = 1; n <= NUM_MUELLES; n++) {
+  // Object.keys y no `numerosMuelle`: si un vehículo quedó en un
+  // muelle que ya no está en la numeración, getMuellesOcupacion lo
+  // agrega al final y aquí se sigue viendo hasta que salga.
+  Object.keys(ocupacion).forEach((n) => {
     const r = ocupacion[n];
 
+    // La alerta sale de la meta de la tipología del vehículo.
+    const nivel = r ? nivelMuelle(r) : "normal";
+
     html += `
-      <div class="muelle-card ${r ? "ocupado" : "libre"}">
+      <div class="muelle-card ${r ? "ocupado" : "libre"} ${nivel !== "normal" ? "muelle-" + nivel : ""}">
         <div class="muelle-card-top">
           <span class="muelle-card-num">Muelle ${n}</span>
           <span class="muelle-card-status ${r ? "ocupado" : "libre"}">${r ? "OCUPADO" : "LIBRE"}</span>
         </div>
+        ${r ? avisoMetaMuelle(r) : ""}
         <div class="muelle-card-body">
           ${r
             ? `<div class="muelle-card-placa">${escapar(r.placa)}</div><div>${escapar(r.conductor || "—")}</div>` +
@@ -306,11 +491,11 @@ function renderUbicacion() {
             : `<div class="muelle-card-empty">Disponible</div>`}
         </div>
       </div>`;
-  }
+  });
 
   grid.innerHTML = html;
 
-  const enPatio = ordenarPorPrioridad(getRegistrosEnPatio(base));
+  const enPatio = ordenarPorPrioridad(getRegistrosEnPatio(base), configBodega);
   document.getElementById("tabla-patio-body").innerHTML = enPatio.map(filaPatio).join("") || filaVacia(8);
 }
 
@@ -320,7 +505,7 @@ function claseTipo(tipo) {
 
 function filaPatio(r) {
   const min = minutosEsperando(r);
-  const nivel = nivelPrioridad(min);
+  const nivel = nivelPrioridad(min, umbralesDePatio());
   return `
     <tr>
       <td><strong>${escapar(r.placa)}</strong></td>
@@ -411,14 +596,19 @@ function openModalNovedades(id) {
           </div>
         </div>`).join("");
 
-  document.getElementById("modal-novedades-body").innerHTML = `
-    <div class="detail-row"><span class="detail-lbl">Placa:</span><span class="detail-val">${escapar(rec.placa)}</span></div>
-    <div class="detail-row"><span class="detail-lbl">Conductor:</span><span class="detail-val">${escapar(rec.conductor || "—")}</span></div>
-    <div class="detail-row"><span class="detail-lbl">Ubicación:</span><span class="detail-val">${escapar(getDestino(rec))}</span></div>
-    <div class="detail-row"><span class="detail-lbl">Ingreso:</span><span class="detail-val">${formatearFecha(rec.horaEntrada)}</span></div>
-    <div class="detail-row"><span class="detail-lbl">Programado:</span><span class="detail-val">${rec.programado && rec.horaProgramacion ? formatearFecha(rec.horaProgramacion) : "No"}</span></div>
-    ${seccionAutorizacion(rec)}
-    <div class="detail-section-title">Novedades</div>${histHtml}`;
+  // Sin nada de dinero: las reglas de Firestore no le abren la
+  // colección de cobros al cliente, y el vehículo tampoco le dice
+  // si se pagó. Todo lo demás sí lo ve completo — es su carga.
+  document.getElementById("modal-novedades-body").innerHTML =
+    fichaVehiculo(rec, {
+      etiquetas: {
+        conductor: etiquetaCampo(configBodega, "conductor"),
+        cedula: etiquetaCampo(configBodega, "cedula")
+      },
+      mostrarOperarios: true
+    }) +
+    seccionAutorizacion(rec) +
+    `<div class="detail-section-title">Novedades</div>${histHtml}`;
 
   document.getElementById("modal-novedades").classList.add("open");
 }
@@ -470,7 +660,7 @@ function renderRegistros() {
     return true;
   });
 
-  filtrados = ordenarPorPrioridad(filtrados);
+  filtrados = ordenarPorPrioridad(filtrados, configBodega);
 
   const tbody = document.getElementById("tabla-registros-body");
   let activeRank = 0;
@@ -488,14 +678,28 @@ function renderRegistros() {
    Novedades que abre el mismo historial que el de muelles/patio.
    ========================================================= */
 
+/* El puesto en la fila ya no se decide con el mismo reloj para
+   todos: el que está en muelle corre contra la meta de SU
+   tipología y el que espera afuera contra el límite de patio. El
+   badge muestra el reloj que efectivamente lo está midiendo. Ver
+   prioridadDe() en eventos.js. */
 function prioridadRegistro(r, rank) {
   if (r.horaSalida) return '<span class="badge badge-salio">—</span>';
-  const min = minutosEsperando(r);
-  const clase = min >= 240 ? "badge-amber" : min >= 120 ? "badge-descargue" : "badge-en-patio";
-  return `<span class="badge ${clase}"><i class="ti ti-flag-3"></i> #${rank} · ${formatearMinutos(min)}</span>`;
+  const p = prioridadDe(r, configBodega);
+  const clase = p.nivel === "alta" ? "badge-amber" : p.nivel === "media" ? "badge-descargue" : "badge-en-patio";
+  return `<span class="badge ${clase}" title="${tituloPrioridad(p)}"><i class="ti ti-flag-3"></i> #${rank} · ${formatearMinutos(p.minutos)}</span>`;
 }
 
 function badgeEstado(r) {
+  // Va antes que "Salió" porque un cancelado también trae hora de
+  // salida. El cliente tiene que poder distinguir el vehículo que se
+  // atendió del que no se atendió: es su carga la que no se movió.
+  if (estaCancelado(r)) {
+    const llego = r.cancelacion && r.cancelacion.llego;
+    return `<span class="badge badge-cancelado" title="${escapar((r.cancelacion && r.cancelacion.motivo) || "")}">
+              <i class="ti ti-ban"></i> ${llego ? "Cancelado" : "No llegó"}
+            </span>`;
+  }
   if (r.horaSalida) return '<span class="badge badge-salio">Salió</span>';
   if (!requiereAvanceCompleto(r)) {
     return '<span class="badge badge-amber" title="Sin avance registrado — puede salir sin restricción de %"><i class="ti ti-alert-triangle"></i> Activo</span>';
@@ -572,7 +776,7 @@ function setPeriodoEstadisticas(p, btn) {
   if (p === "personalizado") {
     custom.style.display = "flex";
     if (!document.getElementById("estad-hasta").value) {
-      const hoyOp = todayOperativo(HORA_CORTE);
+      const hoyOp = todayOperativo(horaCorte);
       document.getElementById("estad-hasta").value = hoyOp;
       document.getElementById("estad-desde").value = hoyOp;
     }
@@ -584,7 +788,7 @@ function setPeriodoEstadisticas(p, btn) {
 }
 
 function getDiasOperativosDelPeriodo() {
-  const hoyOp = todayOperativo(HORA_CORTE);
+  const hoyOp = todayOperativo(horaCorte);
 
   if (estadPeriodoActual === "personalizado") {
     const desde = document.getElementById("estad-desde").value;
@@ -596,7 +800,7 @@ function getDiasOperativosDelPeriodo() {
     const base = registrosFiltrados();
     const dias = new Set();
     base.forEach((r) => {
-      const d = getDiaOperativo(r, HORA_CORTE);
+      const d = getDiaOperativo(r, horaCorte);
       if (d) dias.add(d);
     });
     if (!dias.size) dias.add(hoyOp);
@@ -628,7 +832,7 @@ function buildDayRange(desde, hasta) {
   ) + 1;
   rangoRecortado = Math.max(0, pedidos - dias.length);
 
-  return dias.length ? dias : [todayOperativo(HORA_CORTE)];
+  return dias.length ? dias : [todayOperativo(horaCorte)];
 }
 
 function pintarAvisoRango() {
@@ -650,11 +854,16 @@ function renderEstadisticas() {
   const diasSet = new Set(dias);
 
   renderPanelEstadisticas({
-    recs: base.filter((r) => diasSet.has(getDiaOperativo(r, HORA_CORTE))),
+    recs: base.filter((r) => diasSet.has(getDiaOperativo(r, horaCorte))),
     base: base,
     todos: registros,
     dias: dias,
-    horaCorte: HORA_CORTE
+    horaCorte: horaCorte,
+
+    // El cliente mide contra la MISMA meta de patio que la
+    // portería: si su pérdida de operación se calculara contra
+    // otro límite, las dos pantallas se contradirían.
+    config: configBodega
   });
 }
 
@@ -677,9 +886,18 @@ function exportar() {
   if (desde) filtrados = filtrados.filter((r) => r.fecha >= desde);
   if (hasta) filtrados = filtrados.filter((r) => r.fecha <= hasta);
 
+  // Los dos campos libres salen con el nombre que les da esta
+  // bodega, igual que en la hoja de la portería: si el cliente
+  // exportara "Conductor" y "Cédula" donde adentro se anota el
+  // proveedor y el número de cita, los dos archivos no se podrían
+  // comparar sin traducir las columnas a mano.
+  const rotuloConductor = etiquetaCampo(configBodega, "conductor");
+  const rotuloCedula = etiquetaCampo(configBodega, "cedula");
+
   const filas = filtrados.map((r) => ({
     Placa: r.placa,
-    Conductor: r.conductor || "",
+    [rotuloConductor]: r.conductor || "",
+    [rotuloCedula]: r.cedula || "",
     Entrada: r.horaEntrada || "",
     Salida: r.horaSalida || "",
     Ubicacion: getDestino(r),

@@ -11,6 +11,13 @@
 
 import { diaOperativo } from "../utils/tiempos.js";
 
+import {
+    tiemposDe,
+    umbralesPatio,
+    modalidadDe,
+    metaPromedioMuelle
+} from "./config.js";
+
 
 /* ── HISTORIAL ── */
 
@@ -386,34 +393,229 @@ export function minutosEsperando(r) {
 }
 
 /*
-    Ordena una lista de registros: primero los activos (sin salida),
-    de mayor a menor tiempo de espera; luego los que ya salieron,
-    del más reciente al más antiguo.
+    Ordena una lista de registros: primero los activos (sin salida)
+    por urgencia, luego los que ya salieron, del más reciente al más
+    antiguo.
+
+    ── QUÉ ES "MÁS URGENTE" ──
+
+    Antes era simplemente el que llevaba más rato adentro. Eso
+    ordenaba bien una fila de patio —donde esperar es esperar y
+    todos se miden contra el mismo límite— pero mentía en cuanto
+    entraba un vehículo de muelle: una mula que lleva 50 minutos
+    sobre una meta de 45 va MÁS retrasada que otra que lleva 2 horas
+    sobre una meta de 3h30, y la vieja regla las ponía al revés.
+
+    Ahora cada vehículo se mide contra SU meta —la de su tipología
+    y su fase si está en muelle, la de patio de la bodega si está
+    esperando— y manda:
+
+        1. cuántos minutos lleva POR ENCIMA de su meta
+        2. si nadie se ha pasado, qué tanto de su meta lleva gastado
+        3. y solo al final, el tiempo total adentro, para desempatar
+
+    `config` es la configuración de la bodega. Sin ella no hay metas
+    que consultar y el orden queda como estaba: por tiempo adentro.
 */
-export function ordenarPorPrioridad(list) {
+export function ordenarPorPrioridad(list, config) {
+
+    // Se calcula una vez por registro y no dentro del comparador:
+    // getLocationDurations() recorre el historial completo, y un
+    // sort lo llamaría O(n log n) veces sobre el mismo vehículo.
+    var peso = new Map();
+    (list || []).forEach(function (r) { peso.set(r, prioridadDe(r, config)); });
+
     return list.slice().sort(function (a, b) {
+
         var aActivo = !a.horaSalida, bActivo = !b.horaSalida;
         if (aActivo && !bActivo) return -1;
         if (!aActivo && bActivo) return 1;
-        if (aActivo && bActivo) return minutosEsperando(b) - minutosEsperando(a);
+
+        if (aActivo && bActivo) {
+            var pa = peso.get(a), pb = peso.get(b);
+            if (pb.exceso !== pa.exceso) return pb.exceso - pa.exceso;
+            if (pb.consumo !== pa.consumo) return pb.consumo - pa.consumo;
+            return minutosEsperando(b) - minutosEsperando(a);
+        }
+
         return new Date(b.horaSalida || 0) - new Date(a.horaSalida || 0);
     });
 }
 
-/*
-    Nivel de urgencia según el tiempo de espera.
+/* ── NIVEL DE ALERTA CONTRA UNA META ──────────────────────
 
-    IMPORTANTE (punto 9 de tu prompt maestro): estos umbrales
-    (120/240 min) hoy están fijos, igual que en bodega-J4.html.
-    Cuando construyamos el panel de administrador, se moverán a
-    un documento de configuración por operación en Firestore
-    (ej. config/{operacion} → { patioMaximo, muelleMaximo }) para
-    que cada operación tenga sus propios umbrales.
-*/
-export function nivelPrioridad(minutos) {
-    if (minutos >= 240) return 'alta';
-    if (minutos >= 120) return 'media';
+   La regla es la misma en toda la aplicación, venga la meta de
+   donde venga: pasarse de ella enciende el amarillo, doblarla
+   enciende el rojo. Está escrita UNA vez aquí para que la espera
+   en patio y el tiempo en muelle no puedan interpretarse con
+   criterios distintos.
+
+   `umbrales` es el objeto { atencion, urgente } que ya arman
+   `umbralesPatio()` y `tiemposDe()` en config.js — los dos
+   devuelven esa misma forma, así que sirven indistintamente.
+
+   Sin umbrales o con la meta en cero devuelve 'normal': una meta
+   que nadie configuró no puede incumplirse, y pintar de rojo un
+   vehículo por un dato que falta es una alarma falsa.
+   ───────────────────────────────────────────────────────── */
+
+export function nivelContraMeta(minutos, umbrales) {
+    if (!umbrales || !umbrales.urgente) return 'normal';
+    if (minutos >= umbrales.urgente) return 'alta';
+    if (minutos >= umbrales.atencion) return 'media';
     return 'normal';
+}
+
+/* Umbrales de espera en patio con los que operaba el sistema
+   cuando estaban fijos en el código. Se conservan como valor de
+   partida para los paneles que todavía no pasan la configuración
+   de su bodega — así ninguno se queda sin alerta mientras se
+   migran uno por uno. */
+export const UMBRALES_PATIO_POR_DEFECTO = { atencion: 120, urgente: 240 };
+
+/*
+    Nivel de urgencia por el tiempo de espera en patio.
+
+    `umbrales` sale de umbralesPatio(config) — el límite de patio
+    que el administrador configura por bodega. Antes eran 120/240
+    fijos aquí, con un comentario prometiendo moverlos a la
+    configuración; esto es ese movimiento. Sin argumento se
+    comporta exactamente como antes.
+*/
+export function nivelPrioridad(minutos, umbrales) {
+    return nivelContraMeta(minutos, umbrales || UMBRALES_PATIO_POR_DEFECTO);
+}
+
+/*
+    En qué fase va el vehículo AHORA. Un "Ambos" descarga primero
+    y carga después, y cada fase tiene su propia meta: preguntar
+    por `tipo` devolvería "Ambos", que no es una fase sino las dos.
+    `avanceTipo` es el que se mueve solo al terminar el descargue.
+*/
+export function faseActual(r) {
+    return (r && (r.avanceTipo || r.tipo)) || '';
+}
+
+/*
+    Minutos que el vehículo lleva EN MUELLE ahora mismo. Sale del
+    historial y no de una resta contra la hora de entrada: un
+    vehículo que esperó dos horas en patio antes de subir no lleva
+    dos horas de muelle.
+
+    Cero para el que ya salió o no está en muelle: no hay tiempo
+    corriendo contra ninguna meta.
+*/
+export function minutosEnMuelle(r) {
+    if (!r || r.horaSalida) return 0;
+    if (r.ubicacion !== 'Muelle') return 0;
+    return getLocationDurations(r).muelle || 0;
+}
+
+
+/* ── PRIORIDAD DE UN VEHÍCULO CONTRA SU PROPIA META ───────
+
+   Un vehículo activo corre contra UN reloj y UNA meta, y cuáles
+   son depende de dónde está parado:
+
+       PATIO    el reloj es lo que lleva adentro y la meta es el
+                límite de patio de la bodega — igual para todos,
+                porque esperar es esperar.
+
+       MUELLE   el reloj es lo que lleva EN MUELLE (no lo que
+                lleva adentro: la espera previa en patio ya se
+                contó allá) y la meta sale de su tipología y de
+                la fase en la que va. Una MULA 40 arrumada no
+                debería tardar lo mismo que una paletizada.
+
+   De ahí salen las tres cifras con las que se ordena y se pinta:
+
+       exceso    minutos POR ENCIMA de la meta (0 si va en hora)
+       consumo   fracción de la meta ya gastada (0.8 = va en el
+                 80% del tiempo que debería tardar)
+       nivel     'normal' | 'media' | 'alta', la misma escala de
+                 nivelContraMeta() que ya usa todo lo demás
+
+   `meta` es SOLO la meta configurada: cero cuando el vehículo no
+   tiene tipología asignada, y por eso `nivel` se queda en
+   'normal' — no se puede incumplir una meta que nadie fijó, y
+   pintar de rojo por un dato que falta es una alarma falsa.
+
+   `referencia` sí puede traer la meta promedio de la bodega en
+   ese caso (ver metaPromedioMuelle en config.js). Es lo que
+   permite ORDENAR a un vehículo sin tipología sin mandarlo al
+   final de la fila; `estimada` avisa que esa cifra no es suya.
+   ───────────────────────────────────────────────────────── */
+
+export function prioridadDe(r, config) {
+
+    if (!r || r.horaSalida) {
+        return {
+            ubicacion: null, minutos: 0, umbrales: null,
+            meta: 0, referencia: 0, estimada: false,
+            exceso: 0, consumo: 0, nivel: 'normal'
+        };
+    }
+
+    var enMuelle = r.ubicacion === 'Muelle';
+
+    var minutos = enMuelle ? minutosEnMuelle(r) : minutosEsperando(r);
+
+    var umbrales = enMuelle
+        ? tiemposDe(config, r.tipologia, faseActual(r), modalidadDe(r))
+        : (config ? umbralesPatio(config) : UMBRALES_PATIO_POR_DEFECTO);
+
+    // umbralesTiempo() trae `meta` y umbralesPatio() trae `atencion`
+    // con el límite; las dos son el mismo número: a partir de ahí se
+    // está fuera de meta.
+    var meta = umbrales ? (umbrales.meta || umbrales.atencion || 0) : 0;
+
+    var referencia = meta;
+    var estimada = false;
+
+    if (!referencia && enMuelle) {
+        referencia = metaPromedioMuelle(config);
+        estimada = referencia > 0;
+    }
+
+    return {
+        ubicacion: enMuelle ? 'Muelle' : 'Patio',
+        minutos: minutos,
+        umbrales: umbrales,
+        meta: meta,
+        referencia: referencia,
+        estimada: estimada,
+        exceso: referencia ? Math.max(0, minutos - referencia) : 0,
+        consumo: referencia ? minutos / referencia : 0,
+        nivel: nivelContraMeta(minutos, umbrales)
+    };
+}
+
+/*
+    Los vehículos que AHORA MISMO están en muelle y ya se pasaron
+    de la meta que el administrador configuró para su tipología,
+    del más retrasado al menos.
+
+    Es la población de la alerta de muelle, y por eso exige `meta`
+    y no `referencia`: la meta promedio de la bodega sirve para
+    ordenar, pero disparar una alerta contra el promedio de otros
+    vehículos sería avisar de un incumplimiento que nadie definió.
+
+    No reemplaza a la alerta de patio: son dos relojes distintos y
+    cada uno avisa de lo suyo.
+*/
+export function enMuelleFueraDeMeta(recs, config) {
+
+    var conMeta = [];
+
+    (recs || []).forEach(function (r) {
+        if (!r || r.horaSalida || r.ubicacion !== 'Muelle') return;
+        var p = prioridadDe(r, config);
+        if (p.meta > 0 && p.nivel !== 'normal') conMeta.push({ rec: r, p: p });
+    });
+
+    conMeta.sort(function (a, b) { return b.p.exceso - a.p.exceso; });
+
+    return conMeta.map(function (x) { return x.rec; });
 }
 
 
@@ -450,6 +652,21 @@ export function tituloHistorial(item) {
 
     if (item.tipo === 'autorizacion') {
         return 'Salida anticipada autorizada por el supervisor';
+    }
+
+    /* Corregir un registro es reescribir lo que pasó, así que el
+       historial lo anuncia como lo que es. El detalle campo por
+       campo —con el valor viejo y el nuevo— va en `texto`, que lo
+       arma corregirRegistro() en vehiculos.js. */
+    if (item.tipo === 'correccion') {
+        return 'Datos del vehículo corregidos';
+    }
+
+    /* De cómo viene la mercancía cuelga la meta de tiempo en
+       muelle, así que marcarla mueve la alerta en el acto. Queda
+       en el historial por eso: es una decisión, no una nota. */
+    if (item.tipo === 'modalidad') {
+        return 'Modalidad de la mercancía marcada';
     }
 
     if (item.tipo === 'ubicacion') {

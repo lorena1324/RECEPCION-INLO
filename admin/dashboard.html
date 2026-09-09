@@ -11,6 +11,40 @@
     <link rel="stylesheet" href="../css/layout.css">
     <link rel="stylesheet" href="../css/components.css">
     <link rel="stylesheet" href="admin.css">
+
+    <!-- COLOR DE LA BODEGA ABIERTA, ANTES DEL PRIMER PINTADO
+
+         Los nueve paneles de operación traen su `data-operacion`
+         escrito en el <html>, porque su bodega no cambia nunca. La del
+         administrador sí: la elige en el topbar y se recuerda entre
+         recargas.
+
+         Por eso va aquí y no en admin.js. admin.js es un módulo, así
+         que se difiere hasta después de armar el documento: para
+         cuando corriera, la página ya se habría pintado naranja y el
+         color correcto entraría como un parpadeo en cada recarga —
+         justo lo que este color viene a evitar.
+
+         La clave de localStorage está repetida a propósito con la de
+         admin.js (STORAGE_OPERACION): son cuatro líneas que tienen que
+         correr antes que cualquier módulo, y hacerlas depender de un
+         import las dejaría llegando tarde. Si allá cambia, aquí
+         también. Los valores válidos y sus colores viven en
+         css/base.css. -->
+    <script>
+        (function () {
+            try {
+                var op = localStorage.getItem('inlotrans_admin_operacion');
+                if (op === 'J3' || op === 'J4' || op === 'B9') {
+                    document.documentElement.setAttribute('data-operacion', op);
+                }
+            } catch (e) {
+                // localStorage bloqueado (modo privado, políticas del
+                // navegador): se queda con el color por defecto, que es
+                // exactamente lo que hacía la aplicación hasta ahora.
+            }
+        })();
+    </script>
 </head>
 <body>
 
@@ -40,12 +74,29 @@
             <button class="nav-item" data-view="estadisticas">
                 <i class="ti ti-chart-histogram"></i> Estadísticas
             </button>
+
+            <!-- Cobros. Es la misma vista del supervisor de J4, no una
+                 versión recortada: el administrador tiene que poder
+                 hacer todo lo que hace cualquier rol. Se oculta entera
+                 donde la bodega no cobra — un menú con una sección que
+                 nunca aplica invita a entrar a buscar algo que no está. -->
+            <button class="nav-item" data-view="cobros" id="nav-cobros" style="display:none;">
+                <i class="ti ti-cash"></i> Cobros
+                <span class="nav-pendientes" id="nav-cobros-badge" style="display:none;">0</span>
+            </button>
+
             <div class="nav-label">Herramientas</div>
+            <button class="nav-item" data-view="configuracion">
+                <i class="ti ti-settings"></i> Configuración
+            </button>
             <button class="nav-item" data-view="exportar">
                 <i class="ti ti-download"></i> Exportar datos
             </button>
             <a class="nav-item" href="backfill-avance.html" style="text-decoration:none;">
                 <i class="ti ti-tool"></i> Backfill de avance
+            </a>
+            <a class="nav-item" href="revision-datos.html" style="text-decoration:none;">
+                <i class="ti ti-stethoscope"></i> Revisión de datos
             </a>
         </nav>
 
@@ -95,6 +146,20 @@
                         <option value="B9">B9 · EMMA</option>
                     </select>
                 </div>
+
+                <!-- Filtro global de canal, el mismo que tienen supervisor
+                     y cliente: recorta Dashboard, Registros, Cobros y
+                     Estadísticas a la vez, para que no haya dos universos
+                     distintos en la misma pantalla. -->
+                <div class="op-switch">
+                    <label for="filtro-canal">Canal</label>
+                    <select id="filtro-canal">
+                        <option value="">Todos</option>
+                        <option value="MQ">MQ</option>
+                        <option value="3PD">3PD</option>
+                        <option value="Otro">Otro</option>
+                    </select>
+                </div>
                 <div class="op-badge"><i class="ti ti-building-warehouse"></i> <span id="op-operacion">—</span></div>
                 <div class="topbar-operator">
                     <i class="ti ti-user-circle"></i>
@@ -113,6 +178,19 @@
                     <div>
                         <strong id="alerta-patio-titulo">Vehículos con más de 4 horas en patio</strong>
                         <span id="alerta-patio-detalle"></span>
+                    </div>
+                </div>
+
+                <!-- Alerta de muelle. Es distinta de la de arriba: aquella
+                     mide la espera en patio contra el límite general de la
+                     bodega, y esta mide lo que cada vehículo lleva EN MUELLE
+                     contra la meta que el administrador le fijó a su
+                     tipología en Configuración. -->
+                <div id="alerta-muelle-banner" class="local-banner" style="display:none; background:#FDECEC; border-color:#F0A9A9; color:#7F1D1D;">
+                    <i class="ti ti-clock-exclamation"></i>
+                    <div>
+                        <strong>Vehículos por encima de su meta de muelle</strong>
+                        <span id="alerta-muelle-detalle"></span>
                     </div>
                 </div>
 
@@ -139,6 +217,54 @@
                     </div>
                 </div>
 
+                <!-- Los cuatro indicadores del tablero de supervisor y
+                     cliente. Estaban solo allá, y por eso el
+                     administrador —que responde por las tres bodegas—
+                     era el único que no veía de un vistazo cuántos
+                     vehículos están en alerta ni cuál fue el día más
+                     cargado. -->
+                <div class="cards-resumen">
+                    <div class="card-resumen destacada">
+                        <div class="card-resumen-valor" id="kpi-mejor-dia-fecha">—</div>
+                        <div class="card-resumen-label"><i class="ti ti-trending-up"></i> Día con más movimiento</div>
+                        <div class="card-resumen-detalle" id="kpi-mejor-dia-detalle"></div>
+                    </div>
+                    <div class="card-resumen">
+                        <div class="card-resumen-valor" id="kpi-hoy">0</div>
+                        <div class="card-resumen-label"><i class="ti ti-calendar"></i> Entradas del día operativo</div>
+                    </div>
+                    <div class="card-resumen">
+                        <div class="card-resumen-valor" id="kpi-alerta">0</div>
+                        <div class="card-resumen-label alerta"><i class="ti ti-alert-triangle"></i> En alerta (patio)</div>
+                    </div>
+                    <div class="card-resumen">
+                        <div class="card-resumen-valor" id="kpi-alerta-muelle">0</div>
+                        <div class="card-resumen-label alerta"><i class="ti ti-clock-exclamation"></i> Fuera de meta (muelle)</div>
+                    </div>
+                </div>
+
+                <!-- Reparto de la cola de patio por nivel de prioridad.
+                     Es el bloque que ve el cliente y que faltaba aquí:
+                     dice si los que esperan son muchos o si son pocos
+                     pero llevan demasiado. -->
+                <div class="section-header">
+                    <div class="section-title">Prioridad de los que esperan en patio</div>
+                </div>
+                <div class="cards-resumen">
+                    <div class="card-resumen">
+                        <div class="card-resumen-valor" id="prioridad-normal">0</div>
+                        <div class="card-resumen-label"><i class="ti ti-circle-check"></i> Normal</div>
+                    </div>
+                    <div class="card-resumen">
+                        <div class="card-resumen-valor" id="prioridad-media">0</div>
+                        <div class="card-resumen-label"><i class="ti ti-clock-exclamation"></i> Atención</div>
+                    </div>
+                    <div class="card-resumen">
+                        <div class="card-resumen-valor" id="prioridad-alta">0</div>
+                        <div class="card-resumen-label alerta"><i class="ti ti-alert-triangle"></i> Urgente</div>
+                    </div>
+                </div>
+
                 <div class="section-header">
                     <div class="section-title" id="muelles-titulo">Muelles</div>
                 </div>
@@ -152,10 +278,38 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>Prioridad</th><th>Placa</th><th>Conductor</th><th>Tipo</th><th>Ingreso</th><th>Operador</th><th>Acción</th>
+                                <th>Prioridad</th><th>Placa</th><th class="th-conductor">Conductor</th><th>Tipo</th><th>Ingreso</th><th>Operador</th><th>Acción</th>
                             </tr>
                         </thead>
                         <tbody id="dash-table"></tbody>
+                    </table>
+                </div>
+
+                <!-- Franja horaria del día operativo. La misma gráfica
+                     que pintan supervisor y cliente, con la misma
+                     función compartida (renderChartFranjaHoraria), para
+                     que las tres pantallas no puedan mostrar horas pico
+                     distintas. -->
+                <div class="section-header">
+                    <div class="section-title">Franja horaria (día operativo en curso)</div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-box full">
+                        <canvas id="chart-franja-horaria-dashboard"></canvas>
+                    </div>
+                </div>
+
+                <div class="section-header">
+                    <div class="section-title">Últimos movimientos</div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Placa</th><th class="th-conductor">Conductor</th><th>Entrada</th><th>Ubicación</th><th>Corriendo</th><th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-dashboard-body"></tbody>
                     </table>
                 </div>
             </div>
@@ -166,7 +320,7 @@
                     <div class="form-grid">
 
                         <div class="form-group">
-                            <label for="f-conductor">Conductor *</label>
+                            <label for="f-conductor" id="lbl-conductor">Conductor *</label>
                             <input type="text" id="f-conductor" placeholder="Nombre completo del conductor" autocomplete="off">
                         </div>
 
@@ -259,8 +413,16 @@
                             </select>
                         </div>
 
+                        <!-- Las opciones salen de la configuración GUARDADA
+                             de la bodega que esté seleccionada en el topbar. -->
                         <div class="form-group full">
-                            <label for="f-cedula">Cédula / documento conductor</label>
+                            <label for="f-tipologia">Tipología del vehículo</label>
+                            <select id="f-tipologia"></select>
+                            <span class="form-hint" id="f-tipologia-hint"></span>
+                        </div>
+
+                        <div class="form-group full">
+                            <label for="f-cedula" id="lbl-cedula">Cédula / documento</label>
                             <input type="text" id="f-cedula" placeholder="Número de documento" autocomplete="off">
                         </div>
 
@@ -296,6 +458,10 @@
                         <label>Desde <input type="date" id="reg-desde"></label>
                         <label>Hasta <input type="date" id="reg-hasta"></label>
                         <button class="btn btn-sm" id="btn-limpiar-fechas"><i class="ti ti-x"></i> Limpiar</button>
+                        <!-- Un vehículo que nunca llegó no puede registrarlo
+                             la portería, porque no pasó por ahí. Solo se ve
+                             donde la bodega maneja cancelaciones. -->
+                        <button class="btn btn-sm" id="btn-cita-cancelada" style="display:none;"><i class="ti ti-calendar-x"></i> Cita cancelada</button>
                     </div>
                 </div>
                 <p class="texto-ayuda">Las fechas van por día operativo (6am a 6am): un vehículo que entró a las 2am aparece en el día anterior.</p>
@@ -303,7 +469,7 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>Prioridad</th><th>Placa</th><th>Conductor</th><th>Ubicación</th><th>Tipo</th><th>Canal</th>
+                                <th>Prioridad</th><th>Placa</th><th class="th-conductor">Conductor</th><th>Ubicación</th><th>Tipo</th><th>Canal</th>
                                 <th>Ingreso</th><th>Salida</th><th>Estado</th><th>Programado</th><th>Hora programada</th><th>Servicio</th>
                                 <th>T. patio</th><th>T. muelle</th><th>Motivo patio</th><th>Operador</th><th>Acciones</th>
                             </tr>
@@ -383,6 +549,124 @@
                   <div class="card-resumen">
                     <div class="card-resumen-valor" id="es-total-general">0</div>
                     <div class="card-resumen-label"><i class="ti ti-database"></i> Vehículos registrados (general)</div>
+                  </div>
+                </div>
+
+                <!-- Cancelaciones. Los cancelados no entran en ningún
+                     promedio ni en el cumplimiento de cita, así que
+                     este es el único sitio donde se ven. -->
+                <div class="subtitulo">Operaciones canceladas</div>
+                <div class="cards-resumen">
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-cancel-total">0</div>
+                    <div class="card-resumen-label"><i class="ti ti-ban"></i> Canceladas en el periodo</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-cancel-pct">0%</div>
+                    <div class="card-resumen-label"><i class="ti ti-percentage"></i> De todo lo esperado</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-cancel-llego">0</div>
+                    <div class="card-resumen-label"><i class="ti ti-truck-return"></i> Llegaron y no operaron</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-cancel-nollego">0</div>
+                    <div class="card-resumen-label"><i class="ti ti-calendar-x"></i> Nunca llegaron</div>
+                  </div>
+                </div>
+                <div class="stat-box full">
+                  <h3>Motivos de cancelación</h3>
+                  <div id="es-cancel-motivos">Cargando…</div>
+                </div>
+
+                <!-- Capacidad instalada y nivel de servicio: los tres
+                     números salen de la configuración de la bodega
+                     seleccionada, más abajo en esta misma pantalla. -->
+                <div class="subtitulo">Capacidad y nivel de servicio</div>
+                <div class="cards-resumen">
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-ocupacion-pico">0%</div>
+                    <div class="card-resumen-label"><i class="ti ti-parking"></i> Ocupación pico</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-capacidad-pct">—</div>
+                    <div class="card-resumen-label"><i class="ti ti-gauge"></i> Uso de la capacidad diaria</div>
+                  </div>
+                  <div class="card-resumen destacada">
+                    <div class="card-resumen-valor" id="es-nivel-servicio">—</div>
+                    <div class="card-resumen-label"><i class="ti ti-award"></i> Índice de nivel de servicio</div>
+                  </div>
+                </div>
+                <div id="es-nivel-detalle"></div>
+
+                <!-- Caja del periodo. Solo se llena en las bodegas
+                     que cobran; en las demás sale en ceros. -->
+                <div class="subtitulo">Caja del periodo</div>
+                <div class="cards-resumen">
+                  <div class="card-resumen destacada">
+                    <div class="card-resumen-valor" id="es-caja-total">$0</div>
+                    <div class="card-resumen-label"><i class="ti ti-cash"></i> Recaudado en portería</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-caja-efectivo">$0</div>
+                    <div class="card-resumen-label"><i class="ti ti-coins"></i> Efectivo</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-caja-qr">$0</div>
+                    <div class="card-resumen-label"><i class="ti ti-qrcode"></i> QR</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-caja-iva">$0</div>
+                    <div class="card-resumen-label"><i class="ti ti-receipt-tax"></i> IVA liquidado</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-caja-cuadrilla">$0</div>
+                    <div class="card-resumen-label"><i class="ti ti-users-group"></i> Valor cuadrilla</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-caja-inlo">$0</div>
+                    <div class="card-resumen-label"><i class="ti ti-building"></i> Ganancia INLO</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-caja-facturado">$0</div>
+                    <div class="card-resumen-label"><i class="ti ti-file-invoice"></i> Facturado al cliente</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-caja-pendientes">0</div>
+                    <div class="card-resumen-label alerta"><i class="ti ti-clock-dollar"></i> Vehículos sin cobrar</div>
+                  </div>
+                </div>
+                <!-- Cuántos VEHÍCULOS pagó cada medio, no cuánta
+                     plata: son dos preguntas distintas. -->
+                <div class="subtitulo">Vehículos por medio de pago</div>
+                <div class="cards-resumen">
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-medio-efectivo">0</div>
+                    <div class="card-resumen-label"><i class="ti ti-coins"></i> Pagaron en efectivo</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-medio-qr">0</div>
+                    <div class="card-resumen-label"><i class="ti ti-qrcode"></i> Pagaron por QR</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-medio-ambos">0</div>
+                    <div class="card-resumen-label"><i class="ti ti-arrows-split"></i> Pagaron con ambos</div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-medio-factura">0</div>
+                    <div class="card-resumen-label"><i class="ti ti-file-invoice"></i> Facturados al cliente</div>
+                  </div>
+                </div>
+
+                <div class="stats-grid">
+                  <div class="stat-box">
+                    <h3>Reparto por medio de pago</h3>
+                    <p class="texto-ayuda">Número de vehículos. Pasa el cursor para ver el monto de cada uno.</p>
+                    <canvas id="chart-medios-pago"></canvas>
+                  </div>
+                  <div class="stat-box">
+                    <h3>Desglose de la caja</h3>
+                    <div id="es-caja-body">Cargando…</div>
                   </div>
                 </div>
 
@@ -476,6 +760,14 @@
                         <p class="texto-ayuda">Muelle preferido de cada operario y cuántas veces lo usó</p>
                         <div id="estad-muelles-operario-body">Cargando…</div>
                     </div>
+                    <div class="stat-box full">
+                        <h3>Cumplimiento por tipología</h3>
+                        <p class="texto-ayuda">
+                            Cada tipología contra la meta de tiempo en muelle configurada más abajo,
+                            que es distinta según la operación sea cargue o descargue.
+                        </p>
+                        <div id="es-tipologias-body">Cargando…</div>
+                    </div>
                 </div>
 
                 <div class="stats-grid" style="margin-top:18px;">
@@ -500,6 +792,344 @@
                 </div>
             </div>
 
+            <!-- ═══════════ CONFIGURACIÓN ═══════════
+                 Todo lo de esta vista aplica SOLO a la bodega
+                 seleccionada en el topbar. Cada bodega tiene sus
+                 propias tipologías, tarifas y tiempos: ninguna
+                 hereda de otra. -->
+            <div id="view-configuracion" class="view">
+
+                <div class="cfg-aviso" id="cfg-aviso-bodega"></div>
+
+                <!-- Si la configuración no se pudo leer, el formulario
+                     entero queda inerte. Sin este bloque los botones
+                     simplemente no responderían, sin decir por qué. -->
+                <div class="cfg-errores" id="cfg-error-carga" style="display:none;"></div>
+
+                <!-- Sin tipologías no se puede despachar ningún
+                     vehículo: la salida las exige. Este aviso es lo
+                     que evita que eso se descubra en la fila. -->
+                <div class="cfg-alerta" id="cfg-alerta-vacia" style="display:none;"></div>
+
+                <!-- Estos tres estaban fijos en el código y repetidos
+                     en los diez paneles. Cambiar un muelle exigía
+                     tocar diez archivos y volver a desplegar. -->
+                <div class="cfg-seccion">
+                    <div class="cfg-seccion-head">
+                        <div>
+                            <h3>Identidad de la bodega</h3>
+                            <p class="cfg-ayuda">Quién es el cliente, cuántos muelles tiene y a qué hora arranca el día operativo. Lo usan todos los paneles de esta bodega —portería, supervisor y cliente—, así que un cambio aquí les cambia el tablero de muelles y el corte con el que se cuentan los promedios del día.</p>
+                        </div>
+                    </div>
+                    <div class="cfg-grid">
+                        <div class="cfg-campo">
+                            <label for="cfg-cliente">Cliente</label>
+                            <input type="text" id="cfg-cliente" placeholder="Ej: Alkosto" maxlength="60">
+                            <span class="cfg-nota" id="cfg-nota-cliente"></span>
+                        </div>
+                        <div class="cfg-campo">
+                            <label for="cfg-muelles">Número de muelles</label>
+                            <input type="number" id="cfg-muelles" min="0" max="60" step="1">
+                            <span class="cfg-nota" id="cfg-nota-muelles"></span>
+                        </div>
+                        <div class="cfg-campo">
+                            <label for="cfg-hora-corte">Hora de corte del turno</label>
+                            <input type="number" id="cfg-hora-corte" min="0" max="23" step="1">
+                            <span class="cfg-nota" id="cfg-nota-hora-corte"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Los mismos dos campos del registro con otro
+                     rótulo: en J4 la portería no anota conductor y
+                     cédula sino proveedor y número de cita. -->
+                <div class="cfg-seccion">
+                    <div class="cfg-seccion-head">
+                        <div>
+                            <h3>Campos de la entrada</h3>
+                            <p class="cfg-ayuda">Cómo se llaman los dos campos libres del formulario de entrada y qué aceptan. Son los mismos dos espacios del registro, con otro nombre: cambiarlos aquí cambia el formulario, las tablas, el detalle del vehículo y la exportación a Excel de esta bodega. <strong>No renombra lo ya registrado</strong>, solo cómo se rotula.</p>
+                        </div>
+                    </div>
+                    <div class="cfg-grid">
+                        <div class="cfg-campo">
+                            <label for="cfg-campo-conductor">Nombre del primer campo</label>
+                            <input type="text" id="cfg-campo-conductor" placeholder="Ej: Conductor" maxlength="40">
+                            <span class="cfg-nota">Obligatorio al registrar la entrada.</span>
+                        </div>
+                        <div class="cfg-campo">
+                            <label for="cfg-formato-conductor">Qué acepta</label>
+                            <select id="cfg-formato-conductor">
+                                <option value="letras">Solo letras (nombre de persona)</option>
+                                <option value="numero">Solo números</option>
+                                <option value="texto">Cualquier texto</option>
+                            </select>
+                        </div>
+                        <div class="cfg-campo">
+                            <label for="cfg-campo-cedula">Nombre del segundo campo</label>
+                            <input type="text" id="cfg-campo-cedula" placeholder="Ej: Cédula / documento" maxlength="40">
+                            <span class="cfg-nota">Opcional al registrar la entrada.</span>
+                        </div>
+                        <div class="cfg-campo">
+                            <label for="cfg-formato-cedula">Qué acepta</label>
+                            <select id="cfg-formato-cedula">
+                                <option value="letras">Solo letras</option>
+                                <option value="numero">Solo números</option>
+                                <option value="texto">Cualquier texto</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cfg-seccion">
+                    <div class="cfg-seccion-head">
+                        <div>
+                            <h3>Vehículos cancelados</h3>
+                            <p class="cfg-ayuda">Cuando la operación de un vehículo no se hace. Lo marca el <strong>supervisor</strong> (o el administrador), nunca la portería, y siempre con un motivo. Cubre las dos formas: el vehículo que entró y se va sin operar, y la cita que se canceló sin que el vehículo llegara.</p>
+                        </div>
+                    </div>
+                    <label class="cfg-check">
+                        <input type="checkbox" id="cfg-cancelaciones">
+                        <span>Esta bodega maneja vehículos cancelados</span>
+                    </label>
+                </div>
+
+                <div class="cfg-seccion">
+                    <div class="cfg-seccion-head">
+                        <div>
+                            <h3>Cobro a los vehículos</h3>
+                            <p class="cfg-ayuda">Solo algunas bodegas le cobran al vehículo. En las que no cobran, las tipologías siguen sirviendo para medir tiempos, pero sin tarifa ni registro de pago — y la salida no los exige.</p>
+                        </div>
+                    </div>
+                    <label class="cfg-check">
+                        <input type="checkbox" id="cfg-cobra">
+                        <span>Esta bodega le cobra a los vehículos</span>
+                    </label>
+
+                    <!-- Uno solo para toda la bodega: el IVA no cambia
+                         entre tipologías, y repetirlo nueve veces sería
+                         nueve sitios donde puede quedar desactualizado. -->
+                    <div class="cfg-grid" id="cfg-cobro-detalle" style="display:none;">
+                        <div class="cfg-campo">
+                            <label for="cfg-iva">IVA (%)</label>
+                            <input type="number" id="cfg-iva" min="0" max="100" step="1">
+                            <span class="cfg-nota">Con recibo de caja menor se cobra el valor <strong>sin</strong> IVA; con factura, el valor <strong>con</strong> IVA.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cfg-seccion">
+                    <div class="cfg-seccion-head">
+                        <div>
+                            <h3>Tipologías de vehículo</h3>
+                            <p class="cfg-ayuda">El tipo de vehículo determina cuánto debería tardar en muelle y, donde se cobra, cuánto se le cobra. Se crean a mano, una por una, para esta bodega. De cada tarifa solo se digitan <strong>el valor antes de IVA</strong> y <strong>la tasa de ganancia INLO</strong>: el IVA, el valor con IVA y lo que se le paga a la cuadrilla salen calculados. De los tiempos solo se digita <strong>la meta</strong>: el aviso de atención se enciende al pasarse de ella y el de urgencia al doblarla. La meta va en <strong>HH:MM</strong>, igual que en las tablas de tiempos de las bodegas — <code>03:30</code> son tres horas y media. <strong>«Ambos» no se digita:</strong> un vehículo que carga y descarga hace las dos fases, así que su meta sale de sumar cargue más descargue; déjalo vacío.</p>
+                        </div>
+                        <div class="cfg-seccion-btns">
+                            <button class="btn" id="btn-cfg-tabla-base" style="display:none;" title="Crea las nueve tipologías de la tabla 2026 con sus tarifas. Solo funciona si la lista está vacía.">
+                                <i class="ti ti-table-plus"></i> Cargar tabla 2026
+                            </button>
+                            <button class="btn btn-primary" id="btn-cfg-nueva-tipologia">
+                                <i class="ti ti-plus"></i> Agregar tipología
+                            </button>
+                        </div>
+                    </div>
+                    <div id="cfg-tipologias"></div>
+                </div>
+
+                <div class="cfg-seccion">
+                    <div class="cfg-seccion-head">
+                        <div>
+                            <h3>Reglas de salida</h3>
+                            <p class="cfg-ayuda">Cuánto avance necesita un vehículo para poder salir, por cada fase. <strong>100 significa sin excepción.</strong> Por debajo de 100, entre el mínimo y el 99% un supervisor puede autorizar la salida explicando el motivo; por debajo del mínimo no hay excepción posible.</p>
+                        </div>
+                    </div>
+                    <div class="cfg-grid">
+                        <div class="cfg-campo">
+                            <label for="cfg-minimo-descargue">Mínimo de descargue (%)</label>
+                            <input type="number" id="cfg-minimo-descargue" min="50" max="100" step="1">
+                            <span class="cfg-nota" id="cfg-nota-descargue"></span>
+                        </div>
+                        <div class="cfg-campo">
+                            <label for="cfg-minimo-cargue">Mínimo de cargue (%)</label>
+                            <input type="number" id="cfg-minimo-cargue" min="50" max="100" step="1">
+                            <span class="cfg-nota" id="cfg-nota-cargue"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cfg-seccion">
+                    <div class="cfg-seccion-head">
+                        <div>
+                            <h3>Tiempo de espera en patio</h3>
+                            <p class="cfg-ayuda">Igual para todos los vehículos, sin distinción de tipología. Este número es a la vez el límite de la pérdida de operación y el umbral de «Atención»; «Urgente» se dispara solo al doble.</p>
+                        </div>
+                    </div>
+                    <div class="cfg-grid">
+                        <div class="cfg-campo">
+                            <label for="cfg-limite-patio">Límite de patio (minutos)</label>
+                            <input type="number" id="cfg-limite-patio" min="1" step="1">
+                            <span class="cfg-nota" id="cfg-nota-patio"></span>
+                        </div>
+                        <div class="cfg-campo">
+                            <label>Umbral «Urgente»</label>
+                            <div class="cfg-derivado" id="cfg-urgente-patio">—</div>
+                            <span class="cfg-nota">Calculado: el doble del límite</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cfg-seccion">
+                    <div class="cfg-seccion-head">
+                        <div>
+                            <h3>Capacidad de la operación</h3>
+                            <p class="cfg-ayuda">Cuántos vehículos alcanza a atender la bodega en un día. Es contra este número que se mide si la programación del cliente cabe en la operación.</p>
+                        </div>
+                    </div>
+                    <div class="cfg-grid">
+                        <div class="cfg-campo">
+                            <label for="cfg-capacidad">Vehículos por día</label>
+                            <input type="number" id="cfg-capacidad" min="0" step="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cfg-seccion">
+                    <div class="cfg-seccion-head">
+                        <div>
+                            <h3>Ocupación de bodega</h3>
+                            <p class="cfg-ayuda">Ubicaciones de almacenamiento, no muelles. El total es el denominador del porcentaje; la hora es el límite para que el supervisor envíe el reporte, que es <strong>uno solo al día</strong>.</p>
+                        </div>
+                    </div>
+                    <div class="cfg-grid">
+                        <div class="cfg-campo">
+                            <label for="cfg-posiciones">Ubicaciones totales de la bodega</label>
+                            <input type="number" id="cfg-posiciones" min="0" step="1">
+                        </div>
+                        <div class="cfg-campo">
+                            <label for="cfg-hora-ocupacion">Hora límite del reporte diario</label>
+                            <input type="time" id="cfg-hora-ocupacion">
+                            <span class="cfg-nota" id="cfg-nota-ocupacion"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cfg-seccion">
+                    <div class="cfg-seccion-head">
+                        <div>
+                            <h3>Índice de cumplimiento</h3>
+                            <p class="cfg-ayuda">Cuánto pesa cada mitad del índice que mide si el cliente cumplió lo que programó. Deben sumar 100. Es distinto del indicador de capacidad de arriba: este mide puntualidad y cancelaciones, aquel mide si lo programado cabía.</p>
+                        </div>
+                    </div>
+                    <div class="cfg-grid">
+                        <div class="cfg-campo">
+                            <label for="cfg-peso-cita">Cumplimiento de cita (%)</label>
+                            <input type="number" id="cfg-peso-cita" min="0" max="100" step="1">
+                        </div>
+                        <div class="cfg-campo">
+                            <label for="cfg-peso-programacion">Cumplimiento de programación (%)</label>
+                            <input type="number" id="cfg-peso-programacion" min="0" max="100" step="1">
+                        </div>
+                    </div>
+                    <div class="cfg-suma" id="cfg-suma-pesos"></div>
+                </div>
+
+                <div class="cfg-errores" id="cfg-errores" style="display:none;"></div>
+
+                <div class="cfg-barra">
+                    <span class="cfg-nota" id="cfg-ultima-edicion"></span>
+                    <div class="cfg-barra-btns">
+                        <button class="btn" id="btn-cfg-descartar"><i class="ti ti-rotate"></i> Descartar cambios</button>
+                        <button class="btn btn-success" id="btn-cfg-guardar"><i class="ti ti-device-floppy"></i> Guardar configuración</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- COBROS
+
+                 La misma vista que el supervisor de la bodega que
+                 cobra, completa: caja del día, pendientes y cobros ya
+                 registrados, con el mismo modal para cobrar y para
+                 corregir un cobro. Las reglas de Firestore ya le abrían
+                 la colección `cobros` al administrador (ver
+                 firestore.rules); lo que faltaba era la pantalla.
+
+                 El valor que se cobra NO se digita: sale de la tarifa
+                 de la tipología, que se configura en la vista de
+                 Configuración de este mismo panel. Aquí solo se
+                 registra el soporte y por qué medio se pagó. -->
+            <div id="view-cobros" class="view">
+
+                <div class="caja-resumen">
+                    <div class="caja-card">
+                        <div class="caja-valor" id="caja-total">$0</div>
+                        <div class="caja-label"><i class="ti ti-cash"></i> Recaudado hoy</div>
+                    </div>
+                    <div class="caja-card">
+                        <div class="caja-valor" id="caja-efectivo">$0</div>
+                        <div class="caja-label"><i class="ti ti-coins"></i> En efectivo</div>
+                    </div>
+                    <div class="caja-card">
+                        <div class="caja-valor" id="caja-qr">$0</div>
+                        <div class="caja-label"><i class="ti ti-qrcode"></i> Por QR</div>
+                    </div>
+                    <div class="caja-card">
+                        <div class="caja-valor" id="caja-vehiculos">0</div>
+                        <div class="caja-label"><i class="ti ti-truck"></i> Vehículos cobrados</div>
+                        <div class="caja-detalle" id="caja-desglose"></div>
+                        <div class="caja-detalle" id="caja-soportes"></div>
+                    </div>
+                </div>
+
+                <!-- El reparto del valor antes de IVA. No es plata
+                     distinta de la de arriba: es la misma, vista por a
+                     quién le toca. El IVA sí es aparte — solo se liquida
+                     donde hubo factura. -->
+                <div class="caja-resumen">
+                    <div class="caja-card">
+                        <div class="caja-valor" id="caja-iva">$0</div>
+                        <div class="caja-label"><i class="ti ti-receipt-tax"></i> IVA liquidado</div>
+                        <div class="caja-detalle">Solo lo cobrado con factura</div>
+                    </div>
+                    <div class="caja-card">
+                        <div class="caja-valor" id="caja-cuadrilla">$0</div>
+                        <div class="caja-label"><i class="ti ti-users"></i> Total a pagar cuadrilla</div>
+                    </div>
+                    <div class="caja-card">
+                        <div class="caja-valor" id="caja-inlo">$0</div>
+                        <div class="caja-label"><i class="ti ti-building-warehouse"></i> Ganancia INLO</div>
+                    </div>
+                </div>
+
+                <div class="section-header">
+                    <div class="section-title">Pendientes de cobro</div>
+                </div>
+                <p class="form-hint">Vehículos que siguen adentro y todavía no tienen el pago registrado.</p>
+                <div id="cobros-aviso-sin-tipologia"></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Placa</th><th class="th-conductor">Conductor</th><th>Tipología</th><th>Tarifa</th><th>Ingreso</th><th>Adentro</th><th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-pendientes-body"></tbody>
+                    </table>
+                </div>
+
+                <div class="section-header">
+                    <div class="section-title">Cobros registrados hoy</div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Placa</th><th>Tipología</th><th>Soporte</th><th>Medio</th><th>Efectivo</th><th>QR</th><th>Total</th><th>Registró</th><th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-cobros-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
             <div id="view-exportar" class="view">
                 <div class="export-card">
                     <h3>Exportar a Excel (.xlsx)</h3>
@@ -508,10 +1138,122 @@
                         <button class="btn btn-success" id="btn-export-todos"><i class="ti ti-download"></i> Exportar todos</button>
                         <button class="btn" id="btn-export-hoy"><i class="ti ti-calendar-down"></i> Solo hoy</button>
                     </div>
+
+                    <!-- Exportar un rango, como pueden supervisor y
+                         cliente. El administrador solo tenía "todos" y
+                         "hoy": para sacar el mes pasado le tocaba bajar
+                         el histórico completo y recortarlo en Excel. -->
+                    <div class="export-row" style="margin-top:14px;">
+                        <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;">Desde
+                            <input type="date" id="exp-desde">
+                        </label>
+                        <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;">Hasta
+                            <input type="date" id="exp-hasta">
+                        </label>
+                        <button class="btn" id="btn-export-rango"><i class="ti ti-calendar-search"></i> Exportar rango</button>
+                    </div>
                 </div>
             </div>
 
         </main>
+    </div>
+</div>
+
+<!-- MODAL: TIPOLOGÍA OBLIGATORIA
+
+     Se abre al intentar registrar una entrada sin tipología, cuando
+     la bodega ya tiene tipologías configuradas. Trae el mismo
+     desplegable para resolverlo aquí y seguir, sin perder nada de
+     lo ya digitado en el formulario. -->
+<!-- CANCELAR UN VEHÍCULO QUE YA ENTRÓ
+
+     El motivo es obligatorio: una cifra de cancelados sin razones
+     detrás no le sirve a nadie para corregir nada. -->
+<div class="modal-backdrop" id="modal-cancelar">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title"><i class="ti ti-ban"></i> Cancelar la operación</div>
+            <button class="modal-close" data-close="modal-cancelar"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-info-box" id="cancelar-info"></div>
+        <p class="form-hint">El vehículo queda cerrado con la hora de ahora y marcado como cancelado. Deja de ocupar patio o muelle, y no entra en los promedios de desempeño.</p>
+        <div class="form-group full">
+            <label for="cancelar-motivo">Motivo *</label>
+            <textarea id="cancelar-motivo" rows="3" placeholder="Por qué no se hizo la operación"></textarea>
+        </div>
+        <div class="cfg-errores" id="cancelar-errores" style="display:none;"></div>
+        <div class="modal-footer">
+            <button class="btn" data-close="modal-cancelar">Cancelar</button>
+            <button class="btn btn-danger" id="btn-confirmar-cancelar"><i class="ti ti-check"></i> Marcar como cancelado</button>
+        </div>
+    </div>
+</div>
+
+<!-- CITA CANCELADA DE UN VEHÍCULO QUE NUNCA LLEGÓ
+
+     Nace cerrada, sin ubicación ni paso por muelle. La fecha es la
+     de la cita y no la de hoy, porque la cancelación pertenece al
+     día que se dejó de operar. -->
+<div class="modal-backdrop" id="modal-cita-cancelada">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title"><i class="ti ti-calendar-x"></i> Registrar cita cancelada</div>
+            <button class="modal-close" data-close="modal-cita-cancelada"><i class="ti ti-x"></i></button>
+        </div>
+        <p class="form-hint">Para un vehículo que <strong>no llegó</strong>. Queda registrado en el día de la cita, sin entrada ni salida reales.</p>
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="cita-placa">Placa *</label>
+                <input type="text" id="cita-placa" placeholder="Ej: ABC-123" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="cita-conductor" id="lbl-cita-conductor">Conductor</label>
+                <input type="text" id="cita-conductor" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="cita-cedula" id="lbl-cita-cedula">Cédula</label>
+                <input type="text" id="cita-cedula" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="cita-fecha">Fecha de la cita *</label>
+                <input type="date" id="cita-fecha">
+            </div>
+            <div class="form-group">
+                <label for="cita-hora">Hora de la cita</label>
+                <input type="time" id="cita-hora">
+            </div>
+        </div>
+        <div class="form-group full">
+            <label for="cita-motivo">Motivo *</label>
+            <textarea id="cita-motivo" rows="3" placeholder="Por qué se canceló la cita"></textarea>
+        </div>
+        <div class="cfg-errores" id="cita-errores" style="display:none;"></div>
+        <div class="modal-footer">
+            <button class="btn" data-close="modal-cita-cancelada">Cancelar</button>
+            <button class="btn btn-primary" id="btn-confirmar-cita"><i class="ti ti-check"></i> Registrar</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-backdrop" id="modal-tipologia">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title"><i class="ti ti-truck"></i> Falta la tipología del vehículo</div>
+            <button class="modal-close" data-close="modal-tipologia"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-info-box">
+            No se puede registrar la entrada sin indicar qué tipo de vehículo es.
+            De la tipología dependen los tiempos con los que se mide la operación.
+        </div>
+        <div class="form-group full">
+            <label for="m-tipologia">Tipología del vehículo *</label>
+            <select id="m-tipologia"></select>
+            <span class="form-hint aviso" id="m-tipologia-error"></span>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" data-close="modal-tipologia">Cancelar</button>
+            <button class="btn btn-primary" id="btn-confirmar-tipologia"><i class="ti ti-check"></i> Continuar con el registro</button>
+        </div>
     </div>
 </div>
 
@@ -613,10 +1355,194 @@
     </div>
 </div>
 
+<!-- MODAL: CORREGIR LOS DATOS DEL VEHÍCULO
+
+     Distinto del modal "Mover" de arriba, que solo cambia la
+     ubicación. Aquí se corrige lo que se digitó mal en la entrada:
+     placa, campos libres, tipo, canal, tipología, hora de entrada y
+     cita. Cada cambio queda en el historial del vehículo con el valor
+     anterior y el nuevo.
+
+     Existía únicamente en el supervisor de J4. El administrador podía
+     escribirlo en Firestore (las reglas nunca se lo impidieron) pero no
+     tenía dónde hacerlo, así que una placa mal digitada en J3 o B9 no
+     la podía corregir nadie. -->
+<div class="modal-backdrop" id="modal-corregir">
+    <div class="modal" style="max-width:720px;">
+        <div class="modal-header">
+            <div class="modal-title"><i class="ti ti-edit"></i> Corregir datos del vehículo</div>
+            <button class="modal-close" data-close="modal-corregir"><i class="ti ti-x"></i></button>
+        </div>
+
+        <div class="modal-info-box" id="corregir-info"></div>
+
+        <p class="form-hint">
+            Corrige lo que se digitó mal en la entrada. Todo cambio queda registrado en el historial
+            del vehículo con el valor anterior y el nuevo. El avance, las autorizaciones de salida,
+            los cobros y las cancelaciones se manejan por su propio flujo, no desde aquí.
+        </p>
+
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="ed-placa">Placa</label>
+                <input type="text" id="ed-placa" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="ed-conductor" id="lbl-ed-conductor">Conductor</label>
+                <input type="text" id="ed-conductor" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="ed-cedula" id="lbl-ed-cedula">Cédula</label>
+                <input type="text" id="ed-cedula" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="ed-tipo">Tipo de operación</label>
+                <select id="ed-tipo">
+                    <option value="Cargue">Cargue</option>
+                    <option value="Descargue">Descargue</option>
+                    <option value="Ambos">Ambos</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="ed-canal">Canal</label>
+                <select id="ed-canal">
+                    <option value="MQ">MQ</option>
+                    <option value="3PD">3PD</option>
+                    <option value="Otro">Otro</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="ed-tipologia">Tipología</label>
+                <select id="ed-tipologia"></select>
+            </div>
+
+            <div class="form-group">
+                <label for="ed-fecha-entrada">Fecha de entrada</label>
+                <input type="date" id="ed-fecha-entrada">
+            </div>
+            <div class="form-group">
+                <label for="ed-hora-h">Hora de entrada (24h)</label>
+                <div style="display:flex;gap:6px;">
+                    <input type="number" id="ed-hora-h" min="0" max="23" placeholder="HH" style="width:64px;">
+                    <input type="number" id="ed-hora-m" min="0" max="59" placeholder="MM" style="width:64px;">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="ed-programado">Programado</label>
+                <select id="ed-programado">
+                    <option value="Programado">Programado</option>
+                    <option value="No programado">No programado</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="ed-cita-h">Hora de la cita (24h)</label>
+                <div style="display:flex;gap:6px;">
+                    <input type="number" id="ed-cita-h" min="0" max="23" placeholder="HH" style="width:64px;">
+                    <input type="number" id="ed-cita-m" min="0" max="59" placeholder="MM" style="width:64px;">
+                </div>
+            </div>
+
+            <div class="form-group full">
+                <label for="ed-obs">Observaciones de entrada</label>
+                <textarea id="ed-obs" rows="2"></textarea>
+            </div>
+        </div>
+
+        <div class="cfg-errores" id="corregir-errores" style="display:none;"></div>
+
+        <div class="modal-footer">
+            <button class="btn" data-close="modal-corregir">Cancelar</button>
+            <button class="btn btn-primary" id="btn-confirmar-correccion"><i class="ti ti-device-floppy"></i> Guardar corrección</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: REGISTRAR COBRO
+
+     El soporte va PRIMERO porque es lo que decide cuánto se cobra: con
+     recibo de caja menor el valor sin IVA, con factura el valor con
+     IVA. Es otra cosa que el medio de pago — se puede pagar por QR y
+     llevarse una factura.
+
+     Con "Ambos" solo se digita el efectivo; el QR se calcula con el
+     resto, para que la suma no pueda quedar descuadrada. -->
+<div class="modal-backdrop" id="modal-cobro">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title"><i class="ti ti-cash"></i> Registrar cobro</div>
+            <button class="modal-close" data-close="modal-cobro"><i class="ti ti-x"></i></button>
+        </div>
+
+        <div class="modal-info-box" id="cobro-info"></div>
+
+        <div class="form-group full">
+            <label>Soporte de pago *</label>
+            <div class="soportes-pago" id="cobro-soportes">
+                <button type="button" class="soporte-btn" data-soporte="Recibo Caja Menor">
+                    <i class="ti ti-receipt"></i> Recibo Caja Menor
+                </button>
+                <button type="button" class="soporte-btn" data-soporte="Factura">
+                    <i class="ti ti-file-invoice"></i> Factura
+                </button>
+                <button type="button" class="soporte-btn" data-soporte="Facturado al cliente">
+                    <i class="ti ti-building-bank"></i> Se le factura al cliente
+                </button>
+            </div>
+        </div>
+
+        <div class="cobro-tarifa">
+            <span class="cobro-tarifa-label" id="cobro-tarifa-label">Se cobra el valor antes de IVA</span>
+            <span class="cobro-tarifa-valor" id="cobro-tarifa">$0</span>
+            <span class="cobro-tarifa-detalle" id="cobro-tarifa-detalle"></span>
+        </div>
+
+        <div class="form-group full" id="cobro-medio-wrap">
+            <label>Medio de pago *</label>
+            <div class="medios-pago" id="cobro-medios">
+                <button type="button" class="medio-btn" data-medio="Efectivo">
+                    <i class="ti ti-coins"></i> Efectivo
+                </button>
+                <button type="button" class="medio-btn" data-medio="QR">
+                    <i class="ti ti-qrcode"></i> QR
+                </button>
+                <button type="button" class="medio-btn" data-medio="Ambos">
+                    <i class="ti ti-arrows-split"></i> Ambos
+                </button>
+            </div>
+        </div>
+
+        <!-- Solo visible con "Ambos" seleccionado -->
+        <div id="cobro-split" style="display:none;">
+            <div class="form-group full">
+                <label for="cobro-efectivo">¿Cuánto pagó en efectivo?</label>
+                <input type="number" id="cobro-efectivo" min="0" step="1" placeholder="0">
+            </div>
+            <div class="cobro-derivado">
+                <span>Se cobra por QR</span>
+                <strong id="cobro-qr-calculado">$0</strong>
+            </div>
+        </div>
+
+        <div class="cobro-errores" id="cobro-errores" style="display:none;"></div>
+
+        <div class="modal-footer">
+            <button class="btn" data-close="modal-cobro">Cancelar</button>
+            <button class="btn btn-primary" id="btn-confirmar-cobro"><i class="ti ti-check"></i> Registrar cobro</button>
+        </div>
+    </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<!-- Las etiquetas de valor sobre las barras. Supervisor y cliente ya lo
+     cargaban; sin él, las gráficas del administrador salían con las
+     mismas opciones de datalabels pero sin nadie que las leyera, así que
+     las mismas gráficas se veían con menos información que en los otros
+     paneles. -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script type="module" src="admin.js"></script>
 
 </body>

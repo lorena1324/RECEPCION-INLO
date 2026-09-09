@@ -2,15 +2,94 @@
    INLOTRANS
    Base: variables, reset, tipografía
 
-   Extraído literal de bodega-J4.html — mismos colores y
-   escalas que ya usas, para no romper la identidad visual
-   de lo que el equipo ya conoce.
+   Extraído literal de bodega-J4.html — mismas escalas que ya
+   usas, para no romper la identidad visual de lo que el equipo
+   ya conoce.
    ========================================================= */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+
+/* =========================================================
+   COLOR DE MARCA POR BODEGA
+
+   Las tres bodegas se atienden desde las mismas pantallas, y
+   equivocarse de bodega es un error caro: significa registrar la
+   entrada de un camión de Pepsico en la operación de Alkosto. El
+   selector del topbar dice cuál está abierta, pero es una línea de
+   texto en una esquina — nadie la lee cuando va de afán.
+
+   Por eso el color manda:
+
+       J3 · Pepsico   azul
+       J4 · Alkosto   naranja   (el que tenía la aplicación entera)
+       B9 · EMMA      verde
+
+   Se elige con `data-operacion` en el <html>. Los nueve paneles de
+   operación lo traen escrito en el HTML —su bodega no cambia
+   nunca— y así el color está puesto antes del primer pintado, sin
+   el parpadeo naranja que daría ponerlo desde JavaScript. El panel
+   de administrador sí lo escribe por JS, porque el suyo cambia con
+   el selector de bodega. Ver shared/utils/tema.js.
+
+   ── LOS CUATRO PELDAÑOS ──
+
+       --brand-50    fondo suave (badges, banners, item activo)
+       --brand-100   borde de esos fondos
+       --brand-600   el color, el que se lee como "la marca"
+       --brand-800   su versión oscura (hover, texto sobre 50)
+
+   Los tres ramales tienen el mismo reparto de claridad, así que
+   ningún componente cambia de forma al cambiar de bodega: lo que
+   era un fondo suave sigue siéndolo, y lo que era el color fuerte
+   sigue leyéndose como tal.
+
+   Contraste medido (WCAG, mínimo 4.5:1 para texto normal):
+
+                        600 sobre blanco   600 sobre el 50
+       J3  azul               7.62              6.45
+       J4  naranja            4.60              3.99
+       B9  verde              6.54              5.60
+
+   Los tres pasan sobre blanco —el caso de los botones primarios y
+   del texto de marca— y los dos nuevos quedan bastante por encima
+   del naranja, que es el que la aplicación ya venía usando. El
+   3.99 del naranja sobre su propio fondo suave (badges e ítem
+   activo del menú) se queda corto para texto pequeño, pero es el
+   valor que ya existía: se conserva tal cual para no cambiarle el
+   aspecto a J4, y los otros dos ramales no lo heredan.
+   ========================================================= */
+
 :root {
-    --blue-50: #FDECDD; --blue-100: #F7C79A; --blue-600: #C2540A; --blue-800: #8F3D07;
+
+    /* Naranja: el que ha tenido la aplicación desde siempre. Es
+       también el valor de partida, el que se ve mientras no haya
+       bodega elegida o si alguna pantalla nueva olvida declararla.
+       Se eligió el naranja y no un gris neutro a propósito: es lo
+       que el equipo ya conoce, así que una pantalla sin marcar se
+       ve como antes en vez de verse rota. */
+    --brand-50: #FDECDD; --brand-100: #F7C79A; --brand-600: #C2540A; --brand-800: #8F3D07;
+
+    /* Alias histórico. Toda la hoja de estilos llama a estos
+       tokens `--blue-*` desde que existe, aunque hace tiempo que no
+       son azules: renombrar las cuarenta y pico referencias en
+       components.css, layout.css y admin.css no cambiaría un solo
+       pixel y sí rompería cualquier hoja de una bodega que todavía
+       los use. Apuntan a la marca, que es lo que siempre
+       significaron.
+
+       OJO: por esta indirección, `data-operacion` TIENE que ir en el
+       <html> y no en el <body>. Un `var()` dentro de una variable se
+       resuelve en el elemento donde se declara, y estos cuatro se
+       declaran aquí, en :root. Si la bodega se marcara en el <body>,
+       `--brand-*` cambiaría de color pero `--blue-*` ya se habría
+       resuelto contra el naranja del :root, y media aplicación se
+       quedaría del color viejo sin ningún error visible. */
+    --blue-50: var(--brand-50);
+    --blue-100: var(--brand-100);
+    --blue-600: var(--brand-600);
+    --blue-800: var(--brand-800);
+
     --green-50: #EAF3DE; --green-600: #3B6D11; --green-800: #27500A;
     --amber-50: #FAEEDA; --amber-600: #854F0B; --amber-800: #633806;
     --red-50: #FCEBEB; --red-600: #A32D2D;
@@ -33,6 +112,44 @@
     --header-h: 60px;
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.07);
     --shadow-md: 0 4px 16px rgba(0,0,0,0.10);
+}
+
+/* ── J3 · Pepsico — azul ────────────────────────────────────
+   El azul de Pepsico. Solo se redefinen los cuatro peldaños de
+   marca: todo lo demás (grises, verde de "libre", ámbar de
+   atención, rojo de alerta) es igual en las tres bodegas a
+   propósito, porque significan lo mismo en las tres. Si el rojo de
+   "urgente" cambiara de bodega en bodega, dejaría de leerse como
+   urgente. */
+[data-operacion="J3"] {
+    --brand-50: #E4EDF8;
+    --brand-100: #A9C4E6;
+    --brand-600: #12539E;
+    --brand-800: #0B3B73;
+}
+
+/* ── J4 · Alkosto — naranja ─────────────────────────────────
+   Los mismos valores del :root. Se escribe explícito y no se deja
+   caer en el valor por defecto para que las tres bodegas se lean
+   igual de declaradas: la de arriba no es "la que no cambió", es
+   la que tiene naranja. */
+[data-operacion="J4"] {
+    --brand-50: #FDECDD;
+    --brand-100: #F7C79A;
+    --brand-600: #C2540A;
+    --brand-800: #8F3D07;
+}
+
+/* ── B9 · EMMA — verde ──────────────────────────────────────
+   Un verde frío, deliberadamente distinto del `--green-600`
+   (#3B6D11, oliva) que usan los estados de "libre" y "en meta": si
+   la marca y el semáforo compartieran verde, un muelle libre y un
+   botón primario se leerían como lo mismo. */
+[data-operacion="B9"] {
+    --brand-50: #E3F1E3;
+    --brand-100: #A8D3A8;
+    --brand-600: #1F6B33;
+    --brand-800: #144A22;
 }
 
 html { font-size: 15px; }

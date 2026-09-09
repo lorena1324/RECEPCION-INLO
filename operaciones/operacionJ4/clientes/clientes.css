@@ -41,8 +41,8 @@
 .prioridad-chip.alta { border-left: 4px solid #ef4444; }
 
 .card-resumen.destacada {
-  background: #eff6ff;
-  border-color: #93c5fd;
+  background: var(--brand-50);
+  border-color: var(--brand-100);
 }
 
 .card-resumen-detalle {
@@ -111,7 +111,7 @@
 }
 
 .arbol-rama {
-  border-left: 3px solid #2563eb;
+  border-left: 3px solid var(--brand-600);
   padding-left: 14px;
 }
 
@@ -145,7 +145,7 @@
 .arbol-barra span {
   display: block;
   height: 100%;
-  background: #2563eb;
+  background: var(--brand-600);
   border-radius: 4px;
 }
 

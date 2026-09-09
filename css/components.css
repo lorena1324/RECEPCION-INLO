@@ -40,6 +40,19 @@
 
 label { font-size: 12px; font-weight: 500; color: var(--text-2); text-transform: uppercase; letter-spacing: .5px; }
 
+/* Aclaración bajo un campo: por qué está vacío, qué pasa si se deja
+   así. En minúscula y sin espaciado de letra, al contrario que la
+   etiqueta, para que se lea como una frase y no como otro rótulo. */
+.form-hint {
+    font-size: 11.5px;
+    color: var(--text-3);
+    line-height: 1.45;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.form-hint.aviso { color: var(--amber-600); }
+
 input[type=text], input[type=datetime-local], input[type=time], input[type=date], select, textarea {
     width: 100%; padding: 9px 12px;
     border: 0.5px solid var(--border-md);
@@ -99,6 +112,21 @@ textarea { resize: vertical; min-height: 64px; }
 .badge-ambos     { background: #F0E7FA; color: #6B2FB3; }
 .badge-operador  { background: var(--teal-50);  color: var(--teal-600);  }
 .badge-canal     { background: var(--gray-50);  color: var(--gray-600);  }
+
+/* Vehículo cancelado. Vive aquí y no en el CSS de cada rol porque
+   lo muestran los cuatro paneles: portería, supervisor, cliente y
+   administrador ven el mismo estado y deben verlo igual. */
+.badge-cancelado { background: #fee2e2; color: #991b1b; }
+
+/* La fila se apaga en vez de esconderse: el registro sigue siendo
+   parte del turno y hay que poder leerlo, pero no debe competir con
+   los vehículos que sí están operando. */
+.fila-cancelada td { opacity: .62; }
+
+/* Cancelar es destructivo pero no urgente: se distingue en rojo sin
+   el peso de un botón rojo lleno, que compite con "Salida". */
+.btn-cancelar { color: #b91c1c; border-color: #fecaca; }
+.btn-cancelar:hover { background: #fef2f2; border-color: #fca5a5; }
 
 /* ── Toast ── */
 .toast {
@@ -230,6 +258,25 @@ textarea { resize: vertical; min-height: 64px; }
 .muelle-card-placa { font-weight: 600; color: var(--text-1); font-size: 13px; }
 .muelle-card-empty { color: var(--text-3); font-style: italic; }
 
+/* ── Alerta de tiempo en muelle ──
+   El borde izquierdo pasa de ámbar (ocupado) a rojo cuando el
+   vehículo se pasa de la meta de SU tipología. Va después de
+   .ocupado a propósito: con la misma especificidad, gana el que
+   se declara de último, y una alerta tiene que poder pisar el
+   color de "ocupado". */
+.muelle-card.muelle-media { border-left-color: var(--amber-600); background: var(--amber-50); }
+.muelle-card.muelle-alta { border-left-color: var(--red-600); background: var(--red-50); }
+
+.muelle-meta {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 600; margin-bottom: 6px;
+    padding: 3px 7px; border-radius: 10px; width: fit-content;
+}
+.muelle-meta.normal { background: var(--green-50); color: var(--green-600); }
+.muelle-meta.media { background: var(--amber-50); color: var(--amber-600); }
+.muelle-meta.alta { background: var(--red-50); color: var(--red-600); }
+.muelle-meta.sin-meta { background: var(--surface-3); color: var(--text-3); font-weight: 500; }
+
 /* ── Avance de cargue/descargue (dentro de una muelle-card ocupada) ── */
 .avance-selector, .avance-box { margin-top: 8px; padding-top: 8px; border-top: 0.5px dashed var(--border); }
 .avance-label { display: block; font-size: 11px; color: var(--text-3); margin-bottom: 6px; }
@@ -300,6 +347,13 @@ tbody tr:hover { background: var(--surface-2); }
 .detail-lbl { color: var(--text-3); font-size: 12px; min-width: 110px; }
 .detail-val { color: var(--text-1); font-weight: 500; }
 .detail-section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-3); margin: 18px 0 8px; }
+
+/* Filas cuyo valor lo escribió una persona (observaciones, motivos
+   de cancelación). La etiqueta se ancla arriba y el texto envuelve
+   en varias líneas, en vez de estirar la fila hasta desbordar el
+   modal. */
+.detail-row-largo { align-items: flex-start; }
+.detail-row-largo .detail-val { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .historial-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid var(--border); }
 .historial-item:last-child { border-bottom: none; }
 .historial-ico { width: 26px; height: 26px; border-radius: 50%; background: var(--surface-3); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -526,7 +580,7 @@ tbody tr:hover { background: var(--surface-2); }
 }
 
 .arbol-rama {
-  border-left: 3px solid #2563eb;
+  border-left: 3px solid var(--brand-600);
   padding-left: 14px;
 }
 
@@ -560,7 +614,7 @@ tbody tr:hover { background: var(--surface-2); }
 .arbol-barra span {
   display: block;
   height: 100%;
-  background: #2563eb;
+  background: var(--brand-600);
   border-radius: 4px;
 }
 
@@ -625,3 +679,301 @@ tbody tr:hover { background: var(--surface-2); }
   font-size: 11px;
   letter-spacing: .03em;
 }
+
+/* Semáforo de prioridad de un vehículo activo: normal, atención,
+   urgente. Vivía triplicado en los tres supervisor.css (de donde lo
+   heredaban los paneles de cliente). Está aquí porque el tablero del
+   administrador lo usa ahora también, y el color de una alerta tiene
+   que ser el mismo en las cuatro pantallas. */
+.badge-prioridad-normal { background: #e0f2fe; color: #075985; }
+.badge-prioridad-media  { background: #fef3c7; color: #92400e; }
+.badge-prioridad-alta   { background: #fee2e2; color: #991b1b; }
+
+
+/* =========================================================
+   COBROS — estilos compartidos
+
+   Este bloque vivía triplicado, idéntico, en los tres
+   supervisor.css. Ahora la misma vista de Cobros la tiene también
+   el panel de administrador, y una cuarta copia habría garantizado
+   que las cuatro pantallas del mismo dinero terminaran viéndose
+   distinto.
+
+   Se movió tal cual, sin retocar un color: lo que se buscaba era
+   dejar de repetirlo, no rediseñarlo.
+   ========================================================= */
+
+/* =========================================================
+   COBROS
+
+   El dinero se distingue del resto del panel por el color: verde
+   para lo recaudado, ámbar para lo que está pendiente. Las cifras
+   van en tabular-nums para que las columnas de montos queden
+   alineadas por dígito y se puedan comparar de un vistazo.
+   ========================================================= */
+
+/* Contador de pendientes junto al ítem del menú: el supervisor no
+   tiene que entrar a la vista para saber que hay cobros esperando. */
+.nav-pendientes {
+  margin-left: auto;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 1px 7px;
+  min-width: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.caja-resumen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.caja-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.caja-valor {
+  font-size: 24px;
+  font-weight: 600;
+  color: #065f46;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.caja-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 6px;
+}
+
+.caja-detalle {
+  font-size: 11.5px;
+  color: #6b7280;
+  margin-top: 5px;
+  line-height: 1.5;
+}
+
+/* Vehículos adentro sin tipología: no se les puede cobrar todavía,
+   así que no salen en la lista de pendientes. Se dicen aparte para
+   que la lista corta no se lea como "no falta nada por cobrar". */
+.cobros-aviso {
+  background: #fef3c7;
+  border-left: 3px solid #f59e0b;
+  border-radius: 6px;
+  padding: 11px 15px;
+  font-size: 13px;
+  color: #854d0e;
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+/* ── Modal de cobro ── */
+
+/* La cifra que se va a cobrar, con el desglose que la produjo
+   debajo. Es una rejilla y no una fila porque el detalle ocupa el
+   ancho completo: el valor grande queda alineado a la derecha y las
+   cuentas menudas debajo, sin competirle. */
+.cobro-tarifa {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 12px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 14px 0;
+}
+
+.cobro-tarifa-label { font-size: 12.5px; color: #15803d; font-weight: 500; }
+
+.cobro-tarifa-valor {
+  font-size: 21px;
+  font-weight: 700;
+  color: #065f46;
+  font-variant-numeric: tabular-nums;
+}
+
+.cobro-tarifa-detalle {
+  grid-column: 1 / -1;
+  font-size: 11.5px;
+  color: #15803d;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tres opciones y nombres largos: en columna, a diferencia de los
+   medios de pago, que son tres palabras sueltas y caben en fila. */
+.soportes-pago {
+  display: grid;
+  gap: 8px;
+}
+
+.soporte-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.soporte-btn i { font-size: 18px; color: #9ca3af; }
+
+.soporte-btn:hover { border-color: #d1d5db; }
+
+.soporte-btn.activo {
+  border-color: #059669;
+  background: #f0fdf4;
+  color: #065f46;
+}
+
+.soporte-btn.activo i { color: #059669; }
+
+.badge-soporte {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 5px;
+  padding: 2px 8px;
+  background: #f3f4f6;
+  color: #4b5563;
+  white-space: nowrap;
+}
+
+/* La otra cifra de la fila de pendientes: la que se cobraría si el
+   conductor pide factura. Va debajo y en pequeño porque es el caso
+   excepcional, no el que se lee de corrido. */
+.monto-alterno {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: #9ca3af;
+}
+
+.cobro-factura {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: #faf5ff;
+  border: 1px solid #e9d5ff;
+  border-radius: 8px;
+  padding: 11px 15px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  color: #5b21b6;
+  cursor: pointer;
+}
+
+.cobro-factura input { width: 16px; height: 16px; margin: 0; cursor: pointer; }
+
+.medios-pago {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.medio-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 14px 8px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.medio-btn i { font-size: 20px; color: #9ca3af; }
+
+.medio-btn:hover { border-color: #d1d5db; }
+
+.medio-btn.activo {
+  border-color: #059669;
+  background: #f0fdf4;
+  color: #065f46;
+}
+
+.medio-btn.activo i { color: #059669; }
+
+/* Monto calculado, no editable: sin fondo de campo para que no
+   invite a escribir en él. */
+.cobro-derivado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 11px 16px;
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 10px;
+}
+
+.cobro-derivado strong {
+  font-size: 17px;
+  color: #374151;
+  font-variant-numeric: tabular-nums;
+}
+
+.cobro-errores {
+  background: #fef2f2;
+  border-left: 3px solid #dc2626;
+  border-radius: 6px;
+  padding: 11px 15px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: #991b1b;
+  line-height: 1.55;
+}
+
+
+
+/* La fila se apaga en vez de esconderse: el registro sigue siendo
+   parte del turno y hay que poder leerlo, pero no debe competir
+   con los vehículos que sí están operando. */
+/* Los estilos de vehículo cancelado viven en css/components.css:
+   los muestran los cuatro paneles y tienen que verse igual. */
+
+/* ── Celdas de dinero en las tablas ── */
+
+.monto { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.monto.cero { color: #9ca3af; }
+
+.badge-medio {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.badge-medio.efectivo { background: #dcfce7; color: #166534; }
+.badge-medio.qr       { background: #dbeafe; color: #1e40af; }
+.badge-medio.ambos    { background: #ede9fe; color: #5b21b6; }
+.badge-medio.factura  { background: #f3e8ff; color: #6b21a8; }
