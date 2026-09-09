@@ -142,16 +142,24 @@ service cloud.firestore {
       // permiso nuevo en la práctica, es el mismo que ya tenía por
       // otra vía.
       //
-      // `modalidad` —si la mercancía viene arrumada o paletizada— es
-      // del supervisor porque es quien ve el camión abierto: en la
-      // fila de entrada no siempre se sabe. Faltaba en esta lista, y
-      // como J3 (la única bodega que hoy lo distingue) no está en
-      // `bodegasConSupervisorEditor`, sus botones de modalidad
-      // fallaban contra el servidor con permission-denied: la
-      // interfaz ofrecía marcarla y el guardado se rechazaba. Es un
-      // campo de clasificación, no de dinero ni de autorización: de
-      // él cuelga contra qué meta de tiempo se mide el muelle, que
-      // es justo lo que este rol tiene que poder ajustar.
+      // ── LA CLASIFICACIÓN DEL VEHÍCULO ──
+      //
+      // `tipologia`/`tipologiaNombre` y `modalidad` son del
+      // SUPERVISOR. Los tres entraron a esta lista a la vez y por la
+      // misma razón: es el rol que ve el camión abierto en el muelle.
+      // La tipología se capturaba en la portería, con el vehículo
+      // todavía cerrado y en la fila, y la elección se hacía a ojo —
+      // de ella cuelgan la tarifa que se cobra y las metas de tiempo
+      // contra las que se mide toda la bodega.
+      //
+      // `modalidad` además estaba faltando: como J3 (la única bodega
+      // que hoy la distingue) no está en `bodegasConSupervisorEditor`,
+      // sus botones fallaban contra el servidor con permission-denied
+      // — la interfaz ofrecía marcarla y el guardado se rechazaba.
+      //
+      // Son campos de clasificación, no de dinero ni de autorización.
+      // El operario los pierde: ya no captura la tipología, y sigue
+      // sin poder tocar el avance ni las autorizaciones.
       function camposDeSupervisor() {
         return request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly([
@@ -160,7 +168,7 @@ service cloud.firestore {
                  'pickingCargue', 'auditoriaCargue',
                  'pickingDescargue', 'auditoriaDescargue',
                  'cancelado', 'cancelacion', 'horaSalida', 'operadorSalida',
-                 'modalidad'
+                 'modalidad', 'tipologia', 'tipologiaNombre'
                ]);
       }
 

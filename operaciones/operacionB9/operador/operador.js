@@ -58,7 +58,6 @@ import {
 
 import {
     suscribirseAConfig,
-    buscarTipologia,
     tiemposDe,
     modalidadDe,
     distingueModalidad,
@@ -851,120 +850,26 @@ function escapar(s) {
 
 
 /* =========================================================
-   TIPOLOGÍA DEL VEHÍCULO
+   LA TIPOLOGÍA YA NO SE CAPTURA AQUÍ
 
-   La lista la define el administrador por bodega. Aquí solo se
-   pinta lo que él haya configurado: el operario no puede inventar
-   tipologías, porque de cada una cuelgan una tarifa y unas metas
-   de tiempo que solo tienen sentido si están configuradas.
+   Aquí vivían el desplegable de tipología del formulario de
+   entrada y el modal que bloqueaba el registro cuando faltaba.
+   Los dos se quitaron: la tipología la asigna el SUPERVISOR, que
+   es quien ve el vehículo abierto en el muelle. En la fila de
+   entrada, con el camión cerrado y la portería de afán, la
+   elección se hacía a ojo — y de ella cuelgan la tarifa y las
+   metas de tiempo contra las que después se mide la bodega.
 
-   Mientras la lista esté vacía el vehículo puede entrar sin
-   tipología —parar la portería por una tabla sin llenar sería
-   peor— pero NO podrá salir hasta que alguien se la asigne. El
-   texto de ayuda lo dice en el momento de registrar, no cuando ya
-   sea tarde.
+   El dato no se volvió opcional: cambió de momento y de
+   responsable. Sin tipología el vehículo NO PUEDE SALIR, y la
+   regla vive en diagnosticoSalida() (vehiculos.js), que es la
+   misma puerta por la que ya pasaban el avance y la autorización
+   del supervisor.
    ========================================================= */
-
-function renderSelectTipologia() {
-
-    var sel = document.getElementById('f-tipologia');
-    var hint = document.getElementById('f-tipologia-hint');
-    if (!sel) return;
-
-    var seleccionActual = sel.value;
-
-    if (!configBodega) {
-        sel.innerHTML = '<option value="">Cargando…</option>';
-        sel.disabled = true;
-        hint.textContent = '';
-        hint.className = 'form-hint';
-        return;
-    }
-
-    var lista = configBodega.tipologias || [];
-
-    if (!lista.length) {
-        sel.innerHTML = '<option value="">Sin tipologías configuradas</option>';
-        sel.disabled = true;
-        hint.textContent = 'El administrador todavía no ha configurado las tipologías de esta bodega. ' +
-            'Puedes registrar la entrada, pero el vehículo no podrá salir hasta que se le asigne una.';
-        hint.className = 'form-hint aviso';
-        return;
-    }
-
-    sel.disabled = false;
-    sel.innerHTML = '<option value="">Selecciona la tipología</option>' +
-        lista.map(function (t) {
-            return '<option value="' + escapar(t.id) + '">' + escapar(t.nombre) + '</option>';
-        }).join('');
-
-    // Si el administrador agrega o quita tipologías con el
-    // formulario a medio llenar, se conserva lo que el operario
-    // ya había elegido — salvo que sea justo la que desapareció.
-    if (seleccionActual && buscarTipologia(configBodega, seleccionActual)) {
-        sel.value = seleccionActual;
-    }
-
-    hint.textContent = '';
-    hint.className = 'form-hint';
-}
-
-/* =========================================================
-   MODAL: TIPOLOGÍA OBLIGATORIA
-
-   Bloquea el registro de entrada cuando la bodega ya tiene
-   tipologías configuradas y el operario no eligió ninguna.
-
-   No cierra ni continúa hasta que se elija una: cancelar deja el
-   formulario intacto para que el operario lo revise, pero no
-   registra. Antes esto era un aviso que se desvanecía solo, y un
-   vehículo podía terminar guardado sin el dato solo porque nadie
-   alcanzó a leerlo.
-   ========================================================= */
-
-function abrirModalTipologia() {
-
-    var sel = document.getElementById('m-tipologia');
-    var lista = (configBodega && configBodega.tipologias) || [];
-
-    sel.innerHTML = '<option value="">Selecciona la tipología</option>' +
-        lista.map(function (t) {
-            return '<option value="' + escapar(t.id) + '">' + escapar(t.nombre) + '</option>';
-        }).join('');
-
-    // Si el operario ya había elegido algo en el formulario y lo
-    // borró, no se le impone nada: arranca en blanco a propósito.
-    sel.value = '';
-    document.getElementById('m-tipologia-error').textContent = '';
-
-    document.getElementById('modal-tipologia').classList.add('open');
-    sel.focus();
-}
-
-/*
-    Pasa la elección al formulario y reintenta el registro. Se
-    reintenta llamando a registrarEntrada() en vez de duplicar aquí
-    el guardado: así la entrada sigue pasando por TODAS las
-    validaciones, no solo por la que faltaba.
-*/
-function confirmarTipologia() {
-
-    var sel = document.getElementById('m-tipologia');
-
-    if (!sel.value) {
-        document.getElementById('m-tipologia-error').textContent =
-            'Elige una tipología para poder continuar.';
-        return;
-    }
-
-    document.getElementById('f-tipologia').value = sel.value;
-    closeModal('modal-tipologia');
-    registrarEntrada();
-}
 
 function limpiarForm() {
 
-    ['f-conductor', 'f-placa', 'f-ubicacion', 'f-numeroMuelle', 'f-cedula', 'f-obs', 'f-programado', 'f-servicio-tipo', 'f-tipologia']
+    ['f-conductor', 'f-placa', 'f-ubicacion', 'f-numeroMuelle', 'f-cedula', 'f-obs', 'f-programado', 'f-servicio-tipo']
         .forEach(function (id) { document.getElementById(id).value = ''; });
 
     limpiarHora('f-hora-programacion-h', 'f-hora-programacion-m');
@@ -1009,8 +914,6 @@ async function registrarEntrada() {
         : servicioTipo === 'Insumos' ? document.getElementById('f-servicio-empresa-text').value : '';
     var cedula = document.getElementById('f-cedula').value.trim();
     var obs = document.getElementById('f-obs').value.trim();
-    var tipologiaId = document.getElementById('f-tipologia').value;
-    var tipologia = buscarTipologia(configBodega, tipologiaId);
 
     if (!conductor) { toast('Ingresa ' + rotulo('conductor').toLowerCase(), 'red', 'ti-alert-circle'); return; }
 
@@ -1031,19 +934,6 @@ async function registrarEntrada() {
     if (programado === 'Programado' && !horaProgramacion) { toast('Ingresa hora de programación', 'red', 'ti-alert-circle'); return; }
     if (servicioTipo === 'Reciclaje' && !servicioEmpresa) { toast('Selecciona la empresa de reciclaje', 'red', 'ti-alert-circle'); return; }
 
-    // La tipología solo es obligatoria cuando hay alguna configurada:
-    // si el administrador todavía no llenó la tabla, no se puede
-    // exigir un dato que el formulario no tiene cómo ofrecer.
-    //
-    // Cuando falta, no basta con avisar: el registro se detiene y se
-    // abre el modal, que trae el mismo desplegable para resolverlo
-    // sin salir del paso ni perder lo ya digitado.
-    var hayTipologiasConfiguradas = !!(configBodega && (configBodega.tipologias || []).length);
-    if (hayTipologiasConfiguradas && !tipologia) {
-        abrirModalTipologia();
-        return;
-    }
-
     var activo = registros.find(function (r) { return r.placa === placa && !r.horaSalida; });
     if (activo) { toast('El vehículo ' + placa + ' ya está activo en ' + getDestino(activo), 'amber', 'ti-alert-triangle'); return; }
 
@@ -1054,8 +944,13 @@ async function registrarEntrada() {
         destino: computeDestino(ubicacion, numeroMuelle, 'A'),
         tipo: tipo, cedula: cedula, obs: obs,
         servicioTipo: servicioTipo || 'Normal', servicioEmpresa: servicioEmpresa,
-        tipologia: tipologia ? tipologia.id : '',
-        tipologiaNombre: tipologia ? tipologia.nombre : ''
+        // Nace sin tipología: la asigna el supervisor. Los dos campos
+        // van igual, vacíos, porque el resto de la aplicación los lee
+        // —tablas, ficha, exportación— y un registro sin la clave
+        // definida obligaría a cada lector a distinguir entre "falta
+        // el dato" y "falta el campo".
+        tipologia: '',
+        tipologiaNombre: ''
     };
 
     setSyncStatus('syncing');
@@ -1483,7 +1378,6 @@ function iniciarPagina(perfil) {
 
         pintarTituloMuelles();
         pintarEtiquetasCampos();
-        renderSelectTipologia();
 
         // El nombre del cliente se escribe en el campo de empresa del
         // servicio de insumos: si cambió, el formulario abierto tiene
@@ -1491,8 +1385,6 @@ function iniciarPagina(perfil) {
         cambiarServicioTipo();
         renderTodo();
     });
-
-    renderSelectTipologia();
 
     // Eventos del formulario
     document.getElementById('f-ubicacion').addEventListener('change', cambiarUbicacion);
@@ -1521,7 +1413,6 @@ function iniciarPagina(perfil) {
     document.getElementById('btn-confirmar-salida').addEventListener('click', confirmarSalida);
     document.getElementById('btn-confirmar-edicion').addEventListener('click', confirmarEdicionUbicacion);
     document.getElementById('btn-confirmar-observacion').addEventListener('click', confirmarObservacion);
-    document.getElementById('btn-confirmar-tipologia').addEventListener('click', confirmarTipologia);
 
     // Exportar
     document.getElementById('btn-export-todos').addEventListener('click', exportarTodos);

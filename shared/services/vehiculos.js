@@ -33,6 +33,7 @@ import {
 
 import { db } from "../core/firebase.js";
 import { getDestino, ordenarPorPrioridad } from "../services/eventos.js";
+import { distingueModalidad, hayTipologias } from "./config.js";
 import { nowLocal } from "../utils/tiempos.js";
 
 const COLECCION = "vehiculos";
@@ -633,6 +634,49 @@ export async function actualizarModalidad(id, modalidad, operador) {
 
 
 /* =========================================================
+   TIPOLOGÍA DEL VEHÍCULO
+
+   La asigna el SUPERVISOR, no la portería. Se capturaba en el
+   formulario de entrada, con el camión todavía cerrado y en la
+   fila: la elección se hacía a ojo, y de la tipología cuelgan la
+   tarifa que se le cobra y las metas de tiempo contra las que se
+   mide toda la operación de la bodega. El supervisor la elige
+   cuando ya vio el vehículo.
+
+   Va acompañada de `tipologiaNombre` porque el nombre se copia
+   dentro del registro a propósito: las tablas, la ficha y la
+   exportación lo leen sin tener que cargar la configuración, y un
+   vehículo que ya salió conserva el nombre que tenía la tipología
+   entonces aunque el administrador la renombre después.
+
+   Queda en el historial por lo mismo que la modalidad: es una
+   decisión que mueve indicadores y dinero, no una nota.
+   ========================================================= */
+
+export async function actualizarTipologia(id, tipologia, operador) {
+
+    // `tipologia` es el objeto de la configuración, o null para
+    // dejar el vehículo sin clasificar otra vez (una asignación
+    // equivocada tiene que poder deshacerse).
+    const idTipologia = tipologia ? tipologia.id : "";
+    const nombre = tipologia ? tipologia.nombre : "";
+
+    const entrada = {
+        fecha: nowLocal(),
+        tipo: "tipologia",
+        operador: operador || "",
+        texto: nombre ? "Tipología asignada: " + nombre : "Tipología retirada"
+    };
+
+    await updateDoc(doc(db, COLECCION, id), {
+        tipologia: idTipologia,
+        tipologiaNombre: nombre,
+        historial: arrayUnion(entrada)
+    });
+}
+
+
+/* =========================================================
    AVANZAR A LA FASE DE CARGUE (cuando el descargue llega al 100%)
 
    Solo aplica a vehículos "Ambos": el descargue siempre va
@@ -909,7 +953,60 @@ export function puedeAutorizarSalidaAnticipada(r, config) {
     return (r.avancePorcentaje || 0) >= minimo;
 }
 
+/* =========================================================
+   LA CLASIFICACIÓN QUE EXIGE LA SALIDA
+
+   Un vehículo no sale sin estar clasificado. Son dos datos y los
+   dos los pone el SUPERVISOR, no la portería:
+
+       tipología   qué vehículo es. De ella cuelgan la tarifa y las
+                   metas de tiempo en muelle.
+       modalidad   cómo vino la mercancía, arrumada o paletizada.
+                   Solo donde la bodega lo distingue.
+
+   Sin ellos el vehículo se va y se lleva consigo la posibilidad
+   de medirlo: no hay meta contra la cual comparar sus tiempos, no
+   hay tarifa que cobrarle, y en los indicadores aparece como una
+   fila más de "sin tipología" que ya nadie puede completar porque
+   el camión no está. Es la misma razón por la que el avance
+   bloquea la salida — lo que no se registró antes de que se vaya,
+   no se registra nunca.
+
+   ── POR QUÉ LA TIPOLOGÍA NO BLOQUEA SIEMPRE ──
+
+   Solo se exige donde la bodega TIENE tipologías configuradas. Si
+   el administrador todavía no ha llenado esa tabla, no hay nada
+   que asignar: exigirla igual dejaría a todos los vehículos de esa
+   bodega encerrados, sin ninguna forma de resolverlo desde la
+   aplicación. El aviso de ese caso va en el diagnóstico, que lo
+   dice en voz alta en vez de dejar salir en silencio.
+
+   Sin `config` no se exige ninguna de las dos: un llamador que no
+   la pasa no puede saber si esta bodega distingue modalidad ni si
+   tiene tipologías, y bloquear por un dato que no se tiene sería
+   inventar una regla.
+   ========================================================= */
+
+export function faltaClasificacion(r, config) {
+
+    if (!r || !config) return null;
+
+    if (hayTipologias(config) && !r.tipologia) return "tipologia";
+
+    // La modalidad solo existe donde se distingue. Donde no, un
+    // vehículo sin ella no está incompleto: está bien.
+    if (distingueModalidad(config) && !r.modalidad) return "modalidad";
+
+    return null;
+}
+
 export function puedeRegistrarSalida(r, config) {
+
+    // Antes que el avance: sin clasificar no sale, aunque esté al
+    // 100%. Un vehículo completo pero sin tipología es exactamente
+    // el que se escapa sin poder medirse ni cobrarse.
+    if (faltaClasificacion(r, config)) return false;
+
     if (!requiereAvanceCompleto(r)) return true;
     if (avanceCompleto(r)) return true;
 
@@ -961,13 +1058,51 @@ export function diagnosticoSalida(r, config) {
     var esCargue = r.avanceTipo === 'Cargue';
     var tipo = r.avanceTipo || r.tipo || 'la operación';
 
+    /* La clasificación va primero: un vehículo al 100% pero sin
+       tipología es justamente el que se va sin poder medirse ni
+       cobrarse. Los dos datos los pone el supervisor, así que el
+       mensaje dice a quién hay que pedírselos — el operario no
+       puede resolverlo solo y decirle "falta la tipología" sin más
+       lo deja mirando un formulario que ya no la tiene. */
+    var falta = faltaClasificacion(r, config);
+
+    if (falta === 'tipologia') {
+        return {
+            puedeSalir: false, nivel: 'bloqueo',
+            titulo: 'Falta la tipología del vehículo',
+            detalle: 'Este vehículo no tiene tipología asignada. Sin ella no hay meta de tiempo contra la cual medir su operación ni tarifa que cobrarle, y una vez que salga ya no se le puede asignar.',
+            accion: 'Pídele al supervisor que le asigne la tipología desde su panel.',
+            porcentaje: pct, minimo: null, faltante: null
+        };
+    }
+
+    if (falta === 'modalidad') {
+        return {
+            puedeSalir: false, nivel: 'bloqueo',
+            titulo: 'Falta indicar cómo vino la mercancía',
+            detalle: 'En esta bodega hay que indicar si la mercancía vino arrumada o paletizada: la misma tipología tarda tiempos muy distintos según el caso, y sin ese dato el tiempo en muelle se mide contra una meta que puede no ser la suya.',
+            accion: 'Pídele al supervisor que marque la mercancía como arrumada o paletizada.',
+            porcentaje: pct, minimo: null, faltante: null
+        };
+    }
+
+    /* La bodega sin tipologías configuradas. Aquí no se bloquea
+       —no hay ninguna que asignar, encerrar los vehículos no
+       arreglaría nada— pero tampoco se deja pasar en silencio: el
+       vehículo se va sin poder medirse, y eso hay que decirlo
+       mientras todavía se puede hacer algo al respecto. Ver
+       faltaClasificacion(). */
+    var sinTabla = config && !hayTipologias(config) && !r.tipologia
+        ? ' Ojo: esta bodega todavía no tiene tipologías configuradas, así que este vehículo va a salir sin clasificar y quedará fuera de los indicadores de cumplimiento. El administrador debe cargarlas.'
+        : '';
+
     // Registros anteriores a la función de avance: nunca se les
     // pidió el dato, así que no se les puede exigir.
     if (!requiereAvanceCompleto(r)) {
         return {
             puedeSalir: true, nivel: 'sin-avance',
             titulo: 'Sin avance registrado',
-            detalle: 'Este vehículo no tiene avance de cargue/descargue registrado (es un registro anterior a esta función), así que puede salir sin restricción de porcentaje.',
+            detalle: 'Este vehículo no tiene avance de cargue/descargue registrado (es un registro anterior a esta función), así que puede salir sin restricción de porcentaje.' + sinTabla,
             accion: 'Verifica manualmente con el muelle antes de confirmar la salida.',
             porcentaje: 0, minimo: null, faltante: null
         };
@@ -975,9 +1110,9 @@ export function diagnosticoSalida(r, config) {
 
     if (avanceCompleto(r)) {
         return {
-            puedeSalir: true, nivel: 'ok',
-            titulo: 'Completo — listo para salir',
-            detalle: 'El ' + tipo.toLowerCase() + ' está al 100%. El vehículo puede salir.',
+            puedeSalir: true, nivel: sinTabla ? 'sin-avance' : 'ok',
+            titulo: sinTabla ? 'Completo, pero sin clasificar' : 'Completo — listo para salir',
+            detalle: 'El ' + tipo.toLowerCase() + ' está al 100%. El vehículo puede salir.' + sinTabla,
             accion: '',
             porcentaje: pct, minimo: MINIMO_SALIDA, faltante: 0
         };

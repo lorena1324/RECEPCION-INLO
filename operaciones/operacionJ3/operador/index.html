@@ -261,10 +261,27 @@
                              configuración de la bodega (config/J3), en
                              vivo: si el administrador agrega una
                              tipología, aparece aquí sin recargar. -->
+                        <!-- LA TIPOLOGÍA YA NO SE PIDE AQUÍ
+
+                             La asigna el SUPERVISOR, que es quien ve el
+                             vehículo abierto en el muelle. En la fila de
+                             entrada, con el camión cerrado y la portería
+                             de afán, la elección se hacía a ojo — y de
+                             ella cuelgan la tarifa y las metas de tiempo.
+
+                             El dato sigue siendo obligatorio, solo que se
+                             exige más tarde: sin tipología el vehículo NO
+                             puede salir (ver diagnosticoSalida() en
+                             shared/services/vehiculos.js). No se pierde;
+                             se le pide a quien puede acertar. -->
                         <div class="form-group full">
-                            <label for="f-tipologia">Tipología del vehículo</label>
-                            <select id="f-tipologia"></select>
-                            <span class="form-hint" id="f-tipologia-hint"></span>
+                            <div class="local-banner" style="margin:0;">
+                                <i class="ti ti-user-shield"></i>
+                                <div>
+                                    <strong>La tipología la asigna el supervisor</strong>
+                                    <span>El vehículo no podrá salir hasta que se la asigne desde su panel.</span>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="form-group full">
@@ -374,33 +391,14 @@
     </div>
 </div>
 
-<!-- MODAL: TIPOLOGÍA OBLIGATORIA
+<!-- Aquí vivía el modal que bloqueaba la ENTRADA por falta de
+     tipología. Se quitó junto con el campo del formulario: la
+     tipología pasó a ser del supervisor, así que la portería ya no
+     tiene nada que llenar ni nada que se le pueda exigir.
 
-     Se abre al intentar registrar una entrada sin tipología, cuando
-     la bodega ya tiene tipologías configuradas. No es solo un aviso:
-     trae el mismo desplegable para resolverlo aquí y seguir, sin
-     perder nada de lo ya digitado en el formulario. -->
-<div class="modal-backdrop" id="modal-tipologia">
-    <div class="modal">
-        <div class="modal-header">
-            <div class="modal-title"><i class="ti ti-truck"></i> Falta la tipología del vehículo</div>
-            <button class="modal-close" data-close="modal-tipologia"><i class="ti ti-x"></i></button>
-        </div>
-        <div class="modal-info-box">
-            No se puede registrar la entrada sin indicar qué tipo de vehículo es.
-            De la tipología dependen los tiempos con los que se mide la operación.
-        </div>
-        <div class="form-group full">
-            <label for="m-tipologia">Tipología del vehículo *</label>
-            <select id="m-tipologia"></select>
-            <span class="form-hint aviso" id="m-tipologia-error"></span>
-        </div>
-        <div class="modal-footer">
-            <button class="btn" data-close="modal-tipologia">Cancelar</button>
-            <button class="btn btn-primary" id="btn-confirmar-tipologia"><i class="ti ti-check"></i> Continuar con el registro</button>
-        </div>
-    </div>
-</div>
+     La exigencia no desapareció, se movió al otro extremo de la
+     visita: sin tipología el vehículo no puede SALIR. Ver
+     diagnosticoSalida() en shared/services/vehiculos.js. -->
 
 <!-- MODAL: EDITAR UBICACIÓN -->
 <div class="modal-backdrop" id="modal-editar">

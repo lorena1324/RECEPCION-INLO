@@ -28,6 +28,8 @@ import {
   avanceCompleto,
   cancelarVehiculo,
   crearCitaCancelada,
+  actualizarModalidad,
+  actualizarTipologia,
   estaCancelado
 } from "../../../shared/services/vehiculos.js";
 
@@ -55,8 +57,10 @@ import {
   tarifasPorDefecto,
   desglosarTarifa,
   tiemposDe,
+  buscarTipologia,
   modalidadDe,
   distingueModalidad,
+  MODALIDADES,
   etiquetaCampo
 } from "../../../shared/services/config.js";
 
@@ -1056,6 +1060,101 @@ function claseTipo(tipo) {
    contra otra meta.
    ========================================================= */
 
+/* =========================================================
+   CLASIFICAR EL VEHÍCULO (tipología y modalidad)
+
+   Los dos datos que el vehículo necesita para poder salir, en un
+   solo bloque, dentro del modal de Novedades. Va ahí y no en la
+   tarjeta del muelle porque ese modal se abre desde los DOS
+   sitios —la tarjeta del muelle y la tabla de patio— y un
+   vehículo que entró directo a patio y se va sin pasar por muelle
+   también tiene que poder clasificarse. Si los controles vivieran
+   solo en la tarjeta, ese vehículo quedaría encerrado: sin
+   tipología no sale, y sin muelle no habría dónde asignársela.
+
+   La tipología la asigna este rol y no la portería: es quien ve
+   el vehículo abierto. En la fila de entrada, con el camión
+   cerrado, la elección se hacía a ojo — y de ella cuelgan la
+   tarifa y las metas de tiempo de toda la bodega.
+   ========================================================= */
+
+function bloqueClasificacion(r) {
+
+  if (r.horaSalida) return "";
+
+  const lista = (configBodega && configBodega.tipologias) || [];
+
+  const opciones = ['<option value="">Sin asignar</option>']
+    .concat(lista.map((t) =>
+      `<option value="${escapar(t.id)}"${t.id === r.tipologia ? " selected" : ""}>${escapar(t.nombre)}</option>`))
+    .join("");
+
+  // Sin tipologías configuradas no hay nada que elegir. Se dice en
+  // vez de mostrar un desplegable vacío que parecería roto.
+  const selector = lista.length
+    ? `<select data-set-tipologia="${escapar(r.id)}">${opciones}</select>`
+    : '<span class="texto-ayuda">El administrador todavía no ha configurado las tipologías de esta bodega.</span>';
+
+  const falta = !r.tipologia && lista.length
+    ? '<div class="cobros-aviso" style="margin-top:10px;"><i class="ti ti-alert-triangle"></i> Sin tipología el vehículo <strong>no puede salir</strong>, y una vez que salga ya no se le puede asignar.</div>'
+    : "";
+
+  return `<div class="detail-section-title">Clasificación</div>
+          <div class="avance-selector" style="border-top:none;padding-top:0;">
+            <span class="avance-label">Tipología del vehículo</span>
+            ${selector}
+          </div>
+          ${selectorModalidad(r)}
+          ${falta}`;
+}
+
+/* Los botones de la modalidad. Solo aparecen donde la bodega la
+   distingue: en las demás sería una pregunta que no cambia nada.
+   B9 hoy no la distingue, pero el control va igual — el
+   administrador puede encenderla desde Configuración. */
+function selectorModalidad(r) {
+
+  if (!distingueModalidad(configBodega)) return "";
+
+  const actual = modalidadDe(r);
+
+  const botones = MODALIDADES.map((m) => {
+    const activo = m === actual;
+    return `<button class="btn btn-sm ${activo ? "btn-primary" : ""}" data-modalidad="${escapar(r.id)}:${m}">${m}</button>`;
+  }).join("");
+
+  // "sin marcar" y no un check: hasta que alguien lo diga, lo que
+  // rige es el supuesto, no una confirmación.
+  const nota = r.modalidad ? "" : ' <span style="color:var(--text-3);">(sin marcar — se asume arrumado)</span>';
+
+  return `<div class="avance-selector">
+            <span class="avance-label">¿Cómo viene la mercancía?${nota}</span>
+            <div class="avance-selector-btns">${botones}</div>
+          </div>`;
+}
+
+async function marcarModalidad(id, modalidad) {
+  try {
+    await actualizarModalidad(id, modalidad, perfilActual.nombre);
+    // El modal se pinta de una sola vez con innerHTML, así que no se
+    // entera del cambio por su cuenta: se vuelve a abrir para que los
+    // botones y el aviso de "no puede salir" queden al día.
+    if (document.getElementById("modal-novedades").classList.contains("open")) openModalNovedades(id);
+  } catch (error) {
+    console.error("No se pudo marcar la modalidad:", error);
+  }
+}
+
+async function asignarTipologia(id, tipologiaId) {
+  try {
+    await actualizarTipologia(id, buscarTipologia(configBodega, tipologiaId), perfilActual.nombre);
+    if (document.getElementById("modal-novedades").classList.contains("open")) openModalNovedades(id);
+  } catch (error) {
+    console.error("No se pudo asignar la tipología:", error);
+    alert("No se pudo asignar la tipología. Revisa tu conexión e inténtalo de nuevo.");
+  }
+}
+
 function nivelMuelle(r) {
   return nivelContraMeta(
     minutosEnMuelle(r),
@@ -1197,6 +1296,18 @@ function iniciarAvanceClicks() {
       return;
     }
 
+    const btnModalidad = e.target.closest("[data-modalidad]");
+    if (btnModalidad) {
+      const [idM, modalidad] = btnModalidad.getAttribute("data-modalidad").split(":");
+      marcarModalidad(idM, modalidad);
+      return;
+    }
+
+    // El desplegable de tipología no es un botón: escucha 'change',
+    // más abajo. Aquí solo se atrapa el clic para que no se lo lleve
+    // ningún otro handler de la lista.
+    if (e.target.closest("[data-set-tipologia]")) return;
+
     const btnNovedades = e.target.closest("[data-novedades]");
     if (btnNovedades) {
       openModalNovedades(btnNovedades.getAttribute("data-novedades"));
@@ -1213,6 +1324,15 @@ function iniciarAvanceClicks() {
     if (btnAutorizar) {
       autorizarSalida(btnAutorizar.getAttribute("data-autorizar-salida"));
     }
+  });
+
+  /* El desplegable de tipología. Va por delegación como los demás:
+     el modal se repinta entero cada vez que se abre, así que
+     enlazarlo elemento por elemento se perdería en el primer
+     repintado. */
+  document.body.addEventListener("change", (e) => {
+    const sel = e.target.closest("[data-set-tipologia]");
+    if (sel) asignarTipologia(sel.getAttribute("data-set-tipologia"), sel.value);
   });
 }
 
@@ -1260,6 +1380,7 @@ function openModalNovedades(id) {
       distingueModalidad: distingueModalidad(configBodega),
       mostrarOperarios: true
     }) +
+    bloqueClasificacion(rec) +
     seccionAutorizacion(rec) +
     `<div class="detail-section-title">Novedades</div>${histHtml}`;
 
