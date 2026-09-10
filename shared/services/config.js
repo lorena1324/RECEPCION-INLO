@@ -620,6 +620,35 @@ export function buscarTipologia(config, tipologiaId) {
     return (config.tipologias || []).find(function (t) { return t.id === tipologiaId; }) || null;
 }
 
+/*
+    Cómo se llama HOY la tipología de un vehículo.
+
+    El registro lleva el nombre copiado dentro (`tipologiaNombre`)
+    para que las tablas y la exportación no tengan que cargar la
+    configuración, y para que un vehículo cuya tipología alguien
+    borró no quede sin nombre. Pero esa copia se congela el día que
+    se asigna: si el administrador corrige el nombre —lo escribió
+    mal, lo unificó, le cambió la nomenclatura— la corrección no
+    llegaba a ninguna ficha ni a ninguna tabla. Quedaba visible
+    solo en Configuración, que es el único sitio donde nadie
+    necesita leerla.
+
+    Y no es solo cosmético: las estadísticas agrupan por nombre, así
+    que renombrar partía una tipología en dos filas —los vehículos
+    viejos con el nombre viejo, los nuevos con el nuevo— y el
+    cumplimiento de cada una se calculaba sobre la mitad de los
+    datos.
+
+    Por eso el nombre se resuelve al pintar y no se reescriben mil
+    documentos: manda la configuración, y la copia congelada queda
+    de respaldo para la tipología que ya no existe.
+*/
+export function nombreTipologiaDe(rec, config) {
+    if (!rec || !rec.tipologia) return "";
+    const t = buscarTipologia(config, rec.tipologia);
+    return (t && t.nombre) || rec.tipologiaNombre || "";
+}
+
 export function hayTipologias(config) {
     return !!(config && (config.tipologias || []).length);
 }

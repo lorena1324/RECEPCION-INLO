@@ -1246,6 +1246,12 @@ function openModalDetalle(id) {
             distingueModalidad: distingueModalidad(configBodega),
             mostrarOperarios: true,
 
+            // De aquí sale el nombre VIGENTE de la tipología. Sin esto
+            // la ficha muestra el que se copió en el registro el día
+            // que se asignó, y renombrarla desde Configuración no
+            // cambiaba nada.
+            config: configBodega,
+
             // El avance va aparte, aquí abajo: la barra con el
             // diagnóstico de salida es lo que el operario necesita
             // para decidir si despacha, y dos cifras del mismo dato

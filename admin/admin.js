@@ -77,6 +77,7 @@ import {
     validarConfig,
     nuevaTipologia,
     buscarTipologia,
+    nombreTipologiaDe,
     hayTipologias,
     numerosDeMuelle,
     umbralesPatio,
@@ -964,7 +965,7 @@ function renderPendientesCobro() {
             return '<tr>' +
                 '<td class="td-placa">' + escapar(r.placa) + '</td>' +
                 '<td>' + escapar(r.conductor || '—') + '</td>' +
-                '<td>' + escapar(r.tipologiaNombre || '—') + '</td>' +
+                '<td>' + escapar(nombreTipologiaDe(r, cfgGuardada) || '—') + '</td>' +
                 '<td class="monto' + (d.base ? '' : ' cero') + '">' +
                     (d.base
                         ? fmtMoneda(d.base) + '<span class="monto-alterno">' + fmtMoneda(d.conIva) + ' con factura</span>'
@@ -1067,7 +1068,7 @@ function openModalCobro(vehiculoId) {
     document.getElementById('cobro-info').innerHTML =
         '<strong>' + escapar(rec.placa) + '</strong> — ' +
         escapar(rec.conductor || 'sin ' + rotulo('conductor').toLowerCase()) +
-        ' · ' + escapar(rec.tipologiaNombre || 'sin tipología') +
+        ' · ' + escapar(nombreTipologiaDe(rec, cfgGuardada) || 'sin tipología') +
         (existente ? ' <em>(corrigiendo un cobro ya registrado)</em>' : '');
 
     document.getElementById('cobro-efectivo').value =
@@ -2281,6 +2282,12 @@ function openModalDetalle(id) {
             etiquetas: etiquetasCampos(),
             distingueModalidad: distingueModalidad(cfgGuardada),
             mostrarOperarios: true,
+
+            // De aquí sale el nombre VIGENTE de la tipología. Sin
+            // esto la ficha muestra el que se copió en el registro
+            // el día que se asignó, y renombrarla desde
+            // Configuración no cambiaba nada en ninguna parte.
+            config: cfgGuardada,
 
             // El administrador puede leer los cobros completos —las
             // reglas se los abren— así que ve el desglose, y el

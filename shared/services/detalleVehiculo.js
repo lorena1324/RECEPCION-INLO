@@ -36,7 +36,7 @@
 import { fmtDt, formatDuration, duracion } from "../utils/tiempos.js";
 import { getDestino, getLocationDurations, canalDe } from "./eventos.js";
 import { estaCancelado, llegoAunqueCancelado } from "./vehiculos.js";
-import { modalidadDe } from "./config.js";
+import { modalidadDe, nombreTipologiaDe } from "./config.js";
 
 
 function escapar(txt) {
@@ -148,7 +148,7 @@ function textoModalidad(rec) {
     los llame la bodega (`etiquetas`): en J3 y B9 son conductor y
     cédula; en J4, proveedor y número de cita.
 */
-function bloqueIdentificacion(rec, etiquetas, distingueModalidad) {
+function bloqueIdentificacion(rec, etiquetas, distingueModalidad, config) {
     return titulo("Identificación") +
         fila("Placa", rec.placa || "—") +
         fila(etiquetas.conductor, rec.conductor || "—") +
@@ -157,7 +157,12 @@ function bloqueIdentificacion(rec, etiquetas, distingueModalidad) {
         // "Sin asignar" y no un guion: que falte la tipología no es
         // un dato vacío, es lo que tiene al vehículo sin tarifa y
         // sin metas de tiempo, y quien abre la ficha debe notarlo.
-        fila("Tipología", rec.tipologiaNombre || "Sin asignar") +
+        //
+        // El nombre se resuelve contra la configuración, no se lee
+        // de la copia congelada del registro: si el administrador
+        // corrige el nombre de la tipología, la ficha tiene que
+        // decir el nuevo. Ver nombreTipologiaDe() en config.js.
+        fila("Tipología", nombreTipologiaDe(rec, config) || "Sin asignar") +
 
         /* La modalidad va donde la bodega la distingue, esté marcada
            o no — ver textoModalidad(). Se muestra también, aunque la
@@ -316,6 +321,11 @@ function bloquePago(rec) {
                          supervisor lo tiene
       mostrarPago        pinta el bloque de "pago registrado sí/no"
                          (portería, en las bodegas que cobran)
+      config             la configuración de la bodega. De ella sale
+                         el nombre VIGENTE de la tipología: sin
+                         pasarla, la ficha muestra la copia congelada
+                         del registro y no se entera de que el
+                         administrador la renombró
    ========================================================= */
 
 export function fichaVehiculo(rec, opciones) {
@@ -328,7 +338,7 @@ export function fichaVehiculo(rec, opciones) {
     return bloqueIdentificacion(rec, {
         conductor: etiquetas.conductor || "Conductor",
         cedula: etiquetas.cedula || "Cédula / documento"
-    }, !!o.distingueModalidad) +
+    }, !!o.distingueModalidad, o.config) +
         bloqueTrazabilidad(rec, o.mostrarOperarios !== false) +
         (o.mostrarAvance !== false ? bloqueAvance(rec) : "") +
         bloqueObservaciones(rec) +

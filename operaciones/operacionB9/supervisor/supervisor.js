@@ -58,6 +58,7 @@ import {
   desglosarTarifa,
   tiemposDe,
   buscarTipologia,
+  nombreTipologiaDe,
   modalidadDe,
   distingueModalidad,
   MODALIDADES,
@@ -489,7 +490,7 @@ function renderPendientesCobro() {
         return `<tr>
           <td><strong>${escapar(r.placa)}</strong></td>
           <td>${escapar(r.conductor || "—")}</td>
-          <td>${escapar(r.tipologiaNombre || "—")}</td>
+          <td>${escapar(nombreTipologiaDe(r, configBodega) || "—")}</td>
           <td class="monto${d.base ? "" : " cero"}">${d.base
             ? fmtMoneda(d.base) + '<span class="monto-alterno">' + fmtMoneda(d.conIva) + " con factura</span>"
             : "sin tarifa"}</td>
@@ -580,7 +581,7 @@ function abrirModalCobro(vehiculoId) {
 
   document.getElementById("cobro-info").innerHTML =
     "<strong>" + escapar(rec.placa) + "</strong> — " + escapar(rec.conductor || "sin conductor") +
-    " · " + escapar(rec.tipologiaNombre || "sin tipología") +
+    " · " + escapar(nombreTipologiaDe(rec, configBodega) || "sin tipología") +
     (existente ? " <em>(corrigiendo un cobro ya registrado)</em>" : "");
 
   document.getElementById("cobro-efectivo").value = existente && existente.medio === "Ambos"
@@ -1398,7 +1399,12 @@ function openModalNovedades(id) {
         cedula: etiquetaCampo(configBodega, "cedula")
       },
       distingueModalidad: distingueModalidad(configBodega),
-      mostrarOperarios: true
+      mostrarOperarios: true,
+
+      // De aquí sale el nombre VIGENTE de la tipología. Sin esto la
+      // ficha muestra el que se copió en el registro el día que se
+      // asignó, y renombrarla desde Configuración no cambiaba nada.
+      config: configBodega
     }) +
     bloqueClasificacion(rec) +
     seccionAutorizacion(rec) +

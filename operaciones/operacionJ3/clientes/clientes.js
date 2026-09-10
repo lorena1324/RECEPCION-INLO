@@ -603,7 +603,12 @@ function openModalNovedades(id) {
         cedula: etiquetaCampo(configBodega, "cedula")
       },
       distingueModalidad: distingueModalidad(configBodega),
-      mostrarOperarios: true
+      mostrarOperarios: true,
+
+      // De aquí sale el nombre VIGENTE de la tipología. Sin esto la
+      // ficha muestra el que se copió en el registro el día que se
+      // asignó, y renombrarla desde Configuración no cambiaba nada.
+      config: configBodega
     }) +
     seccionAutorizacion(rec) +
     `<div class="detail-section-title">Novedades</div>${histHtml}`;

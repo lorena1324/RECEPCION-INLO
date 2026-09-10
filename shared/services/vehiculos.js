@@ -403,8 +403,6 @@ export async function corregirRegistro(id, actual, cambios, quien) {
         if (campo !== "tipologiaNombre") detalle.push(describirCambio(campo, viejo, nuevo));
     });
 
-    if (!detalle.length && !Object.keys(cambiosDoc).length) return false;
-
     /* ── LA FASE DEL AVANCE ──────────────────────────────
        Cambiar el tipo de operación cambia qué fases hace el
        vehículo, y la que estaba midiendo puede haber dejado de
@@ -413,12 +411,17 @@ export async function corregirRegistro(id, actual, cambios, quien) {
        Se revisa también cuando el tipo NO cambia, y esa es la
        parte que repara lo ya roto: los vehículos que se
        corrigieron antes de esto quedaron con el tipo nuevo y la
-       fase vieja guardados en Firestore, y volver a guardarles el
-       mismo tipo no detecta ningún cambio —el modal se abre con el
-       valor que ya tienen— así que nunca se enderezarían solos. La
-       única salida habría sido cambiar el tipo a otra cosa y
-       devolverlo, que es pedirle al administrador que adivine un
-       truco.
+       fase vieja guardados en Firestore, y el modal se abre con el
+       tipo que ya tienen — así que volver a elegir el correcto no
+       cuenta como cambio y no se escribiría nada. Ese es
+       exactamente el caso que deja al administrador marcando
+       "Descargue" una y otra vez sin que la ficha se mueva.
+
+       VA ANTES DE LA SALIDA POR "NO HAY NADA QUE CAMBIAR": una
+       fase descuadrada ES algo que cambiar, aunque el formulario
+       venga idéntico. Si esta comprobación quedara después del
+       return, reparar exigiría además tocar cualquier otro campo,
+       que es pedirle al administrador que adivine un truco.
 
        "Descuadrada" es solo la fase que NO es una de las que el
        vehículo hace (fasesDe): un "Ambos" midiendo cargue está
@@ -453,6 +456,8 @@ export async function corregirRegistro(id, actual, cambios, quien) {
             detalle.push(describirCambio("Avance de la operación", antes, despues));
         }
     }
+
+    if (!detalle.length && !Object.keys(cambiosDoc).length) return false;
 
     const anotacion = {
         fecha: nowLocal(),

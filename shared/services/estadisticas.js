@@ -67,7 +67,7 @@ import {
 
 import { estaCancelado, llegoAunqueCancelado } from "./vehiculos.js";
 
-import { tiemposDe, modalidadDe } from "./config.js";
+import { tiemposDe, modalidadDe, nombreTipologiaDe } from "./config.js";
 
 import { resumenCaja } from "./cobros.js";
 
@@ -968,7 +968,13 @@ function renderTipologias(recs, config) {
 
   recs.forEach((r) => {
 
-    const nombre = r.tipologiaNombre || "Sin tipología";
+    /* El nombre VIGENTE, no la copia congelada del registro. Aquí
+       se agrupa POR NOMBRE, así que renombrar una tipología desde
+       Configuración la partía en dos filas —los vehículos de antes
+       con el nombre viejo, los de después con el nuevo— y el
+       cumplimiento de cada una salía calculado sobre la mitad de
+       los datos. Ver nombreTipologiaDe() en config.js. */
+    const nombre = nombreTipologiaDe(r, config) || "Sin tipología";
     if (!grupos[nombre]) grupos[nombre] = { n: 0, terminados: 0, conMeta: 0, enMeta: 0, minutos: 0, metas: [] };
 
     const g = grupos[nombre];
