@@ -32,7 +32,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 import { db } from "../core/firebase.js";
-import { getDestino, ordenarPorPrioridad } from "../services/eventos.js";
+import { getDestino, getHistorial, ordenarPorPrioridad } from "../services/eventos.js";
 import { distingueModalidad, hayTipologias } from "./config.js";
 import { nowLocal } from "../utils/tiempos.js";
 
@@ -253,6 +253,31 @@ export async function actualizarUbicacion(id, cambios, operador) {
    avance, las autorizaciones, los cobros y las cancelaciones NO
    están: cada uno tiene su propio flujo, con sus validaciones y
    su propia entrada de historial.
+
+   ── LO QUE CUELGA DE UN CAMPO CORREGIDO ──
+
+   Corregir no es solo escribir el campo nuevo. Tres datos del
+   registro son COPIAS o DERIVADOS de otros, y dejarlos con el
+   valor viejo es lo que hacía que una corrección "no se viera":
+   el campo cambiaba en la tabla y el resto de la aplicación
+   —la ficha del vehículo, la tarjeta del muelle, la alerta de
+   tiempo, la regla de salida— seguía leyendo el derivado sin
+   corregir. Quien corregía veía el dato viejo por todas partes y
+   terminaba dudando de si el cambio se había guardado.
+
+       fecha        el día operativo, que sale de `horaEntrada`.
+
+       historial    el evento de entrada lleva copiadas la hora y
+                    la observación con las que se registró el
+                    vehículo (ver crearRegistro).
+
+       avanceTipo   la fase que se está midiendo, que tiene que
+                    ser una de las que el vehículo hace según su
+                    `tipo` — ver realinearAvance().
+
+   Todo lo demás (placa, conductor, cédula, canal, tipología,
+   modalidad, cita, servicio) vive en un solo campo y se corrige
+   solo.
    ========================================================= */
 
 const CAMPOS_EDITABLES = {
@@ -276,6 +301,80 @@ function describirCambio(campo, antes, despues) {
     const nombre = CAMPOS_EDITABLES[campo] || campo;
     const vacio = (v) => (v === null || v === undefined || v === "" ? "(vacío)" : String(v));
     return nombre + ': "' + vacio(antes) + '" → "' + vacio(despues) + '"';
+}
+
+
+/*
+    La fase del avance después de corregir el tipo de operación.
+
+    `avanceTipo` dice cuál de las dos fases se está midiendo, y de
+    ella cuelgan la meta de tiempo en muelle, el badge de la
+    tarjeta del muelle, el mínimo que exige la salida y la fila
+    "Fase actual" de la ficha. Corregir un "Cargue" que en realidad
+    era un "Descargue" y dejarle la fase vieja dejaba el vehículo
+    diciendo las dos cosas a la vez: la tabla mostraba la operación
+    nueva y la tarjeta seguía midiendo la vieja.
+
+    Devuelve SOLO lo que hay que escribir; un objeto vacío
+    significa que la fase que ya tenía sigue siendo válida.
+*/
+function realinearAvance(actual, tipoNuevo) {
+
+    // Registros anteriores a la función de avance: nunca se les
+    // pidió el dato y no se les inventa uno al corregir otra cosa
+    // (ver requiereAvanceCompleto).
+    if (!actual || !requiereAvanceCompleto(actual)) return {};
+
+    const fase = actual.avanceTipo || "";
+    const pct = actual.avancePorcentaje || 0;
+
+    if (tipoNuevo === "Ambos") {
+
+        // El descargue va primero, siempre. Si venía midiendo
+        // cargue, ese avance no se pierde: se guarda para retomarlo
+        // al terminar el descargue, igual que hace
+        // agregarOperacionFaltante() cuando el muelle detecta la
+        // operación que faltaba.
+        if (fase === "Descargue") return {};
+
+        const cambios = { avanceTipo: "Descargue", avancePorcentaje: 0 };
+        if (fase === "Cargue" && pct > 0) cambios.avanceCarguePendiente = pct;
+        return cambios;
+    }
+
+    // La fase sigue valiendo. Solo queda limpiar el cargue
+    // pendiente si lo había: un vehículo de una sola operación no
+    // tiene una segunda fase que retomar, y la ficha lo seguiría
+    // anunciando para siempre.
+    if (fase === tipoNuevo) {
+        return actual.avanceCarguePendiente ? { avanceCarguePendiente: 0 } : {};
+    }
+
+    /* De "Ambos" a una sola operación: la fase que se estaba
+       midiendo deja de existir para este vehículo, así que su
+       porcentaje no es el de la que queda. Arranca en cero —salvo
+       que hubiera un cargue pendiente, que es justamente el avance
+       de la fase que sobrevive—. No se relabela: decir que un
+       descargue al 80% es un cargue al 80% dejaría salir un
+       vehículo que no ha cargado nada.
+
+       Vale también para un vehículo que ya salió, y es a
+       conciencia: quien corrige está afirmando que este camión
+       nunca hizo la otra operación, y el avance de una fase que no
+       ocurrió no se puede quedar en la ficha como si sí. Queda en
+       el historial de dónde salió el cero. */
+    if (actual.tipo === "Ambos") {
+        return {
+            avanceTipo: tipoNuevo,
+            avancePorcentaje: tipoNuevo === "Cargue" ? (actual.avanceCarguePendiente || 0) : 0,
+            avanceCarguePendiente: 0
+        };
+    }
+
+    /* Cargue ↔ Descargue: es el mismo trabajo con el rótulo
+       corregido. El porcentaje se conserva — lo que se digitó mal
+       fue el nombre de la operación, no lo que el muelle hizo. */
+    return { avanceTipo: tipoNuevo };
 }
 
 export async function corregirRegistro(id, actual, cambios, quien) {
@@ -306,19 +405,134 @@ export async function corregirRegistro(id, actual, cambios, quien) {
 
     if (!detalle.length && !Object.keys(cambiosDoc).length) return false;
 
-    // La fecha del día operativo cuelga de la hora de entrada: si se
-    // corrige la hora y no la fecha, el vehículo queda contado en un
-    // día y ordenado en otro.
-    if (cambiosDoc.horaEntrada) {
-        cambiosDoc.fecha = String(cambiosDoc.horaEntrada).slice(0, 10);
+    /* ── LA FASE DEL AVANCE ──────────────────────────────
+       Cambiar el tipo de operación cambia qué fases hace el
+       vehículo, y la que estaba midiendo puede haber dejado de
+       existir. Ver realinearAvance().
+
+       Se revisa también cuando el tipo NO cambia, y esa es la
+       parte que repara lo ya roto: los vehículos que se
+       corrigieron antes de esto quedaron con el tipo nuevo y la
+       fase vieja guardados en Firestore, y volver a guardarles el
+       mismo tipo no detecta ningún cambio —el modal se abre con el
+       valor que ya tienen— así que nunca se enderezarían solos. La
+       única salida habría sido cambiar el tipo a otra cosa y
+       devolverlo, que es pedirle al administrador que adivine un
+       truco.
+
+       "Descuadrada" es solo la fase que NO es una de las que el
+       vehículo hace (fasesDe): un "Ambos" midiendo cargue está
+       bien —terminó de descargar y siguió— y no se toca. */
+    const tipoFinal = cambiosDoc.tipo || (actual && actual.tipo) || "";
+
+    const faseDescuadrada = !!(actual && actual.avanceTipo) &&
+        fasesDe(tipoFinal).indexOf(actual.avanceTipo) === -1;
+
+    if (tipoFinal && (cambiosDoc.tipo || faseDescuadrada)) {
+
+        const avance = realinearAvance(actual, tipoFinal);
+        Object.assign(cambiosDoc, avance);
+
+        /* Mover la fase mueve el porcentaje que el muelle venía
+           registrando, así que queda dicho en el historial: un
+           avance que baja solo, sin nadie que lo explique, es
+           exactamente lo que hace desconfiar del sistema. */
+        if (avance.avanceTipo) {
+
+            const antes = (actual.avanceTipo || "sin fase") + " " + (actual.avancePorcentaje || 0) + "%";
+
+            let despues = avance.avanceTipo + " " +
+                (avance.avancePorcentaje == null ? (actual.avancePorcentaje || 0) : avance.avancePorcentaje) + "%";
+
+            if (avance.avanceCarguePendiente) {
+                despues += " (quedan " + avance.avanceCarguePendiente + "% de cargue para retomar)";
+            }
+
+            // El rótulo va literal: no es un campo de CAMPOS_EDITABLES,
+            // es una consecuencia de haber corregido el tipo.
+            detalle.push(describirCambio("Avance de la operación", antes, despues));
+        }
     }
 
-    cambiosDoc.historial = arrayUnion({
+    const anotacion = {
         fecha: nowLocal(),
         tipo: "correccion",
         operador: quien || "",
         texto: "Registro corregido — " + detalle.join(" · ")
-    });
+    };
+
+    /* ── LO QUE EL EVENTO DE ENTRADA LLEVA COPIADO ───────
+       La hora y la observación con las que se registró el vehículo
+       están en el documento Y dentro del evento "entrada" del
+       historial (ver crearRegistro). Corregirlas en uno solo dejaba
+       la ficha contando dos versiones del mismo momento: arriba la
+       observación nueva, abajo en la línea de tiempo la vieja. */
+    const parcheEntrada = {};
+
+    if (cambiosDoc.horaEntrada) {
+
+        // La fecha del día operativo cuelga de la hora de entrada: si
+        // se corrige la hora y no la fecha, el vehículo queda contado
+        // en un día y ordenado en otro.
+        cambiosDoc.fecha = String(cambiosDoc.horaEntrada).slice(0, 10);
+
+        parcheEntrada.fecha = cambiosDoc.horaEntrada;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(cambiosDoc, "obs")) {
+        parcheEntrada.texto = cambiosDoc.obs || "";
+    }
+
+    if (Object.keys(parcheEntrada).length) {
+
+        /* ── Y EL HISTORIAL TAMBIÉN ──────────────────────────
+           Los tiempos por ubicación NO se calculan restando
+           entrada − salida: salen del historial, evento por evento
+           (ver getLocationDurations en eventos.js). Un vehículo que
+           hizo patio → muelle → patio tiene dos tramos en cada
+           sitio, y eso solo se sabe leyendo los eventos.
+
+           Por eso corregir `horaEntrada` sin mover el evento de
+           entrada dejaba el registro diciendo dos cosas distintas:
+           la tabla mostraba la hora nueva y las tarjetas de tiempo
+           —promedio en patio, promedio en muelle, pérdida de
+           operación, cumplimiento por tipología— seguían calculadas
+           con la vieja. El cambio se guardaba y no se veía por
+           ningún lado, que es justo lo que hacía dudar de si la
+           corrección había quedado. Con la observación de entrada
+           pasaba lo mismo, a la vista: la ficha mostraba el texto
+           nuevo en "Observaciones" y el viejo en la línea de tiempo,
+           dos renglones más abajo.
+
+           Se reescribe el array completo en vez de usar
+           arrayUnion(): no hay forma de modificar un elemento
+           existente de un array de Firestore. Se acepta a
+           conciencia que esto pisa lo que otro usuario haya
+           agregado al historial en el mismo instante — corregir un
+           registro es una acción rara, deliberada y de una sola
+           persona, y la alternativa es dejar el vehículo con dos
+           horas de entrada distintas para siempre.
+
+           Solo aplica a los registros que YA traen historial
+           guardado. Los antiguos que no lo tienen se corrigen
+           solos: getHistorial() los reconstruye a partir de
+           `horaEntrada`, así que leen la hora nueva sin que haya
+           nada que reescribir. */
+        if (Array.isArray(actual && actual.historial) && actual.historial.length) {
+
+            cambiosDoc.historial = getHistorial(actual).map(function (h) {
+                return h.tipo === "entrada"
+                    ? Object.assign({}, h, parcheEntrada)
+                    : h;
+            }).concat([anotacion]);
+
+        } else {
+            cambiosDoc.historial = arrayUnion(anotacion);
+        }
+
+    } else {
+        cambiosDoc.historial = arrayUnion(anotacion);
+    }
 
     await updateDoc(doc(db, COLECCION, id), cambiosDoc);
     return true;
@@ -698,6 +912,13 @@ export async function avanzarAFaseCargue(id, cambios, operador) {
     await updateDoc(doc(db, COLECCION, id), {
         avanceTipo: "Cargue",
         avancePorcentaje: cambios.porcentajeInicial,
+
+        // Ya se retomó: el pendiente cumplió su función y deja de
+        // existir. Sin esto la ficha seguía anunciando "40% ya hecho,
+        // se retoma al terminar el descargue" para siempre, al lado
+        // del cargue que ya iba en marcha con ese mismo 40%.
+        avanceCarguePendiente: 0,
+
         historial: arrayUnion(entrada)
     });
 }

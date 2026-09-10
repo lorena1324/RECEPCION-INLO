@@ -1197,7 +1197,26 @@ async function confirmarEdicionUbicacion() {
    MODAL: DETALLE
    ========================================================= */
 
+/* Qué vehículo está mostrando el modal de detalle. Se guarda
+   para poder repintarlo cuando llegue un cambio de Firestore:
+   el modal se arma de una sola vez con innerHTML y no se entera
+   por su cuenta de que el registro que muestra cambió. */
+let detalleVehiculoId = null;
+
+
+/* Repinta el modal de detalle si está abierto. Lo llama la
+   suscripción en vivo: sin esto, corregir un registro desde otro
+   panel dejaba el detalle mostrando los datos viejos, y el cambio
+   solo aparecía al cerrar y volver a abrir. */
+function refrescarModalDetalle() {
+    if (!detalleVehiculoId) return;
+    if (!document.getElementById('modal-detalle').classList.contains('open')) return;
+    openModalDetalle(detalleVehiculoId);
+}
+
 function openModalDetalle(id) {
+
+    detalleVehiculoId = id;
     var rec = registros.find(function (r) { return r.id === id; });
     if (!rec) return;
 
@@ -1354,6 +1373,7 @@ function iniciarPagina(perfil) {
         registros = data;
         renderTodo();
         refrescarModalSalida();
+        refrescarModalDetalle();
         if (document.getElementById('muelle-options').style.display !== 'none') {
             poblarSelectMuelles(document.getElementById('f-numeroMuelle'), null);
         }

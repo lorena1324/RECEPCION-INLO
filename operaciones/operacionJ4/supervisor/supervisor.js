@@ -202,6 +202,7 @@ protegerPagina({ rolesPermitidos: ["supervisor"], operacion: OPERACION }).then((
     marcarConectado();
     registros = data || [];
     renderTodo();
+    refrescarModalDetalle();
   });
 
   // La configuración dice si esta bodega cobra y trae las tipologías.
@@ -1571,7 +1572,26 @@ function closeModal(id) {
    NOVEDADES DEL VEHÍCULO (historial completo, solo lectura)
    ========================================================= */
 
+/* Qué vehículo está mostrando el modal de detalle. Se guarda
+   para poder repintarlo cuando llegue un cambio de Firestore:
+   el modal se arma de una sola vez con innerHTML y no se entera
+   por su cuenta de que el registro que muestra cambió. */
+let detalleVehiculoId = null;
+
+
+/* Repinta el modal de detalle si está abierto. Lo llama la
+   suscripción en vivo: sin esto, corregir un registro desde otro
+   panel dejaba el detalle mostrando los datos viejos, y el cambio
+   solo aparecía al cerrar y volver a abrir. */
+function refrescarModalDetalle() {
+    if (!detalleVehiculoId) return;
+    if (!document.getElementById("modal-novedades").classList.contains("open")) return;
+    openModalNovedades(detalleVehiculoId);
+}
+
 function openModalNovedades(id) {
+
+    detalleVehiculoId = id;
   const rec = registros.find((r) => r.id === id);
   if (!rec) return;
 

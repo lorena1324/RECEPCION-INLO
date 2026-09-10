@@ -1019,8 +1019,17 @@ function renderCobrosRegistrados() {
             var entro = soporteEntraACaja(soporte);
             var total = entro ? (c.montoEfectivo || 0) + (c.montoQR || 0) : (c.tarifa || 0);
 
+            /* La placa del vehículo, no la copia que se congeló al
+               cobrar: corregir una placa mal digitada tiene que verse
+               también aquí, o la fila de caja queda apuntando a un
+               vehículo que ya no existe con ese número. Las cifras y
+               la tipología SÍ se quedan congeladas —son lo que
+               explica el monto que se cobró ese día—, pero la placa
+               es identidad, no dinero. */
+            var placa = (rec && rec.placa) || c.placa;
+
             return '<tr>' +
-                '<td class="td-placa">' + escapar(c.placa) + '</td>' +
+                '<td class="td-placa">' + escapar(placa) + '</td>' +
                 '<td>' + escapar(c.tipologiaNombre || '—') + '</td>' +
                 '<td><span class="badge-soporte">' + escapar(soporte) + '</span></td>' +
                 '<td><span class="badge-medio ' + escapar(String(c.medio || '').toLowerCase()) + '">' + escapar(c.medio) + '</span></td>' +
@@ -2224,7 +2233,26 @@ function pintarBotonCitaCancelada() {
    MODAL: DETALLE
    ========================================================= */
 
+/* Qué vehículo está mostrando el modal de detalle. Se guarda
+   para poder repintarlo cuando llegue un cambio de Firestore:
+   el modal se arma de una sola vez con innerHTML y no se entera
+   por su cuenta de que el registro que muestra cambió. */
+let detalleVehiculoId = null;
+
+
+/* Repinta el modal de detalle si está abierto. Lo llama la
+   suscripción en vivo: sin esto, corregir un registro desde otro
+   panel dejaba el detalle mostrando los datos viejos, y el cambio
+   solo aparecía al cerrar y volver a abrir. */
+function refrescarModalDetalle() {
+    if (!detalleVehiculoId) return;
+    if (!document.getElementById('modal-detalle').classList.contains('open')) return;
+    openModalDetalle(detalleVehiculoId);
+}
+
 function openModalDetalle(id) {
+
+    detalleVehiculoId = id;
     var rec = registros.find(function (r) { return r.id === id; });
     if (!rec) return;
 
@@ -2570,6 +2598,7 @@ function suscribir() {
         registros = data;
         renderTodo();
         refrescarModalSalida();
+        refrescarModalDetalle();
         if (document.getElementById('muelle-options').style.display !== 'none') {
             poblarSelectMuelles(document.getElementById('f-numeroMuelle'), null);
         }
