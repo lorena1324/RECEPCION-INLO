@@ -245,6 +245,10 @@ protegerPagina({ rolesPermitidos: ["supervisor"], operacion: OPERACION }).then((
     }
     cobros = data || {};
     renderCobros();
+    // La ficha muestra el cobro y el botón de cobrar: si está
+    // abierta cuando llega el cobro recién registrado, tiene que
+    // pasar de "Pendiente" a los datos del cobro sin cerrarla.
+    refrescarModalDetalle();
   });
 
 }).catch((err) => {
@@ -453,6 +457,70 @@ function bloqueClasificacion(r) {
           </div>
           ${selectorModalidad(r)}
           ${falta}`;
+}
+
+/* =========================================================
+   COBRAR DESDE LA FICHA
+
+   El cobro solo se podía registrar desde la vista de Cobros, en la
+   tabla de pendientes — y esa tabla solo lista los vehículos que
+   siguen ADENTRO. El que salía sin cobrar desaparecía de ahí, y el
+   único que podía cobrarlo después era el administrador, que
+   tiene el botón en cada fila de su tabla de registros. En la
+   práctica los cobros terminaban haciéndose desde el panel de
+   administración.
+
+   Este bloque pone el botón donde el supervisor ya está mirando
+   el vehículo: en la misma ficha desde la que le asigna la
+   tipología y le mueve el avance, abierta desde la tarjeta del
+   muelle o desde la tabla de patio. Y no se esconde cuando el
+   vehículo ya salió: un vehículo que se fue sin pagar es un cobro
+   pendiente, no un caso cerrado.
+
+   Lo que sí se respeta es la regla de la tabla: un cobro ya
+   registrado se corrige solo mientras el vehículo esté adentro.
+   Después la caja del turno ya se cuadró contra esa cifra, y
+   moverla es cosa del administrador.
+   ========================================================= */
+
+/* El estado del cobro en la tarjeta del muelle, de un vistazo. Como
+   el cobro ahora bloquea la salida, el supervisor tiene que poder
+   ver desde el tablero cuáles le faltan sin abrir cada ficha. */
+function chipCobro(r) {
+  if (!bodegaCobra() || r.horaSalida) return "";
+  return r.pagoRegistrado
+    ? '<span class="badge badge-en-patio" title="Cobro registrado"><i class="ti ti-cash"></i> Cobrado</span>'
+    : '<span class="badge badge-amber" title="Sin cobro registrado — no puede salir"><i class="ti ti-cash-off"></i> Sin cobrar</span>';
+}
+
+function bloqueCobroAccion(r) {
+
+  if (!bodegaCobra()) return "";
+
+  const existente = cobros[r.id] || null;
+
+  // Sin tipología no hay tarifa: el bloque de Clasificación, justo
+  // arriba, ya dice que hay que asignarla primero.
+  if (!existente && !r.tipologia) return "";
+
+  let boton = "";
+  let nota = "";
+
+  if (!existente) {
+    boton = `<button class="btn-primario" data-cobrar="${escapar(r.id)}"><i class="ti ti-cash"></i> Registrar cobro</button>`;
+    nota = r.horaSalida
+      ? '<div class="cobros-aviso" style="margin-top:10px;"><i class="ti ti-alert-triangle"></i> Este vehículo <strong>salió sin cobro registrado</strong>.</div>'
+      : '<div class="cobros-aviso" style="margin-top:10px;"><i class="ti ti-lock"></i> Sin el cobro registrado el vehículo <strong>no puede salir</strong>.</div>';
+  } else if (!r.horaSalida) {
+    boton = `<button class="btn btn-sm" data-cobrar="${escapar(r.id)}"><i class="ti ti-edit"></i> Corregir cobro</button>`;
+  } else {
+    nota = '<span class="texto-ayuda">El cobro de un vehículo que ya salió solo lo corrige el administrador.</span>';
+  }
+
+  return `<div class="avance-selector">
+            <div class="avance-selector-btns">${boton}</div>
+            ${nota}
+          </div>`;
 }
 
 /* Los botones de la modalidad. Solo aparecen donde la bodega la
@@ -686,7 +754,7 @@ function renderPendientesCobro() {
       sinTipo.slice(0, 5).map((r) => escapar(r.placa)).join(", ") +
       (sinTipo.length > 5 ? "…" : "") +
       "). No aparecen arriba porque sin tipología no hay tarifa que cobrar, y tampoco podrán salir. " +
-      "Hay que asignársela desde portería.</div>"
+      "Asígnasela desde Novedades, en la tarjeta del muelle o en la tabla de patio.</div>"
     : "";
 }
 
@@ -908,9 +976,11 @@ function iniciarCobros() {
   document.getElementById("cobro-efectivo").addEventListener("input", pintarSplitCobro);
   document.getElementById("btn-confirmar-cobro").addEventListener("click", confirmarCobro);
 
-  // Los botones de las tablas se generan en cada repintado, así que
-  // van por delegación en vez de re-enlazarse uno por uno.
-  document.getElementById("view-cobros").addEventListener("click", (e) => {
+  // Los botones se generan en cada repintado, así que van por
+  // delegación en vez de re-enlazarse uno por uno. En el body y no
+  // en la vista de Cobros: el botón también vive en la ficha del
+  // vehículo (ver bloqueCobroAccion), que está fuera de esa vista.
+  document.body.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-cobrar]");
     if (btn) abrirModalCobro(btn.getAttribute("data-cobrar"));
   });
@@ -1402,7 +1472,7 @@ function renderUbicacion() {
         <div class="muelle-card-body">
           ${r
             ? `<div class="muelle-card-placa">${escapar(r.placa)}</div><div>${escapar(r.conductor || "—")}</div>` +
-              `<div style="margin-top:4px;"><span class="badge badge-canal">${escapar(r.canal || "—")}</span></div>${renderAvance(r)}` +
+              `<div style="margin-top:4px;"><span class="badge badge-canal">${escapar(r.canal || "—")}</span> ${chipCobro(r)}</div>${renderAvance(r)}` +
               `<div style="margin-top:6px;"><button class="btn btn-sm" data-novedades="${r.id}"><i class="ti ti-info-circle"></i> Novedades</button></div>`
             : `<div class="muelle-card-empty">Disponible</div>`}
         </div>
@@ -1635,6 +1705,9 @@ function openModalNovedades(id) {
       // desaparecía y parecía que la ficha estuviera incompleta.
       mostrarPago: bodegaCobra()
     }) +
+    // Justo debajo del bloque de Cobro/Pago con el que cierra la
+    // ficha: el dato y el botón que lo cambia, juntos.
+    bloqueCobroAccion(rec) +
     bloqueClasificacion(rec) +
     seccionAutorizacion(rec) +
     `<div class="detail-section-title">Novedades</div>${histHtml}`;

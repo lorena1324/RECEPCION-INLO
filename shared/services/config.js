@@ -304,13 +304,15 @@ export function configPorDefecto(operacion) {
            cobro en el detalle: no es que faltara el dato, es que la
            bodega figuraba como que no cobra.
 
-           El comentario que estaba aquí advertía que marcarla en
-           true bloquearía la salida de los vehículos esperando un
-           pago. Eso no ocurre: `pagoRegistrado` se escribe al cobrar
-           pero HOY NADIE LO LEE para autorizar la salida — ni
-           puedeRegistrarSalida() ni diagnosticoSalida() lo miran. Lo
-           único que exige la salida es la tipología. Si algún día se
-           implementa ese bloqueo, hay que revisar esta línea antes. */
+           Y SÍ BLOQUEA LA SALIDA: con esto en true, un vehículo no
+           sale hasta que el supervisor registre su cobro
+           (`pagoRegistrado`, ver faltaPago() en vehiculos.js). Es
+           a propósito — un vehículo que se va sin pagar es un cobro
+           que nadie va a poder hacer después. Encenderlo en una
+           bodega que no venía cobrando deja adentro a todos los que
+           estén sin cobro en ese momento, así que hay que cobrarlos
+           o mantener el interruptor apagado hasta que la bodega
+           realmente empiece a cobrar. */
         cobraVehiculos: defectoDeBodega(operacion, "cobraVehiculos", false),
 
         limitePatio: 120,

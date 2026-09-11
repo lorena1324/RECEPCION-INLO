@@ -1226,12 +1226,48 @@ export function faltaClasificacion(r, config) {
     return null;
 }
 
+/* =========================================================
+   EL COBRO QUE EXIGE LA SALIDA
+
+   En las bodegas que le cobran al vehículo (config.cobraVehiculos,
+   hoy J4) ningún vehículo sale sin que el cobro esté registrado.
+   Hasta aquí `pagoRegistrado` se escribía al cobrar pero nadie lo
+   leía para autorizar la salida, así que el vehículo se iba, y el
+   cobro quedaba para después — y "después" era el administrador,
+   el único que podía cobrar un vehículo que ya no estaba: el
+   supervisor solo ve pendientes los que siguen adentro.
+
+   Es la misma lógica que la tipología y el avance: lo que no se
+   registró antes de que se vaya, no se registra nunca. La
+   diferencia es que aquí lo que se pierde es plata.
+
+   Lo que se mira es `pagoRegistrado` en el propio vehículo y no la
+   colección de cobros, a propósito: es el único dato del pago que
+   la portería puede leer (ver el encabezado de cobros.js), y es
+   quien registra la salida.
+
+   Un cancelado no operó y no se cobra: no aplica. Y sin `config` no
+   se exige, por lo mismo que las otras dos reglas — bloquear por un
+   dato que no se tiene sería inventar una regla.
+   ========================================================= */
+
+export function faltaPago(r, config) {
+    if (!r || !config || !config.cobraVehiculos) return false;
+    if (estaCancelado(r)) return false;
+    return !r.pagoRegistrado;
+}
+
 export function puedeRegistrarSalida(r, config) {
 
     // Antes que el avance: sin clasificar no sale, aunque esté al
     // 100%. Un vehículo completo pero sin tipología es exactamente
     // el que se escapa sin poder medirse ni cobrarse.
     if (faltaClasificacion(r, config)) return false;
+
+    // Y sin cobro tampoco, donde la bodega cobra. Va aquí y no al
+    // final para que las dos funciones —esta y el diagnóstico—
+    // no puedan responder distinto.
+    if (faltaPago(r, config)) return false;
 
     if (!requiereAvanceCompleto(r)) return true;
     if (avanceCompleto(r)) return true;
@@ -1266,9 +1302,41 @@ export function puedeRegistrarSalida(r, config) {
    `minimo`/`faltante` van en null cuando el bloqueo no se
    resuelve subiendo el porcentaje (p. ej. ya pasó el mínimo de
    cargue y lo único que falta es la firma del supervisor).
+
+   ── EL ORDEN DE LOS BLOQUEOS ──
+
+   Primero la clasificación, después la operación (el avance) y de
+   último el cobro. Es el orden en que se resuelven: sin tipología
+   no hay tarifa que cobrar, y el cobro se registra cuando la
+   operación termina. Así el operario ve en cada momento lo que
+   toca hacer AHORA, y no "falta el cobro" sobre un vehículo que
+   todavía está descargando.
    ========================================================= */
 
 export function diagnosticoSalida(r, config) {
+
+    const d = diagnosticoOperacion(r, config);
+
+    // La operación está en regla y aun así no sale: falta cobrar.
+    // Se pregunta sobre lo que la operación dejó pasar, para que
+    // un bloqueo de avance siga diciendo lo del avance.
+    if (d.puedeSalir && faltaPago(r, config)) {
+        return {
+            puedeSalir: false, nivel: 'bloqueo',
+            titulo: 'Falta registrar el cobro',
+            detalle: 'La operación de este vehículo está en regla, pero el cobro no se ha registrado. ' +
+                     'En esta bodega ningún vehículo sale sin cobrar: una vez afuera ya no hay a quién cobrarle.',
+            accion: 'Pídele al supervisor que registre el cobro desde su panel — en Cobros o desde la ficha del vehículo.',
+            porcentaje: d.porcentaje, minimo: null, faltante: null
+        };
+    }
+
+    return d;
+}
+
+/* Lo que la salida exige de la operación en sí: clasificación y
+   avance. Sin el cobro, que se pregunta aparte arriba. */
+function diagnosticoOperacion(r, config) {
 
     if (!r) {
         return {
