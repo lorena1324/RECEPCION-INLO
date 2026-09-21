@@ -100,12 +100,12 @@
         <!-- Alerta de muelle. Es distinta del KPI "En alerta": ese
              cuenta la cola de patio contra el límite general de la
              bodega, y esta avisa del vehículo que ya está operando y
-             se pasó de la meta que el administrador le fijó a su
+             se pasó del límite que el administrador le fijó a su
              tipología en Configuración. -->
         <div id="alerta-muelle-banner" class="local-banner" style="display:none; background:#FDECEC; border-color:#F0A9A9; color:#7F1D1D;">
           <i class="ti ti-clock-exclamation"></i>
           <div>
-            <strong>Vehículos por encima de su meta de muelle</strong>
+            <strong>Vehículos por encima de su límite de muelle</strong>
             <span id="alerta-muelle-detalle"></span>
           </div>
         </div>
@@ -339,6 +339,38 @@
           <div id="es-cancel-motivos">Cargando…</div>
         </div>
 
+        <!-- Impacto de los cancelados sobre la capacidad. El mismo
+             bloque del supervisor, con las mismas cifras: es el
+             cliente quien programa y cancela, y tiene que ver lo
+             que eso le cuesta a la operación. -->
+        <div class="subtitulo">Impacto de las cancelaciones</div>
+        <div class="cards-resumen">
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-cupos">—</div>
+            <div class="card-resumen-label"><i class="ti ti-chart-pie-off"></i> De la capacidad del periodo</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-tiempo-muerto">0 min</div>
+            <div class="card-resumen-label"><i class="ti ti-hourglass-off"></i> Tiempo en planta sin operar</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-muelle-bloqueado">0 min</div>
+            <div class="card-resumen-label"><i class="ti ti-building-warehouse"></i> Muelle bloqueado</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-equivalente">—</div>
+            <div class="card-resumen-label"><i class="ti ti-truck-off"></i> Operaciones que cabían en ese muelle</div>
+          </div>
+        </div>
+        <div class="stat-box full">
+          <h3>Qué costó cada cancelación</h3>
+          <p class="texto-ayuda">
+            Un cancelado es un cupo de la capacidad del día que se reservó y no produjo. Si además llegó,
+            ocupó patio o muelle sin operar mientras los que sí venían a operar esperaban.
+          </p>
+          <div id="es-cancel-impacto-detalle">Cargando…</div>
+        </div>
+
         <!-- Capacidad instalada y nivel de servicio. Sale de la
              MISMA configuración que usa la portería: si el cliente
              midiera contra otra capacidad, los dos tableros se
@@ -360,12 +392,12 @@
         </div>
         <div id="es-nivel-detalle"></div>
 
-        <!-- Cuadro de pérdida de operación -->
+        <!-- Cuadro de pérdida de operación 
         <div class="subtitulo">Pérdida de operación</div>
         <div class="cards-resumen perdida">
           <div class="card-resumen">
             <div class="card-resumen-valor" id="es-perdida-horas">0 h</div>
-            <div class="card-resumen-label"><i class="ti ti-hourglass-low"></i> Tiempo perdido sobre la meta</div>
+            <div class="card-resumen-label"><i class="ti ti-hourglass-low"></i> Tiempo perdido sobre el límite</div>
           </div>
           <div class="card-resumen">
             <div class="card-resumen-valor" id="es-perdida-vehiculos">0</div>
@@ -380,7 +412,7 @@
             <div class="card-resumen-label"><i class="ti ti-percentage"></i> De los vehículos que ya salieron</div>
           </div>
         </div>
-        <div id="es-perdida-detalle"></div>
+        <div id="es-perdida-detalle"></div>-->
 
         <!-- Árbol de oportunidades -->
         <div class="subtitulo">Árbol de oportunidades</div>
@@ -421,7 +453,7 @@
         </div>
 
         <div class="stats-grid" style="margin-top:18px;">
-          <div class="stat-box full">
+          <!--<div class="stat-box full">
             <h3>Tiempos por operación y tipo de movimiento</h3>
             <p class="texto-ayuda">Cargue y descargue segmentados por canal, con el tiempo en patio y en muelle por separado.</p>
             <div id="es-segmentado-body">Cargando…</div>
@@ -435,14 +467,53 @@
             <h3>Promedio por canal</h3>
             <p class="texto-ayuda">Tiempo en patio por canal (MQ / 3PD / Otro)</p>
             <div id="estad-por-canal-body">Cargando…</div>
-          </div>
+          </div>-->
           <div class="stat-box full">
             <h3>Cumplimiento por tipología</h3>
             <p class="texto-ayuda">
-              Cada tipología contra la meta de tiempo en muelle configurada para la bodega,
+              Cada tipología contra el límite de tiempo en muelle configurado para la bodega,
               que es distinta según la operación sea cargue o descargue.
             </p>
             <div id="es-tipologias-body">Cargando…</div>
+          </div>
+        </div>
+
+        <!-- ═══ CUMPLIMIENTO DE CITA (ON TIME) ═══
+             El mismo bloque que ven el administrador y el supervisor,
+             pintado por la misma función compartida (renderOnTime y
+             compañía en shared/services/estadisticas.js): el cliente
+             tiene que leer exactamente las mismas cifras de puntualidad
+             que la bodega. Respeta el periodo de arriba y el filtro de
+             canal de la barra superior. -->
+        <div class="stats-grid" style="margin-top:18px;">
+          <div class="stat-box full">
+            <h3>Cumplimiento de cita (on time)</h3>
+            <p class="texto-ayuda">
+              Llegada real contra la hora programada. Solo entran los vehículos que traían cita;
+              usa el periodo de arriba y el filtro de canal de la barra superior.
+            </p>
+            <div class="ontime-layout">
+              <div id="ontime-tabla">Cargando…</div>
+              <div class="ontime-grafica"><canvas id="chart-ontime"></canvas></div>
+            </div>
+
+            <div class="ontime-detalle">
+              <div class="ontime-detalle-col">
+                <h4>Llegaron demasiado temprano</h4>
+                <p class="texto-ayuda">Los 5 con más adelanto sobre su cita.</p>
+                <div id="ontime-top-temprano">Cargando…</div>
+              </div>
+              <div class="ontime-detalle-col">
+                <h4>Llegaron demasiado tarde</h4>
+                <p class="texto-ayuda">Los 5 con más retraso sobre su cita.</p>
+                <div id="ontime-top-tarde">Cargando…</div>
+              </div>
+              <div class="ontime-detalle-col">
+                <h4>Vehículos del periodo</h4>
+                <p class="texto-ayuda">Los que operaron en el periodo, con cita o sin ella. Los cancelados van en su propio bloque.</p>
+                <div id="ontime-listado">Cargando…</div>
+              </div>
+            </div>
           </div>
         </div>
 

@@ -284,7 +284,7 @@ function nivelMuelle(r) {
   );
 }
 
-/* Cuánto lleva en muelle y contra qué meta. El cliente ve el
+/* Cuánto lleva en muelle y contra qué límite. El cliente ve el
    avance de SU carga, así que ve la cifra completa — no es un
    dato de desempeño del personal, es el estado del vehículo. */
 function avisoMetaMuelle(r) {
@@ -398,7 +398,7 @@ function pintarAlertaMuelle(enMuelle) {
 
   banner.style.display = "flex";
   document.getElementById("alerta-muelle-detalle").textContent =
-    `${fuera.length} vehículo(s) pasaron la meta de su tipología en muelle: ` +
+    `${fuera.length} vehículo(s) pasaron el límite de su tipología en muelle: ` +
     fuera.map((r) => {
       const p = prioridadDe(r, configBodega);
       return `${r.placa} (${formatearMinutos(p.minutos)} de ${formatearMinutos(p.meta)} · ${formatearMinutos(p.exceso)} por encima)`;
@@ -443,7 +443,7 @@ function filaTabla(r) {
    contra qué meta se le mide y cuánto lleva por encima. Sin esto
    el "#3" es un número que nadie puede verificar. */
 function tituloPrioridad(p) {
-  if (!p.referencia) return `${p.ubicacion} · sin meta configurada`;
+  if (!p.referencia) return `${p.ubicacion} · sin límite configurado`;
   return `${p.ubicacion} · ${formatearMinutos(p.minutos)} de ${formatearMinutos(p.referencia)}` +
     (p.estimada ? " (promedio de la bodega — a este vehículo le falta la tipología)" : "") +
     (p.exceso ? ` · ${formatearMinutos(p.exceso)} por encima` : "");
@@ -887,8 +887,9 @@ function renderEstadisticas() {
     todos: registros,
     dias: dias,
     horaCorte: horaCorte,
+    etiquetaUmbral: "Límite",
 
-    // El cliente mide contra la MISMA meta de patio que la
+    // El cliente mide contra el MISMO límite de patio que la
     // portería: si su pérdida de operación se calculara contra
     // otro límite, las dos pantallas se contradirían.
     config: configBodega

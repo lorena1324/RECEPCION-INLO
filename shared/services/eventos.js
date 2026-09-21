@@ -119,7 +119,16 @@ export function getLocationDurations(r) {
             return;
         }
 
-        if (item.tipo === 'salida') {
+        /* La cancelación cierra la estadía igual que la salida: el
+           vehículo que llegó, esperó en patio o se paró en un muelle
+           y se fue sin operar (cancelarVehiculo en vehiculos.js)
+           ocupó ese sitio todo ese tiempo. Sin esto, su último tramo
+           no se contaba nunca —el evento no era 'salida', y como ya
+           trae `horaSalida` tampoco entraba al tramo abierto de
+           abajo—, y un cancelado que estuvo 3 horas en patio
+           figuraba con 0 minutos. Es el tiempo que la operación
+           perdió con él, y es justo lo que hay que poder medir. */
+        if (item.tipo === 'salida' || item.tipo === 'cancelacion') {
             if (lastLoc && lastTime) {
                 var diff = (fecha - lastTime) / 60000;
                 if (diff > 0) {

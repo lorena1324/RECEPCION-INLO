@@ -67,7 +67,7 @@ import {
 
 import { estaCancelado, llegoAunqueCancelado } from "./vehiculos.js";
 
-import { tiemposDe, modalidadDe, nombreTipologiaDe } from "./config.js";
+import { tiemposDe, modalidadDe, nombreTipologiaDe, metaPromedioMuelle } from "./config.js";
 
 import { resumenCaja } from "./cobros.js";
 
@@ -223,8 +223,10 @@ export function renderPanelEstadisticas(opts) {
     /* Los cuatro bloques que miden lo que J4 empezó a capturar:
        lo que se canceló, cómo se comporta cada tipología contra su
        meta, qué entró a la caja y qué tan lleno estuvo el patio. */
-    renderCancelaciones(recs, recs.filter((r) => estaCancelado(r)));
-    renderTipologias(operativos, opts.config);
+    const cancelados = recs.filter((r) => estaCancelado(r));
+    renderCancelaciones(recs, cancelados);
+    renderImpactoCancelados(operativos, cancelados, dias, opts.config);
+    renderTipologias(operativos, opts.config, opts.etiquetaUmbral);
     renderCaja(operativos, opts.cobros);
     renderNivelServicio(operativos, dias, opts.config);
 
@@ -919,6 +921,145 @@ function renderCancelaciones(recs, cancelados) {
 
 
 /* =========================================================
+   IMPACTO DE LOS CANCELADOS SOBRE LA CAPACIDAD
+
+   El cuadro de arriba dice CUÁNTOS se cancelaron y por qué. Este
+   dice CUÁNTO LE COSTARON a la operación, que es la pregunta que
+   la bodega de verdad hace: un cancelado no es un cero en la
+   tabla, es un cupo de la capacidad del día que se reservó y no
+   produjo, y —si el vehículo alcanzó a llegar— un muelle o una
+   posición de patio ocupados por un camión que no iba a operar,
+   mientras los que sí venían a operar esperaban.
+
+   Dos medidas, porque son dos daños distintos:
+
+     CUPOS    cancelados contra la capacidad del periodo
+              (capacidadDiaria × días). Es lo que se dejó de
+              atender por haber programado vehículos que no
+              operaron. Cuenta los dos tipos de cancelado: el
+              que no llegó también tenía su cupo.
+
+     TIEMPO   los minutos que los cancelados que SÍ llegaron
+     MUERTO   ocuparon en planta sin operar, repartidos en patio
+              y muelle. Salen del historial, como todos los
+              tiempos (getLocationDurations). El de muelle se
+              traduce además a "operaciones que cabían ahí" con
+              la meta promedio de muelle de la bodega, porque
+              "4 horas de muelle" no le dice nada a nadie y "3
+              vehículos que se pudieron atender" sí.
+
+   Sin `capacidadDiaria` configurada el bloque no inventa el
+   porcentaje: muestra los cupos en número y dice qué falta
+   configurar. Sin metas de muelle, lo mismo con la equivalencia.
+   ========================================================= */
+
+function renderImpactoCancelados(operativos, cancelados, dias, config) {
+
+  const cont = document.getElementById("es-cancel-impacto-detalle");
+  if (!cont && !document.getElementById("es-cancel-cupos")) return;
+
+  const total = cancelados.length;
+  const nDias = dias.length || 1;
+  const capacidadDia = (config && config.capacidadDiaria) || 0;
+  const capacidadPeriodo = capacidadDia * nDias;
+  const esperados = operativos.length + total;
+
+  const llegaron = cancelados.filter((r) => llegoAunqueCancelado(r));
+  const noLlegaron = total - llegaron.length;
+
+  let minPatio = 0, minMuelle = 0;
+  llegaron.forEach((r) => {
+    const d = getLocationDurations(r);
+    minPatio += d.patio || 0;
+    minMuelle += d.muelle || 0;
+  });
+  const minPlanta = minPatio + minMuelle;
+
+  const metaMuelle = metaPromedioMuelle(config);
+  const equivalentes = metaMuelle > 0 ? minMuelle / metaMuelle : null;
+
+  const pctCapacidad = capacidadPeriodo > 0 ? (total / capacidadPeriodo) * 100 : null;
+  const pctEsperado = capacidadPeriodo > 0 ? (esperados / capacidadPeriodo) * 100 : null;
+  const pctOperado = capacidadPeriodo > 0 ? (operativos.length / capacidadPeriodo) * 100 : null;
+
+  // Con un decimal: un cancelado sobre 40 cupos/día es 2,5%, y
+  // redondearlo a 3% o a 2% cambia la lectura de una cifra chica.
+  const pct1 = (v) => (Math.round(v * 10) / 10).toLocaleString("es-CO") + "%";
+  const num1 = (v) => (Math.round(v * 10) / 10).toLocaleString("es-CO");
+
+  setTexto("es-cancel-cupos", pctCapacidad === null ? total + " cupo(s)" : pct1(pctCapacidad));
+  setTexto("es-cancel-tiempo-muerto", formatearMinutos(minPlanta));
+  setTexto("es-cancel-muelle-bloqueado", formatearMinutos(minMuelle));
+  setTexto("es-cancel-equivalente", equivalentes === null ? "—" : num1(equivalentes));
+
+  if (!cont) return;
+
+  if (!total) {
+    cont.innerHTML = '<p class="texto-ayuda">Ninguna operación se canceló en el periodo: la capacidad no se vio afectada por cancelaciones.</p>';
+    return;
+  }
+
+  /* ── El relato ── */
+  const partes = [];
+
+  if (capacidadPeriodo > 0) {
+    partes.push("La bodega podía atender <strong>" + capacidadPeriodo + " vehículo(s)</strong> en " +
+      (nDias === 1 ? "el día" : "los " + nDias + " días") + " del periodo (" + capacidadDia + " por día). " +
+      "Se esperaban <strong>" + esperados + "</strong> (" + pct1(pctEsperado) + " de la capacidad) y operaron <strong>" +
+      operativos.length + "</strong> (" + pct1(pctOperado) + "). Los <strong>" + total + " cancelado(s)</strong> son el <strong>" +
+      pct1(pctCapacidad) + "</strong> de la capacidad del periodo: cupos que se programaron y no produjeron.");
+  } else {
+    partes.push("Se esperaban <strong>" + esperados + " vehículo(s)</strong> y operaron <strong>" + operativos.length +
+      "</strong>: <strong>" + total + "</strong> cupo(s) programados no produjeron. " +
+      "Para medirlo contra la capacidad de la bodega, el administrador debe configurar la <em>capacidad diaria</em> en Configuración.");
+  }
+
+  if (llegaron.length) {
+    let tiempo = "De ellos, <strong>" + llegaron.length + "</strong> llegaron y estuvieron <strong>" + formatearMinutos(minPlanta) +
+      "</strong> en planta sin operar — " + formatearMinutos(minPatio) + " en patio y " + formatearMinutos(minMuelle) + " en muelle.";
+    if (minMuelle > 0) {
+      tiempo += equivalentes !== null
+        ? " Ese tiempo de muelle equivale a <strong>" + num1(equivalentes) + " operación(es) completa(s)</strong> según las metas de muelle configuradas: muelle bloqueado mientras los que sí venían a operar esperaban en patio."
+        : " Sin metas de muelle configuradas no se puede traducir ese tiempo a operaciones perdidas.";
+    }
+    partes.push(tiempo);
+  }
+
+  if (noLlegaron) {
+    partes.push((llegaron.length ? "Los otros " : "Los ") + "<strong>" + noLlegaron + "</strong> nunca llegaron: su cupo quedó reservado y vacío, sin que otro vehículo pudiera usarlo.");
+  }
+
+  let html = '<p class="texto-ayuda">' + partes.join(" ") + "</p>";
+
+  /* ── El detalle, vehículo por vehículo ── */
+  const filas = cancelados.slice().sort((a, b) =>
+    String(b.horaEntrada || "").localeCompare(String(a.horaEntrada || "")));
+
+  html += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Placa</th><th>¿Llegó?</th><th>Cita</th>' +
+    "<th>Entrada</th><th>Cancelado</th><th>Patio</th><th>Muelle</th><th>Motivo</th></tr></thead><tbody>";
+
+  filas.forEach((r) => {
+    const llego = llegoAunqueCancelado(r);
+    const d = llego ? getLocationDurations(r) : { patio: 0, muelle: 0 };
+    const c = r.cancelacion || {};
+    html += "<tr>" +
+      "<td>" + escapar(r.placa) + "</td>" +
+      "<td>" + (llego ? "Sí — se fue sin operar" : "No") + "</td>" +
+      "<td>" + (r.horaProgramacion ? fmtFechaHoraCorta(r.horaProgramacion) : "—") + "</td>" +
+      "<td>" + (llego ? fmtFechaHoraCorta(r.horaEntrada) : "—") + "</td>" +
+      "<td>" + (c.fecha ? fmtFechaHoraCorta(c.fecha) : "—") + "</td>" +
+      "<td>" + (llego ? formatearMinutos(d.patio) : "—") + "</td>" +
+      "<td>" + (llego ? formatearMinutos(d.muelle) : "—") + "</td>" +
+      "<td>" + escapar(c.motivo || "Sin motivo registrado") + "</td>" +
+      "</tr>";
+  });
+
+  html += "</tbody></table></div>";
+  cont.innerHTML = html;
+}
+
+
+/* =========================================================
    TIPOLOGÍAS CONTRA SU META DE MUELLE
 
    Cada tipología lleva una meta de tiempo en muelle POR TIPO DE
@@ -954,7 +1095,7 @@ function textoMetas(metas) {
     return formatearMinutos(orden[0]) + " a " + formatearMinutos(orden[orden.length - 1]);
 }
 
-function renderTipologias(recs, config) {
+function renderTipologias(recs, config, etiquetaUmbral) {
 
   const cont = document.getElementById("es-tipologias-body");
   if (!cont) return;
@@ -1001,8 +1142,9 @@ function renderTipologias(recs, config) {
 
   const nombres = Object.keys(grupos).sort((a, b) => grupos[b].n - grupos[a].n);
 
+  const etiqueta = etiquetaUmbral || "Meta";
   let html = '<table class="tabla"><thead><tr><th>Tipología</th><th># Veh.</th><th>Finalizados</th>' +
-    "<th>Meta</th><th>Prom. muelle</th><th>Con meta</th><th>Dentro de meta</th><th>% cumplimiento</th></tr></thead><tbody>";
+    `<th>${etiqueta}</th><th>Prom. muelle</th><th>Con ${etiqueta.toLowerCase()}</th><th>Dentro de ${etiqueta.toLowerCase()}</th><th>% cumplimiento</th></tr></thead><tbody>`;
 
   let sinMeta = 0;
 
@@ -1017,11 +1159,11 @@ function renderTipologias(recs, config) {
   });
 
   html += "</tbody></table>";
-  html += '<p class="texto-ayuda" style="margin-top:8px;">La meta de muelle la fija el administrador por tipología ' +
-    "y por tipo de operación, así que el cumplimiento se evalúa vehículo por vehículo con la meta de SU operación." +
+  html += `<p class="texto-ayuda" style="margin-top:8px;">El ${etiqueta.toLowerCase()} de muelle lo fija el administrador por tipología ` +
+    `y por tipo de operación, así que el cumplimiento se evalúa vehículo por vehículo con el ${etiqueta.toLowerCase()} de SU operación.` +
     (sinMeta
       ? " " + sinMeta + " vehículo(s) finalizados quedaron fuera del cumplimiento porque su tipología todavía no " +
-        "tiene meta configurada para esa operación."
+        `tiene ${etiqueta.toLowerCase()} configurado para esa operación.`
       : "") +
     "</p>";
 

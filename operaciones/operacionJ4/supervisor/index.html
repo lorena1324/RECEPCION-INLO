@@ -329,6 +329,38 @@
           <div id="es-cancel-motivos">Cargando…</div>
         </div>
 
+        <!-- Impacto de los cancelados: cuánto le costaron a la
+             operación, contra la capacidad diaria configurada y en
+             tiempo de planta ocupado sin operar. Ver
+             renderImpactoCancelados() en estadisticas.js. -->
+        <div class="subtitulo">Impacto de las cancelaciones</div>
+        <div class="cards-resumen">
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-cupos">—</div>
+            <div class="card-resumen-label"><i class="ti ti-chart-pie-off"></i> De la capacidad del periodo</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-tiempo-muerto">0 min</div>
+            <div class="card-resumen-label"><i class="ti ti-hourglass-off"></i> Tiempo en planta sin operar</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-muelle-bloqueado">0 min</div>
+            <div class="card-resumen-label"><i class="ti ti-building-warehouse"></i> Muelle bloqueado</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-equivalente">—</div>
+            <div class="card-resumen-label"><i class="ti ti-truck-off"></i> Operaciones que cabían en ese muelle</div>
+          </div>
+        </div>
+        <div class="stat-box full">
+          <h3>Qué costó cada cancelación</h3>
+          <p class="texto-ayuda">
+            Un cancelado es un cupo de la capacidad del día que se reservó y no produjo. Si además llegó,
+            ocupó patio o muelle sin operar mientras los que sí venían a operar esperaban.
+          </p>
+          <div id="es-cancel-impacto-detalle">Cargando…</div>
+        </div>
+
         <!-- Cuadro de pérdida de operación -->
         <div class="subtitulo">Pérdida de operación</div>
         <div class="cards-resumen perdida">
