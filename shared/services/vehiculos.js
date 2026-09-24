@@ -650,6 +650,41 @@ export async function registrarSalida(id, horaSalida, obsSalida, operador) {
     });
 }
 
+/* =========================================================
+   ANULAR SALIDA (reabrir un vehículo despachado)
+
+   La salida original no se borra: queda guardada junto con el
+   motivo y el supervisor que la anuló. El registro vuelve a estar
+   activo para que la salida correcta deje una nueva huella.
+   ========================================================= */
+
+export async function anularSalida(id, rec, motivo, supervisor) {
+
+    const entrada = {
+        fecha: nowLocal(),
+        tipo: "anulacion_salida",
+        operador: supervisor,
+        texto: motivo,
+        horaSalidaAnterior: rec.horaSalida,
+        operadorSalidaAnterior: rec.operadorSalida || ""
+    };
+
+    await updateDoc(doc(db, COLECCION, id), {
+        horaSalida: null,
+        obsSalida: "",
+        operadorSalida: null,
+        anulacionSalida: {
+            fecha: entrada.fecha,
+            anuladaPor: supervisor,
+            motivo: motivo,
+            horaSalidaAnterior: rec.horaSalida,
+            operadorSalidaAnterior: rec.operadorSalida || "",
+            obsSalidaAnterior: rec.obsSalida || ""
+        },
+        historial: arrayUnion(entrada)
+    });
+}
+
 
 /* =========================================================
    VEHÍCULO CANCELADO
@@ -679,6 +714,24 @@ export async function registrarSalida(id, horaSalida, obsSalida, operador) {
    El motivo es obligatorio. Sin él la cifra de cancelados sería
    un número sin explicación, que es justo lo que nadie puede
    accionar.
+
+   CANCELAR ESTÁ EN LAS TRES BODEGAS Y NO TIENE INTERRUPTOR.
+
+   Hubo uno —`manejaCancelaciones` en la configuración de la
+   bodega— de cuando solo J4 cancelaba, y se quitó porque dejó de
+   proteger algo y pasó a esconder la función: el flujo quedó
+   armado en los tres paneles (botón por fila, modal de cita
+   cancelada, reglas de Firestore) pero el interruptor lo mantenía
+   invisible. En B9 nunca se encendió, y en las que ya tenían
+   documento de configuración guardado mandaba el `false` grabado
+   ahí y no el valor por defecto del código, así que tampoco
+   alcanzaba con cambiarlo aquí.
+
+   Un vehículo cuya operación no se hizo es un hecho de cualquier
+   bodega, no una particularidad de una. Quién puede marcarlo
+   —solo el supervisor y el administrador, nunca la portería— eso
+   sí sigue siendo una regla, y vive donde no se puede esquivar:
+   en firestore.rules.
    ========================================================= */
 
 export function estaCancelado(r) {

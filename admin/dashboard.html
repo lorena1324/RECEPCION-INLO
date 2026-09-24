@@ -933,19 +933,6 @@
                 <div class="cfg-seccion">
                     <div class="cfg-seccion-head">
                         <div>
-                            <h3>Vehículos cancelados</h3>
-                            <p class="cfg-ayuda">Cuando la operación de un vehículo no se hace. Lo marca el <strong>supervisor</strong> (o el administrador), nunca la portería, y siempre con un motivo. Cubre las dos formas: el vehículo que entró y se va sin operar, y la cita que se canceló sin que el vehículo llegara.</p>
-                        </div>
-                    </div>
-                    <label class="cfg-check">
-                        <input type="checkbox" id="cfg-cancelaciones">
-                        <span>Esta bodega maneja vehículos cancelados</span>
-                    </label>
-                </div>
-
-                <div class="cfg-seccion">
-                    <div class="cfg-seccion-head">
-                        <div>
                             <h3>Cobro a los vehículos</h3>
                             <p class="cfg-ayuda">Solo algunas bodegas le cobran al vehículo. En las que no cobran, las tipologías siguen sirviendo para medir tiempos, pero sin tarifa ni registro de pago — y la salida no los exige.</p>
                         </div>
@@ -1518,6 +1505,27 @@
         <div class="modal-footer">
             <button class="btn" data-close="modal-corregir">Cancelar</button>
             <button class="btn btn-primary" id="btn-confirmar-correccion"><i class="ti ti-device-floppy"></i> Guardar corrección</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: ANULAR UNA SALIDA YA REGISTRADA -->
+<div class="modal-backdrop" id="modal-anular-salida">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title"><i class="ti ti-arrow-back-up"></i> Anular salida</div>
+            <button class="modal-close" data-close="modal-anular-salida"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-info-box" id="anular-salida-info"></div>
+        <p class="form-hint">El vehículo volverá a quedar activo. La salida original y este motivo quedarán registrados en el historial.</p>
+        <div class="form-group full">
+            <label for="anular-salida-motivo">Motivo *</label>
+            <textarea id="anular-salida-motivo" rows="3" placeholder="Por qué se debe reabrir el vehículo"></textarea>
+        </div>
+        <div class="cfg-errores" id="anular-salida-errores" style="display:none;"></div>
+        <div class="modal-footer">
+            <button class="btn" data-close="modal-anular-salida">Cancelar</button>
+            <button class="btn btn-primary" id="btn-confirmar-anular-salida"><i class="ti ti-check"></i> Anular salida</button>
         </div>
     </div>
 </div>

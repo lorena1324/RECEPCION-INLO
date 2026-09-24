@@ -312,65 +312,6 @@
           </div>
         </div>
 
-        <!-- Cancelaciones. Los cancelados no entran en ningún
-             promedio ni en el cumplimiento de cita, así que este es
-             el único sitio donde se ven. -->
-        <div class="subtitulo">Operaciones canceladas</div>
-        <div class="cards-resumen">
-          <div class="card-resumen">
-            <div class="card-resumen-valor" id="es-cancel-total">0</div>
-            <div class="card-resumen-label"><i class="ti ti-ban"></i> Canceladas en el periodo</div>
-          </div>
-          <div class="card-resumen">
-            <div class="card-resumen-valor" id="es-cancel-pct">0%</div>
-            <div class="card-resumen-label"><i class="ti ti-percentage"></i> De todo lo esperado</div>
-          </div>
-          <div class="card-resumen">
-            <div class="card-resumen-valor" id="es-cancel-llego">0</div>
-            <div class="card-resumen-label"><i class="ti ti-truck-return"></i> Llegaron y no operaron</div>
-          </div>
-          <div class="card-resumen">
-            <div class="card-resumen-valor" id="es-cancel-nollego">0</div>
-            <div class="card-resumen-label"><i class="ti ti-calendar-x"></i> Nunca llegaron</div>
-          </div>
-        </div>
-        <div class="stat-box full">
-          <h3>Motivos de cancelación</h3>
-          <div id="es-cancel-motivos">Cargando…</div>
-        </div>
-
-        <!-- Impacto de los cancelados sobre la capacidad. El mismo
-             bloque del supervisor, con las mismas cifras: es el
-             cliente quien programa y cancela, y tiene que ver lo
-             que eso le cuesta a la operación. -->
-        <div class="subtitulo">Impacto de las cancelaciones</div>
-        <div class="cards-resumen">
-          <div class="card-resumen">
-            <div class="card-resumen-valor" id="es-cancel-cupos">—</div>
-            <div class="card-resumen-label"><i class="ti ti-chart-pie-off"></i> De la capacidad del periodo</div>
-          </div>
-          <div class="card-resumen">
-            <div class="card-resumen-valor" id="es-cancel-tiempo-muerto">0 min</div>
-            <div class="card-resumen-label"><i class="ti ti-hourglass-off"></i> Tiempo en planta sin operar</div>
-          </div>
-          <div class="card-resumen">
-            <div class="card-resumen-valor" id="es-cancel-muelle-bloqueado">0 min</div>
-            <div class="card-resumen-label"><i class="ti ti-building-warehouse"></i> Muelle bloqueado</div>
-          </div>
-          <div class="card-resumen">
-            <div class="card-resumen-valor" id="es-cancel-equivalente">—</div>
-            <div class="card-resumen-label"><i class="ti ti-truck-off"></i> Operaciones que cabían en ese muelle</div>
-          </div>
-        </div>
-        <div class="stat-box full">
-          <h3>Qué costó cada cancelación</h3>
-          <p class="texto-ayuda">
-            Un cancelado es un cupo de la capacidad del día que se reservó y no produjo. Si además llegó,
-            ocupó patio o muelle sin operar mientras los que sí venían a operar esperaban.
-          </p>
-          <div id="es-cancel-impacto-detalle">Cargando…</div>
-        </div>
-
         <!-- Capacidad instalada y nivel de servicio. Sale de la
              MISMA configuración que usa la portería: si el cliente
              midiera contra otra capacidad, los dos tableros se

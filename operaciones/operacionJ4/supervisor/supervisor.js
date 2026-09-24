@@ -26,6 +26,8 @@ import {
   minimoDe,
   requiereAvanceCompleto,
   avanceCompleto,
+  anularSalida,
+  agregarObservacion,
   cancelarVehiculo,
   crearCitaCancelada,
   corregirRegistro,
@@ -225,7 +227,6 @@ protegerPagina({ rolesPermitidos: ["supervisor"], operacion: OPERACION }).then((
 
     pintarTituloMuelles();
     pintarEtiquetasCampos();
-    pintarBotonCitaCancelada();
     renderTodo();
 
     obtenerTarifas(OPERACION)
@@ -428,6 +429,23 @@ function umbralesDePatio() {
    cerrado, la elección se hacía a ojo — y de ella cuelgan la
    tarifa que se le cobra y las metas de tiempo de toda la bodega.
    ========================================================= */
+
+/* El botón para escribir una novedad, dentro de la propia ficha.
+   Va aquí y no en las tablas porque la ficha se abre desde los tres
+   sitios —la tarjeta del muelle, la tabla de patio y la de
+   registros— y es donde el supervisor ya está mirando el vehículo.
+
+   Sobre un vehículo que ya salió también: una novedad que se
+   recuerda después sigue siendo parte de lo que pasó, y el
+   historial es justamente lo que no se cierra. */
+function bloqueNovedadAccion(r) {
+  return `<div class="avance-selector">
+            <span class="avance-label">¿Pasó algo con este vehículo?</span>
+            <div class="avance-selector-btns">
+              <button class="btn btn-sm" data-observacion="${escapar(r.id)}"><i class="ti ti-message-plus"></i> Agregar novedad</button>
+            </div>
+          </div>`;
+}
 
 function bloqueClasificacion(r) {
 
@@ -1118,9 +1136,130 @@ async function confirmarCitaCancelada() {
   }
 }
 
+let anularSalidaId = null;
+
+function abrirModalAnularSalida(id) {
+  const rec = registros.find((r) => r.id === id);
+  if (!rec || !rec.horaSalida) return;
+  anularSalidaId = id;
+  document.getElementById("anular-salida-info").innerHTML =
+    `<strong>${escapar(rec.placa)}</strong> — ${escapar(rec.conductor || "sin registrar")}` +
+    ` · salida: ${formatearFecha(rec.horaSalida)}`;
+  document.getElementById("anular-salida-motivo").value = "";
+  document.getElementById("anular-salida-errores").style.display = "none";
+  document.getElementById("modal-anular-salida").classList.add("open");
+  document.getElementById("anular-salida-motivo").focus();
+}
+
+async function confirmarAnulacionSalida() {
+  const rec = registros.find((r) => r.id === anularSalidaId);
+  if (!rec) return;
+  const motivo = document.getElementById("anular-salida-motivo").value.trim();
+  const errores = document.getElementById("anular-salida-errores");
+  if (!motivo) {
+    errores.style.display = "";
+    errores.textContent = "Escribe el motivo. Quedará en el historial del vehículo.";
+    return;
+  }
+  const btn = document.getElementById("btn-confirmar-anular-salida");
+  btn.disabled = true;
+  try {
+    await anularSalida(rec.id, rec, motivo, perfilActual.nombre);
+    closeModal("modal-anular-salida");
+    anularSalidaId = null;
+  } catch (error) {
+    console.error("[supervisor] No se pudo anular la salida:", error);
+    errores.style.display = "";
+    errores.textContent = "No se pudo anular la salida. Revisa la conexión e inténtalo de nuevo.";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* =========================================================
+   NOVEDADES DEL VEHÍCULO (observaciones)
+
+   El supervisor es quien está en el muelle con el camión abierto:
+   se entera antes que nadie de que el conductor se fue a almorzar,
+   de que falta el montacargas o de que la mercancía llegó mal
+   estibada. Hasta ahora solo la portería podía dejarlo por escrito
+   —ni siquiera existía el botón aquí, y las reglas tampoco lo
+   dejaban escribir `obsUbicacion`—, así que la novedad se daba de
+   viva voz y no quedaba en ninguna parte.
+
+   Es la MISMA acción del operario (agregarObservacion en
+   vehiculos.js): la última novedad queda en `obsUbicacion` y el
+   texto completo se apila en el historial, que es lo que nunca se
+   pierde. No mueve el vehículo por la planta ni toca el avance.
+   ========================================================= */
+
+let observacionVehiculoId = null;
+
+function abrirModalObservacion(id) {
+
+  const rec = registros.find((r) => r.id === id);
+  if (!rec) return;
+
+  observacionVehiculoId = id;
+
+  document.getElementById("modal-observacion-info").innerHTML =
+    "<strong>" + escapar(rec.placa) + "</strong> — " +
+    escapar(rec.conductor || "sin registrar") + " · " + escapar(getDestino(rec)) +
+    (rec.obsUbicacion
+      ? '<div style="margin-top:6px;font-size:12.5px;color:#9ca3af;">Última novedad: ' +
+        escapar(rec.obsUbicacion) + "</div>"
+      : "");
+
+  // Arranca vacío a propósito: se AGREGA una novedad nueva, no se
+  // edita la anterior — esa ya quedó en el historial.
+  document.getElementById("o-texto").value = "";
+  document.getElementById("observacion-errores").style.display = "none";
+
+  document.getElementById("modal-observacion").classList.add("open");
+  document.getElementById("o-texto").focus();
+}
+
+async function confirmarObservacion() {
+
+  const rec = registros.find((r) => r.id === observacionVehiculoId);
+  if (!rec) return;
+
+  const texto = document.getElementById("o-texto").value.trim();
+  const errores = document.getElementById("observacion-errores");
+
+  if (!texto) {
+    errores.style.display = "";
+    errores.textContent = "Escribe la novedad. Queda en el historial del vehículo.";
+    return;
+  }
+
+  const btn = document.getElementById("btn-confirmar-observacion");
+  btn.disabled = true;
+
+  try {
+    await agregarObservacion(rec.id, texto, perfilActual.nombre);
+    closeModal("modal-observacion");
+    observacionVehiculoId = null;
+
+    // La ficha muestra las novedades: si está abierta, que se vea la
+    // que se acaba de escribir sin cerrarla y volver a abrirla.
+    if (document.getElementById("modal-novedades").classList.contains("open")) {
+      openModalNovedades(rec.id);
+    }
+  } catch (error) {
+    console.error("[supervisor] No se pudo guardar la novedad:", error);
+    errores.style.display = "";
+    errores.textContent = "No se pudo guardar la novedad. Revisa la conexión e inténtalo de nuevo.";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function iniciarCancelaciones() {
 
   document.getElementById("btn-confirmar-cancelar").addEventListener("click", confirmarCancelacion);
+  document.getElementById("btn-confirmar-observacion").addEventListener("click", confirmarObservacion);
+  document.getElementById("btn-confirmar-anular-salida").addEventListener("click", confirmarAnulacionSalida);
   document.getElementById("btn-confirmar-cita").addEventListener("click", confirmarCitaCancelada);
   document.getElementById("btn-cita-cancelada").addEventListener("click", abrirModalCitaCancelada);
 
@@ -1129,6 +1268,10 @@ function iniciarCancelaciones() {
   document.body.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-cancelar]");
     if (btn) abrirModalCancelar(btn.getAttribute("data-cancelar"));
+    const btnAnular = e.target.closest("[data-anular-salida]");
+    if (btnAnular) abrirModalAnularSalida(btnAnular.getAttribute("data-anular-salida"));
+    const btnObs = e.target.closest("[data-observacion]");
+    if (btnObs) abrirModalObservacion(btnObs.getAttribute("data-observacion"));
   });
 }
 
@@ -1325,14 +1468,6 @@ async function confirmarCorreccion() {
     btn.disabled = false;
   }
 }
-
-/* El botón de registrar una cita cancelada solo existe donde la
-   bodega maneja cancelaciones. */
-function pintarBotonCitaCancelada() {
-  const btn = document.getElementById("btn-cita-cancelada");
-  if (btn) btn.style.display = manejaCancelaciones() ? "" : "none";
-}
-
 
 /* =========================================================
    DASHBOARD
@@ -1708,6 +1843,7 @@ function openModalNovedades(id) {
     // Justo debajo del bloque de Cobro/Pago con el que cierra la
     // ficha: el dato y el botón que lo cambia, juntos.
     bloqueCobroAccion(rec) +
+    bloqueNovedadAccion(rec) +
     bloqueClasificacion(rec) +
     seccionAutorizacion(rec) +
     `<div class="detail-section-title">Novedades</div>${histHtml}`;
@@ -1923,24 +2059,28 @@ function filaRegistro(r, rank) {
       <td>
         <button class="btn btn-sm" data-novedades="${r.id}"><i class="ti ti-info-circle"></i></button>
         <button class="btn btn-sm" data-editar="${escapar(r.id)}" title="Corregir los datos del vehículo"><i class="ti ti-edit"></i></button>
+        ${botonAnularSalida(r)}
         ${botonCancelar(r)}
       </td>
     </tr>`;
 }
 
-/* El botón solo aparece donde hay algo que cancelar: en una bodega
-   que maneja cancelaciones y sobre un vehículo que sigue adentro.
-   Uno que ya salió no se cancela hacia atrás — su operación se
-   hizo, y borrarla sería reescribir el turno. */
-function botonCancelar(r) {
-  if (!manejaCancelaciones() || r.horaSalida) return "";
-  return `<button class="btn btn-sm btn-cancelar" data-cancelar="${escapar(r.id)}" title="Marcar la operación como cancelada">
-            <i class="ti ti-ban"></i> Cancelar
+function botonAnularSalida(r) {
+  if (!r.horaSalida || estaCancelado(r)) return "";
+  return `<button class="btn btn-sm" data-anular-salida="${escapar(r.id)}" title="Anular la salida y reabrir el vehículo">
+            <i class="ti ti-arrow-back-up"></i> Anular salida
           </button>`;
 }
 
-function manejaCancelaciones() {
-  return !!(configBodega && configBodega.manejaCancelaciones);
+/* El botón solo aparece donde hay algo que cancelar: sobre un
+   vehículo que sigue adentro. Uno que ya salió no se cancela hacia
+   atrás — su operación se hizo, y borrarla sería reescribir el
+   turno. */
+function botonCancelar(r) {
+  if (r.horaSalida) return "";
+  return `<button class="btn btn-sm btn-cancelar" data-cancelar="${escapar(r.id)}" title="Marcar la operación como cancelada">
+            <i class="ti ti-ban"></i> Cancelar
+          </button>`;
 }
 
 /* =========================================================

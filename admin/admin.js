@@ -40,6 +40,7 @@ import {
     avanzarAFaseCargue,
     autorizarSalidaAnticipada,
     puedeAutorizarSalidaAnticipada,
+    anularSalida,
     cancelarVehiculo,
     crearCitaCancelada,
     corregirRegistro,
@@ -234,10 +235,6 @@ function rotulo(campo) {
    vehículo y la hoja de Excel. */
 function etiquetasCampos() {
     return { conductor: rotulo('conductor'), cedula: rotulo('cedula') };
-}
-
-function manejaCancelaciones() {
-    return !!(cfgGuardada && cfgGuardada.manejaCancelaciones);
 }
 
 /* Si la bodega abierta cobra. Sale de la configuración GUARDADA y
@@ -1413,6 +1410,53 @@ async function confirmarCorreccion() {
     }
 }
 
+var anularSalidaId = null;
+
+function openModalAnularSalida(id) {
+    var rec = registros.find(function (r) { return r.id === id; });
+    if (!rec || !rec.horaSalida) return;
+
+    anularSalidaId = id;
+    document.getElementById('anular-salida-info').innerHTML =
+        '<strong>' + escapar(rec.placa) + '</strong> — ' + escapar(rec.conductor || 'sin registrar') +
+        ' · salida: ' + fmtDt(rec.horaSalida);
+    document.getElementById('anular-salida-motivo').value = '';
+    document.getElementById('anular-salida-errores').style.display = 'none';
+    document.getElementById('modal-anular-salida').classList.add('open');
+    document.getElementById('anular-salida-motivo').focus();
+}
+
+async function confirmarAnulacionSalida() {
+    var rec = registros.find(function (r) { return r.id === anularSalidaId; });
+    if (!rec) return;
+
+    var motivo = document.getElementById('anular-salida-motivo').value.trim();
+    var errores = document.getElementById('anular-salida-errores');
+    if (!motivo) {
+        errores.style.display = '';
+        errores.textContent = 'Escribe el motivo. Quedará en el historial del vehículo.';
+        return;
+    }
+
+    var btn = document.getElementById('btn-confirmar-anular-salida');
+    btn.disabled = true;
+    setSyncStatus('syncing');
+    try {
+        await anularSalida(rec.id, rec, motivo, perfilActual.nombre);
+        setSyncStatus('ok');
+        toast('Salida anulada y vehículo reabierto', 'green', 'ti-arrow-back-up');
+        closeModal('modal-anular-salida');
+        anularSalidaId = null;
+    } catch (error) {
+        console.error('Error al anular la salida:', error);
+        setSyncStatus('error');
+        errores.style.display = '';
+        errores.textContent = 'No se pudo anular la salida. Revisa tu conexión e inténtalo de nuevo.';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 function badgeEstado(r) {
     // Va antes que "Salió" porque un cancelado también trae hora de
     // salida: preguntando al revés se leerían todos como despachos
@@ -1429,12 +1473,12 @@ function badgeEstado(r) {
     return '<span class="badge badge-en-patio">Activo</span>';
 }
 
-/* El botón solo aparece donde hay algo que cancelar: en una bodega
-   que maneja cancelaciones y sobre un vehículo que sigue adentro.
-   Uno que ya salió no se cancela hacia atrás — su operación se
-   hizo, y borrarla sería reescribir el turno. */
+/* El botón solo aparece donde hay algo que cancelar: sobre un
+   vehículo que sigue adentro. Uno que ya salió no se cancela hacia
+   atrás — su operación se hizo, y borrarla sería reescribir el
+   turno. */
 function botonCancelar(r) {
-    if (!manejaCancelaciones() || r.horaSalida) return '';
+    if (r.horaSalida) return '';
     return '<button class="btn btn-sm btn-cancelar" data-cancelar="' + r.id +
            '" title="Marcar la operación como cancelada"><i class="ti ti-ban"></i></button>';
 }
@@ -1544,6 +1588,7 @@ function renderRegistros() {
             '<td>' + (r.operadorEntrada || '—') + '</td>' +
             '<td><div class="td-actions">' +
                 (!r.horaSalida ? '<button class="btn btn-sm btn-success" data-salida="' + r.id + '"' + attrsBotonSalida(r) + '><i class="ti ti-logout"></i></button>' : '') +
+                (r.horaSalida && !estaCancelado(r) ? '<button class="btn btn-sm" data-anular-salida="' + r.id + '" title="Anular la salida y reabrir el vehículo"><i class="ti ti-arrow-back-up"></i></button>' : '') +
                 botonCancelar(r) +
                 botonCobrar(r) +
                 '<button class="btn btn-sm" data-editar="' + r.id + '" title="Mover de ubicación"><i class="ti ti-arrows-move"></i></button>' +
@@ -2222,14 +2267,6 @@ async function confirmarCitaCancelada() {
     }
 }
 
-/* El botón de registrar una cita cancelada solo existe donde la
-   bodega maneja cancelaciones. */
-function pintarBotonCitaCancelada() {
-    var btn = document.getElementById('btn-cita-cancelada');
-    if (btn) btn.style.display = manejaCancelaciones() ? '' : 'none';
-}
-
-
 /* =========================================================
    MODAL: DETALLE
    ========================================================= */
@@ -2818,7 +2855,6 @@ function cfgEditable(config) {
         muelles: config.muelles,
         horaCorte: config.horaCorte,
         campos: config.campos,
-        manejaCancelaciones: config.manejaCancelaciones,
         cobraVehiculos: config.cobraVehiculos,
         limitePatio: config.limitePatio,
         minimoCargue: config.minimoCargue,
@@ -2868,7 +2904,6 @@ async function cargarConfiguracion() {
         // tamaño y los promedios del día, otro corte.
         pintarEtiquetasOperacion();
         pintarEtiquetasCampos();
-        pintarBotonCitaCancelada();
         renderTodo();
 
     } catch (error) {
@@ -2942,8 +2977,6 @@ function renderConfiguracion() {
     document.getElementById('cfg-formato-conductor').value = cfgBorrador.campos.conductor.formato;
     document.getElementById('cfg-campo-cedula').value = cfgBorrador.campos.cedula.etiqueta;
     document.getElementById('cfg-formato-cedula').value = cfgBorrador.campos.cedula.formato;
-
-    document.getElementById('cfg-cancelaciones').checked = !!cfgBorrador.manejaCancelaciones;
 
     document.getElementById('cfg-cobra').checked = !!cfgBorrador.cobraVehiculos;
     document.getElementById('cfg-iva').value = cfgTarifas.ivaPorcentaje;
@@ -3689,11 +3722,6 @@ function wireConfiguracion() {
         });
     });
 
-    document.getElementById('cfg-cancelaciones').addEventListener('change', function (e) {
-        if (!cfgBorrador) return;
-        cfgBorrador.manejaCancelaciones = e.target.checked;
-    });
-
     // El IVA es uno solo para toda la bodega: al cambiarlo se
     // recalculan los derivados de las nueve tarjetas.
     document.getElementById('cfg-iva').addEventListener('input', function (e) {
@@ -3832,6 +3860,9 @@ function wireDelegatedClicks() {
         var btnCorregir = e.target.closest('[data-corregir]');
         if (btnCorregir) { openModalCorregir(btnCorregir.getAttribute('data-corregir')); return; }
 
+        var btnAnularSalida = e.target.closest('[data-anular-salida]');
+        if (btnAnularSalida) { openModalAnularSalida(btnAnularSalida.getAttribute('data-anular-salida')); return; }
+
         var btnCobrar = e.target.closest('[data-cobrar]');
         if (btnCobrar) { openModalCobro(btnCobrar.getAttribute('data-cobrar')); return; }
 
@@ -3958,6 +3989,7 @@ function iniciarPagina(perfil) {
     // que solo tenía el supervisor de J4 y que ahora también ejerce
     // el administrador, en cualquiera de las tres bodegas.
     document.getElementById('btn-confirmar-correccion').addEventListener('click', confirmarCorreccion);
+    document.getElementById('btn-confirmar-anular-salida').addEventListener('click', confirmarAnulacionSalida);
     wireCobros();
 
     // Los campos de hora del modal de corrección: mismo saneamiento

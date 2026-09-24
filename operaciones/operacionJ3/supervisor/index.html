@@ -195,9 +195,8 @@
           <input type="date" id="f-fecha">
 
           <!-- Un vehículo que nunca llegó no puede registrarlo la
-               portería, porque no pasó por ahí. Solo se ve donde la
-               bodega maneja cancelaciones. -->
-          <button class="btn-primario" id="btn-cita-cancelada" style="display:none;">
+               portería, porque no pasó por ahí: es del supervisor. -->
+          <button class="btn-primario" id="btn-cita-cancelada">
             <i class="ti ti-calendar-x"></i> Registrar cita cancelada
           </button>
         </div>
@@ -280,6 +279,67 @@
             <div class="card-resumen-valor" id="es-total-general">0</div>
             <div class="card-resumen-label"><i class="ti ti-database"></i> Vehículos registrados (general)</div>
           </div>
+        </div>
+
+        <!-- Cancelaciones. Los cancelados no entran en ningún
+             promedio ni en el cumplimiento de cita, así que este es
+             el único sitio donde se ven. Los pinta la misma función
+             compartida que en J4 (renderCancelaciones en
+             shared/services/estadisticas.js). -->
+        <div class="subtitulo">Operaciones canceladas</div>
+        <div class="cards-resumen">
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-total">0</div>
+            <div class="card-resumen-label"><i class="ti ti-ban"></i> Canceladas en el periodo</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-pct">0%</div>
+            <div class="card-resumen-label"><i class="ti ti-percentage"></i> De todo lo esperado</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-llego">0</div>
+            <div class="card-resumen-label"><i class="ti ti-truck-return"></i> Llegaron y no operaron</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-nollego">0</div>
+            <div class="card-resumen-label"><i class="ti ti-calendar-x"></i> Nunca llegaron</div>
+          </div>
+        </div>
+        <div class="stat-box full">
+          <h3>Motivos de cancelación</h3>
+          <div id="es-cancel-motivos">Cargando…</div>
+        </div>
+
+        <!-- Impacto de los cancelados: cuánto le costaron a la
+             operación, contra la capacidad diaria configurada y en
+             tiempo de planta ocupado sin operar. Ver
+             renderImpactoCancelados() en estadisticas.js. -->
+        <div class="subtitulo">Impacto de las cancelaciones</div>
+        <div class="cards-resumen">
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-cupos">—</div>
+            <div class="card-resumen-label"><i class="ti ti-chart-pie-off"></i> De la capacidad del periodo</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-tiempo-muerto">0 min</div>
+            <div class="card-resumen-label"><i class="ti ti-hourglass-off"></i> Tiempo en planta sin operar</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-muelle-bloqueado">0 min</div>
+            <div class="card-resumen-label"><i class="ti ti-building-warehouse"></i> Muelle bloqueado</div>
+          </div>
+          <div class="card-resumen">
+            <div class="card-resumen-valor" id="es-cancel-equivalente">—</div>
+            <div class="card-resumen-label"><i class="ti ti-truck-off"></i> Operaciones que cabían en ese muelle</div>
+          </div>
+        </div>
+        <div class="stat-box full">
+          <h3>Qué costó cada cancelación</h3>
+          <p class="texto-ayuda">
+            Un cancelado es un cupo de la capacidad del día que se reservó y no produjo. Si además llegó,
+            ocupó patio o muelle sin operar mientras los que sí venían a operar esperaban.
+          </p>
+          <div id="es-cancel-impacto-detalle">Cargando…</div>
         </div>
 
         <div class="stats-grid">
@@ -482,10 +542,59 @@
   </div>
 </div>
 
+<!-- ANULAR UNA SALIDA YA REGISTRADA -->
+<div class="modal-backdrop" id="modal-anular-salida">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="ti ti-arrow-back-up"></i> Anular salida</div>
+      <button class="modal-close" data-close="modal-anular-salida"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-info-box" id="anular-salida-info"></div>
+    <p class="texto-ayuda">El vehículo volverá a quedar activo. La salida original y este motivo quedarán registrados en el historial.</p>
+    <div class="form-group full">
+      <label for="anular-salida-motivo">Motivo *</label>
+      <textarea id="anular-salida-motivo" rows="3" placeholder="Por qué se debe reabrir el vehículo"></textarea>
+    </div>
+    <div class="cobro-errores" id="anular-salida-errores" style="display:none;"></div>
+    <div class="modal-footer">
+      <button class="btn" data-close="modal-anular-salida">Cancelar</button>
+      <button class="btn btn-primario" id="btn-confirmar-anular-salida"><i class="ti ti-check"></i> Anular salida</button>
+    </div>
+  </div>
+</div>
+
 <!-- CANCELAR UN VEHÍCULO QUE YA ENTRÓ
 
      El motivo es obligatorio: una cifra de cancelados sin razones
      detrás no le sirve a nadie para corregir nada. -->
+<!-- NOVEDAD DEL VEHÍCULO
+     El supervisor está en el muelle viendo el camión: es quien
+     primero se entera de que el conductor se fue a almorzar o de
+     que la mercancía llegó mal estibada. Hasta ahora solo la
+     portería podía dejarlo por escrito. Es el mismo modal del
+     operario (ver operador/index.html) y escribe lo mismo:
+     `obsUbicacion` más una entrada en el historial. -->
+<div class="modal-backdrop" id="modal-observacion">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="ti ti-message-plus"></i> Agregar novedad</div>
+      <button class="modal-close" data-close="modal-observacion"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-info-box" id="modal-observacion-info"></div>
+      <div class="form-group">
+        <label for="o-texto">Novedad *</label>
+        <textarea id="o-texto" rows="3" placeholder="Qué está pasando con este vehículo…"></textarea>
+      </div>
+      <div class="cobro-errores" id="observacion-errores" style="display:none;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" data-close="modal-observacion">Cancelar</button>
+      <button class="btn btn-primario" id="btn-confirmar-observacion"><i class="ti ti-check"></i> Guardar novedad</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-cancelar">
   <div class="modal">
     <div class="modal-header">

@@ -182,11 +182,6 @@ const POR_BODEGA = {
             cedula: { etiqueta: "Número de cita", formato: "texto" }
         },
 
-        // J4 es la única bodega que hoy cancela operaciones: la
-        // portería registra citas que no llegaron y el supervisor
-        // marca vehículos que se fueron sin cargar.
-        manejaCancelaciones: true,
-
         // Los muelles de J4 no se numeran desde 1: dentro de la
         // planta son el 9, el 10 y el 11. Ver `primerMuelle`.
         primerMuelle: 9,
@@ -276,13 +271,6 @@ export function configPorDefecto(operacion) {
            CAMPOS_POR_BODEGA, más arriba. */
         campos: camposPorDefecto(operacion),
 
-        /* Vehículos cancelados. Solo donde la operación lo maneja:
-           en las demás bodegas el botón no aparece, para no ofrecer
-           un estado que nadie va a usar y que ensuciaría los
-           indicadores con una categoría siempre vacía. Hoy solo J4
-           — ver POR_BODEGA. */
-        manejaCancelaciones: defectoDeBodega(operacion, "manejaCancelaciones", false),
-
         /* Si esta bodega pregunta cómo viene la mercancía. Donde
            está en false no se ofrece la opción en ninguna pantalla
            y las metas se miden contra un solo número, que es como
@@ -371,7 +359,6 @@ function normalizar(operacion, datos) {
         primerMuelle: numeroODefecto(datos.primerMuelle, base.primerMuelle),
         horaCorte: numeroODefecto(datos.horaCorte, base.horaCorte),
         campos: normalizarCampos(datos.campos, base.campos),
-        manejaCancelaciones: booleanODefecto(datos.manejaCancelaciones, base.manejaCancelaciones),
         distingueModalidad: booleanODefecto(datos.distingueModalidad, base.distingueModalidad),
         cobraVehiculos: booleanODefecto(datos.cobraVehiculos, base.cobraVehiculos),
         limitePatio: numeroODefecto(datos.limitePatio, base.limitePatio),
@@ -953,7 +940,6 @@ export async function guardarConfig(operacion, config, admin) {
         primerMuelle: limpio.primerMuelle,
         horaCorte: limpio.horaCorte,
         campos: limpio.campos,
-        manejaCancelaciones: limpio.manejaCancelaciones,
         distingueModalidad: limpio.distingueModalidad,
         cobraVehiculos: limpio.cobraVehiculos,
         limitePatio: limpio.limitePatio,
