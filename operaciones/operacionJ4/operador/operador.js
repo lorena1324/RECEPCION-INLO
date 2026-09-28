@@ -75,6 +75,11 @@ import {
 import { nowLocal, today, fmtDt, formatDuration, fechaDentroDeRango, todayOperativo } from "../../../shared/utils/tiempos.js";
 import { exportarExcel } from "../../../shared/utils/excel.js";
 
+
+import { conectarBotonTema } from "../../../shared/utils/tema.js";
+import { iniciarAnimaciones } from "../../../shared/components/animaciones.js";
+import { crearTableroMuelles } from "../../../shared/components/tableroMuelles.js";
+import { crearRegistroActividad } from "../../../shared/components/registroActividad.js";
 const OPERACION = "J4";
 const RUTA_LOGIN = "../../../index.html";
 
@@ -149,6 +154,43 @@ function bodegaCobra() {
 function umbralesDePatio() {
     return configBodega ? umbralesPatio(configBodega) : UMBRALES_PATIO_POR_DEFECTO;
 }
+
+
+/* =========================================================
+   TABLERO DE MUELLES (componente compartido)
+
+   Antes esto armaba una cadena de HTML y la volcaba con innerHTML
+   en cada snapshot de Firestore: las tarjetas destruidas y
+   recreadas cada vez que cambiaba cualquier vehículo de la bodega.
+   Ahora reconcilia — cada muelle conserva su nodo y solo cambia lo
+   que cambió. Ver shared/components/tableroMuelles.js.
+   ========================================================= */
+
+let tableroMuelles = null;
+let registroActividad = null;
+
+/* Perezoso: la primera pintada los crea. Así no hay que acordarse
+   de arrancarlos en el sitio exacto del init de cada rol. */
+function componentes() {
+    if (!tableroMuelles) {
+        iniciarAnimaciones();
+        tableroMuelles = crearTableroMuelles(document.getElementById('muelles-grid'), {
+            acciones: accionesDeMuelle,
+            onSeleccion: openModalDetalle
+        });
+        registroActividad = crearRegistroActividad(document.getElementById('registro-actividad'));
+    }
+    return tableroMuelles;
+}
+
+/* Los botones de una tarjeta. Se los pasa el panel al componente,
+   que sabe dónde ponerlos pero no cuáles son. */
+function accionesDeMuelle(rec) {
+    return '<button class="btn btn-sm btn-primary" data-editar="' + rec.id + '">Mover</button>' +
+           '<button class="btn btn-sm" data-observacion="' + rec.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
+           '<button class="btn btn-sm btn-danger" data-salida="' + rec.id + '"' + attrsBotonSalida(rec) + '>Salida</button>';
+}
+
 
 function nivelMuelle(r) {
     return nivelContraMeta(
@@ -475,40 +517,15 @@ function renderDashboard() {
     // puede estar perfecto en una y disparado en la otra.
     pintarAlertaMuelle(enMuelle);
 
-    // Grilla de muelles
-    // Object.keys y no `numerosMuelle`: si un vehículo quedó en un
-    // muelle que ya no está en la numeración, getMuellesOcupacion lo
-    // agrega al final y aquí se sigue viendo hasta que salga.
-    var ocupacion = getMuellesOcupacion(enMuelle, numerosMuelle);
-    var htmlGrid = '';
-    Object.keys(ocupacion).forEach(function (n) {
-        var rec = ocupacion[n];
-
-        // La alerta del muelle sale de la meta de la tipología del
-        // vehículo, no de un umbral igual para todos: una MULA 40
-        // arrumada no debería tardar lo mismo que una paletizada.
-        var nivel = rec ? nivelMuelle(rec) : 'normal';
-
-        htmlGrid += '<div class="muelle-card ' + (rec ? 'ocupado' : 'libre') +
-            (nivel !== 'normal' ? ' muelle-' + nivel : '') + '">' +
-            '<div class="muelle-card-top">' +
-                '<span class="muelle-card-num">Muelle ' + n + '</span>' +
-                '<span class="muelle-card-status ' + (rec ? 'ocupado' : 'libre') + '">' + (rec ? 'OCUPADO' : 'LIBRE') + '</span>' +
-            '</div>' +
-            (rec ? avisoMetaMuelle(rec) : '') +
-            '<div class="muelle-card-body">' +
-                (rec
-                    ? '<div class="muelle-card-placa">' + rec.placa + '</div><div>' + rec.conductor + '</div>' +
-                      renderAvanceSoloLectura(rec, false) +
-                      '<div style="margin-top:6px;display:flex;gap:4px;">' +
-                        '<button class="btn btn-sm btn-primary" data-editar="' + rec.id + '">Mover</button>' +
-                        '<button class="btn btn-sm" data-observacion="' + rec.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
-                        '<button class="btn btn-sm btn-danger" data-salida="' + rec.id + '"' + attrsBotonSalida(rec) + '>Salida</button>' +
-                      '</div>'
-                    : '<div class="muelle-card-empty">Disponible</div>') +
-            '</div></div>';
+    /* Grilla de muelles: ahora la reconcilia el componente
+       compartido en vez de reconstruirla entera. */
+    componentes().actualizar({
+        numeros: numerosMuelle && numerosMuelle.length
+            ? numerosMuelle
+            : Array.from({ length: numMuelles }, function (_, i) { return i + 1; }),
+        registros: enMuelle,
+        config: configBodega
     });
-    document.getElementById('muelles-grid').innerHTML = htmlGrid;
 
     // Tabla de patio
     var tbody = document.getElementById('dash-table');
@@ -530,6 +547,10 @@ function renderDashboard() {
             '</tr>';
         }).join('');
     }
+
+    /* Actividad reciente. Recibe TODOS los registros y no solo los
+       activos: lo último que pasó incluye las salidas. */
+    registroActividad.actualizar(registros);
 }
 
 /* =========================================================
@@ -1405,6 +1426,11 @@ function wireDelegatedClicks() {
    ========================================================= */
 
 function iniciarPagina(perfil) {
+    /* El interruptor de claro/oscuro. El tema ya lo aplicó el
+       script en línea del <head> antes del primer pintado; esto
+       solo deja el botón escuchando y con el icono que toca. */
+    conectarBotonTema(document.getElementById('btn-tema'));
+
 
     perfilActual = perfil;
 

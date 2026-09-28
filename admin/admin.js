@@ -119,6 +119,57 @@ import { nowLocal, today, fmtDt, formatDuration, fechaDentroDeRango, todayOperat
 import { exportarExcel } from "../shared/utils/excel.js";
 import { renderPanelEstadisticas, renderChartFranjaHoraria } from "../shared/services/estadisticas.js";
 
+
+import { conectarBotonTema } from "../shared/utils/tema.js";
+
+import { iniciarAnimaciones } from "../shared/components/animaciones.js";
+import { crearTableroMuelles } from "../shared/components/tableroMuelles.js";
+
+
+/* =========================================================
+   TABLERO DE MUELLES (componente compartido)
+
+   El mismo que montan los nueve paneles de operación. Antes esto
+   armaba una cadena de HTML y la volcaba con innerHTML en cada
+   snapshot: las tarjetas destruidas y recreadas cada vez que
+   cambiaba cualquier vehículo. Ahora reconcilia — cada muelle
+   conserva su nodo. Ver shared/components/tableroMuelles.js.
+
+   El selector de modalidad y el avance EDITABLE siguen siendo los
+   de este panel: van por el hueco `extras` sin tocarlos.
+
+   OJO CON EL CAMBIO DE BODEGA: aquí la numeración cambia bajo los
+   pies (J3 son el 1 al 8, J4 el 9 al 11). No hace falta hacer
+   nada — el componente quita las tarjetas que ya no están en la
+   lista y crea las nuevas. Es el mismo diff de siempre.
+   ========================================================= */
+
+let tableroMuelles = null;
+
+function tablero() {
+    if (!tableroMuelles) {
+        iniciarAnimaciones();
+        tableroMuelles = crearTableroMuelles(document.getElementById('muelles-grid'), {
+            extras: extrasDeMuelle,
+            acciones: accionesDeMuelle,
+            onSeleccion: openModalDetalle,
+            // Este panel dibuja su propio avance en `extras`; sin
+            // esto la tarjeta enseñaría dos.
+            mostrarAvance: false
+        });
+    }
+    return tableroMuelles;
+}
+
+function extrasDeMuelle(rec) {
+    return selectorModalidad(rec) + renderAvance(rec);
+}
+
+function accionesDeMuelle(rec) {
+    return '<button class="btn btn-sm btn-primary" data-editar="' + rec.id + '">Mover</button>' +
+           '<button class="btn btn-sm" data-observacion="' + rec.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
+           '<button class="btn btn-sm btn-danger" data-salida="' + rec.id + '"' + attrsBotonSalida(rec) + '>Salida</button>';
+}
 /* Bodegas que administra este panel. El admin no está atado a una
    sola operación: el selector del topbar cambia `operacionActual` y
    todo el panel (muelles, registros, estadísticas) se recarga.
@@ -573,41 +624,27 @@ function renderDashboard() {
     // propio administrador le fijó a su tipología en Configuración.
     pintarAlertaMuelle(enMuelle);
 
-    // Grilla de muelles
-    // Object.keys y no la lista: si un vehículo quedó en un muelle
-    // que ya no está en la numeración, getMuellesOcupacion lo agrega
-    // al final y aquí se sigue viendo hasta que salga.
-    var ocupacion = getMuellesOcupacion(enMuelle, numerosMuelle());
-    var htmlGrid = '';
-    Object.keys(ocupacion).forEach(function (n) {
-        var rec = ocupacion[n];
+    /* Grilla de muelles.
 
-        // La alerta del muelle sale de la meta de la tipología del
-        // vehículo, no de un umbral igual para todos.
-        var nivel = rec ? nivelMuelle(rec) : 'normal';
-
-        htmlGrid += '<div class="muelle-card ' + (rec ? 'ocupado' : 'libre') +
-            (nivel !== 'normal' ? ' muelle-' + nivel : '') + '">' +
-            '<div class="muelle-card-top">' +
-                '<span class="muelle-card-num">Muelle ' + n + '</span>' +
-                '<span class="muelle-card-status ' + (rec ? 'ocupado' : 'libre') + '">' + (rec ? 'OCUPADO' : 'LIBRE') + '</span>' +
-            '</div>' +
-            (rec ? avisoMetaMuelle(rec) : '') +
-            '<div class="muelle-card-body">' +
-                (rec
-                    ? '<div class="muelle-card-placa">' + rec.placa + '</div><div>' + rec.conductor + '</div>' +
-                      selectorModalidad(rec) +
-                      renderAvance(rec) +
-                      '<div style="margin-top:6px;display:flex;gap:4px;">' +
-                        '<button class="btn btn-sm btn-primary" data-editar="' + rec.id + '">Mover</button>' +
-                        '<button class="btn btn-sm" data-observacion="' + rec.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
-                        '<button class="btn btn-sm btn-danger" data-salida="' + rec.id + '"' + attrsBotonSalida(rec) + '>Salida</button>' +
-                        '<button class="btn btn-sm" data-detalle="' + rec.id + '"><i class="ti ti-info-circle"></i></button>' +
-                      '</div>'
-                    : '<div class="muelle-card-empty">Disponible</div>') +
-            '</div></div>';
+       La lista de números sale de la configuración MÁS los muelles
+       donde de verdad hay un vehículo. Ese añadido no es defensivo
+       de más: si el administrador baja el número de muelles con un
+       camión todavía dentro del que quitó, sin esto la tarjeta
+       desaparecería del tablero y el vehículo se volvería invisible
+       hasta que alguien lo despachara desde Registros. Era lo que
+       resolvía el Object.keys() de la versión anterior. */
+    var numeros = numerosMuelle().map(String);
+    enMuelle.forEach(function (r) {
+        if (r.numeroMuelle == null || r.numeroMuelle === '') return;
+        var n = String(r.numeroMuelle);
+        if (numeros.indexOf(n) === -1) numeros.push(n);
     });
-    document.getElementById('muelles-grid').innerHTML = htmlGrid;
+
+    tablero().actualizar({
+        numeros: numeros,
+        registros: enMuelle,
+        config: cfgGuardada
+    });
 
     // Tabla de patio
     var tbody = document.getElementById('dash-table');
@@ -3915,6 +3952,11 @@ function wireDelegatedClicks() {
    ========================================================= */
 
 function iniciarPagina(perfil) {
+    /* El interruptor de claro/oscuro. El tema ya lo aplicó el
+       script en línea del <head> antes del primer pintado; esto
+       solo deja el botón escuchando y con el icono que toca. */
+    conectarBotonTema(document.getElementById('btn-tema'));
+
 
     perfilActual = perfil;
 

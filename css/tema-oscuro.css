@@ -1,0 +1,173 @@
+/* =========================================================
+   INLOTRANS — Tema oscuro
+
+   Se activa con  <html data-tema="oscuro">  y se apaga quitando
+   el atributo. Lo escribe shared/utils/tema.js, y el interruptor
+   está en la barra superior, junto al nombre del operador.
+
+   ── POR QUÉ ESTÁ EN UN ARCHIVO APARTE ──
+
+   No va dentro de base.css aunque sea igual de compartido. base.css
+   lo cargan los cuatro roles sin excepción; esta hoja la carga
+   quien ya tenga el interruptor puesto. Hoy es portería. Cuando
+   supervisor, admin o clientes lo quieran, les basta con añadir el
+   <link> y el botón — no hay nada que migrar aquí.
+
+   ── POR QUÉ NO TOCA --brand-* ──
+
+   El color de bodega (J3 azul, J4 naranja, B9 verde) sigue saliendo
+   de base.css y del `data-operacion` del <html>. En oscuro se
+   mantiene: la bodega abierta se reconoce por lo mismo en los dos
+   temas, que es justamente lo que evita registrar un camión en la
+   operación equivocada. Lo único que cambia es sobre qué fondo se
+   lee, y para eso está `--brand-claro`, la versión levantada que
+   usan los iconos y los textos de marca sobre fondo casi negro.
+
+   ── POR QUÉ SELECTOR DE ATRIBUTO Y NO :root ──
+
+   `html[data-tema="oscuro"]` tiene más especificidad (0,1,1) que
+   el `:root` (0,1,0) donde las hojas de cada rol declaran sus
+   valores claros. Así el oscuro gana SIEMPRE, sin depender del
+   orden de los <link> ni de un !important. Añadir esta hoja en
+   cualquier posición funciona igual.
+
+   ── POR QUÉ LOS VALORES SON LITERALES ──
+
+   Nada aquí se declara como `var(--otro-token)`. Un `var()` dentro
+   de una variable se resuelve donde la variable se DECLARA, no
+   donde se usa: encadenarlos daría tokens que en oscuro se quedan
+   resolviendo contra el valor claro, y media pantalla se vería del
+   tema anterior sin ningún error visible. Es la misma trampa que
+   base.css documenta para `--blue-*`.
+   ========================================================= */
+
+html[data-tema="oscuro"] {
+
+    /* ── Superficies y texto ── */
+    --surface:   #12151C;
+    --surface-2: #0B0D12;
+    --surface-3: #1B1F29;
+
+    --text-1: #EDF0F5;
+    --text-2: #A6AEBF;
+    --text-3: #6E7788;
+
+    --border:    rgba(255,255,255,0.09);
+    --border-md: rgba(255,255,255,0.16);
+
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.5);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.55);
+
+    /* ── El semáforo ──
+       Significan lo mismo que en claro —en meta, atención, pasado
+       de meta—; lo que cambia es la luminosidad. Los tonos de
+       base.css están calibrados para leerse sobre blanco y sobre
+       fondo casi negro quedan apagados. */
+    --sem-ok:    #3DD68C;
+    --sem-media: #F2B544;
+    --sem-alta:  #FF6B6B;
+    --sem-libre: #3A4254;
+
+    /* Fondos suaves del semáforo, para badges y franjas. En claro
+       son los --*-50 de base.css; aquí tienen que ser translúcidos
+       para no tapar la superficie de debajo. */
+    --sem-ok-suave:    rgba(61, 214, 140, 0.13);
+    --sem-media-suave: rgba(242, 181, 68, 0.13);
+    --sem-alta-suave:  rgba(255, 107, 107, 0.13);
+
+    /* ── Las escalas de base.css, en oscuro ──
+       components.css y layout.css llaman a estos tokens por su
+       nombre en decenas de sitios (badges, tablas, banners). Si no
+       se redefinieran, todo eso seguiría pintando fondos claros
+       sobre el tema oscuro. */
+    --gray-50:  #1B1F29;
+    --gray-100: #262B37;
+    --gray-200: #333A49;
+    --gray-400: #6E7788;
+    --gray-600: #A6AEBF;
+    --gray-800: #EDF0F5;
+
+    --green-50:  rgba(61, 214, 140, 0.13);
+    --green-600: #3DD68C;
+    --green-800: #86E9B8;
+
+    --amber-50:  rgba(242, 181, 68, 0.13);
+    --amber-600: #F2B544;
+    --amber-800: #F8D08A;
+
+    --red-50:  rgba(255, 107, 107, 0.13);
+    --red-600: #FF6B6B;
+
+    --teal-50:  rgba(45, 212, 191, 0.13);
+    --teal-600: #2DD4BF;
+    --teal-800: #7FE7DA;
+}
+
+
+/* ── El color de marca, levantado ─────────────────────────────
+   El azul de J3 (#12539E) y el verde de B9 (#1F6B33) sobre un
+   fondo casi negro pierden casi toda su presencia: son colores
+   elegidos para contrastar contra blanco. `--brand-claro` es la
+   versión que sí se lee, y la usan los iconos y los textos de
+   marca de esta hoja en adelante.
+
+   Se declara por bodega y no con un filtro global porque cada
+   ramal necesita su propio ajuste: al naranja de J4 le basta con
+   muy poco, y al azul de J3 le hace falta bastante. */
+
+html[data-tema="oscuro"]                        { --brand-claro: #E89B5A; }
+html[data-tema="oscuro"][data-operacion="J3"]   { --brand-claro: #6BA6E8; }
+html[data-tema="oscuro"][data-operacion="J4"]   { --brand-claro: #E89B5A; }
+html[data-tema="oscuro"][data-operacion="B9"]   { --brand-claro: #5FC97A; }
+
+/* En claro, "el color de marca levantado" es el color de marca a
+   secas. Se declara para que las hojas de cada rol puedan usar
+   `--brand-claro` sin preguntar en qué tema están. */
+:root { --brand-claro: var(--brand-600); }
+
+
+/* ── Fondos suaves de marca ───────────────────────────────────
+   `--brand-50` es un pastel: en oscuro taparía la superficie. Se
+   sustituye por un velo translúcido del propio color de bodega. */
+html[data-tema="oscuro"][data-operacion="J3"] { --brand-50: rgba(107, 166, 232, 0.14); --brand-100: rgba(107, 166, 232, 0.3); }
+html[data-tema="oscuro"][data-operacion="J4"] { --brand-50: rgba(232, 155, 90, 0.14);  --brand-100: rgba(232, 155, 90, 0.3); }
+html[data-tema="oscuro"][data-operacion="B9"] { --brand-50: rgba(95, 201, 122, 0.14);  --brand-100: rgba(95, 201, 122, 0.3); }
+html[data-tema="oscuro"]                      { --brand-800: var(--brand-claro); }
+
+
+/* ── Remates que no salen de un token ─────────────────────────
+
+   Lo de abajo es la lista de sitios donde el tema claro está
+   escrito a fuego en components.css o layout.css en vez de salir
+   de una variable. Se corrigen aquí y no allí a propósito: tocar
+   esas hojas le cambiaría el aspecto a los cuatro roles, y este
+   archivo solo lo carga quien encendió el interruptor. */
+
+html[data-tema="oscuro"] body { background: var(--surface-2); color: var(--text-1); }
+
+/* Los campos de formulario y los selects nativos: sin esto el
+   navegador los pinta blancos y la vista de registrar entrada
+   queda a media luz. */
+html[data-tema="oscuro"] input,
+html[data-tema="oscuro"] select,
+html[data-tema="oscuro"] textarea {
+    background: var(--surface-3);
+    color: var(--text-1);
+    border-color: var(--border-md);
+}
+
+html[data-tema="oscuro"] input::placeholder,
+html[data-tema="oscuro"] textarea::placeholder {
+    color: var(--text-3);
+}
+
+/* El calendario y el reloj nativos de los <input type="date|time">
+   vienen con icono negro, invisible sobre fondo oscuro. */
+html[data-tema="oscuro"] input[type="date"]::-webkit-calendar-picker-indicator,
+html[data-tema="oscuro"] input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) opacity(0.65);
+}
+
+/* La barra de scroll del navegador: en oscuro una barra clara es
+   lo único blanco que queda en pantalla. */
+html[data-tema="oscuro"] { color-scheme: dark; }

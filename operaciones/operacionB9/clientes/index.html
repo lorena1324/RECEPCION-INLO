@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="es" data-operacion="B9">
 <head>
+    <!-- ANTES QUE NADA: el tema guardado.
+
+         Va en línea y no en un módulo porque los módulos son
+         diferidos: para cuando se ejecutan, el navegador ya pintó
+         la pantalla en claro. Ese fogonazo blanco en cada recarga
+         es lo que hace que la gente apague el modo oscuro y no
+         vuelva.
+
+         El texto sale de SNIPPET_ANTI_PARPADEO en
+         shared/utils/tema.js, que es donde se documenta. -->
+    <script>try{var t=localStorage.getItem("inlotrans:tema");if(t==="oscuro")document.documentElement.setAttribute("data-tema","oscuro");}catch(e){}</script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Portería B9 — Panel Cliente</title>
@@ -15,6 +27,13 @@
 <link rel="stylesheet" href="../../../css/base.css">
 <link rel="stylesheet" href="../../../css/layout.css">
 <link rel="stylesheet" href="../../../css/components.css">
+<!-- El tablero de muelles y el registro de actividad
+     (shared/components/*). Compartidos por los diez
+     paneles: el aspecto de las tarjetas se toca ahí. -->
+<link rel="stylesheet" href="../../../css/tablero.css">
+<!-- El oscuro gana por especificidad (html[data-tema]
+     contra :root), así que su posición aquí da igual. -->
+<link rel="stylesheet" href="../../../css/tema-oscuro.css">
 <!-- Reutiliza los estilos del panel de supervisor (cards, tablas, badges, stats-grid) -->
 <link rel="stylesheet" href="../supervisor/supervisor.css">
 <!-- Solo lo específico de esta vista -->
@@ -86,6 +105,11 @@
           <option value="3PD">3PD</option>
           <option value="Otro">Otro</option>
         </select>
+          <!-- Claro / oscuro. El icono lo pone shared/utils/tema.js,
+               y es el del tema al que se VA, no el del que se está. -->
+          <button class="btn-tema" id="btn-tema" title="Modo oscuro" aria-label="Modo oscuro">
+              <i class="ti ti-moon"></i>
+          </button>
       </div>
     </header>
 
@@ -152,8 +176,16 @@
 
         <!-- El número lo pone clientes.js con el que traiga la
              configuración de la bodega, no está fijo aquí. -->
-        <div class="subtitulo" id="muelles-titulo">Muelles</div>
-        <div class="muelles-grid" id="grid-muelles"></div>
+        <div class="section-header" style="display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap;">
+          <div class="subtitulo" id="muelles-titulo">Muelles</div>
+          <span class="leyenda-muelles">
+            <span class="punto libre"></span> Libre
+            <span class="punto ok"></span> En meta
+            <span class="punto media"></span> Atención
+            <span class="punto alta"></span> Pasado de meta
+                    </span>
+        </div>
+        <div class="tm-grid" id="grid-muelles"></div>
 
         <div class="subtitulo">Vehículos en patio</div>
         <div class="tabla-wrap">

@@ -1,0 +1,486 @@
+/* =========================================================
+   INLOTRANS — Tablero de muelles y registro de actividad
+
+   Los estilos de los dos componentes compartidos:
+
+       shared/components/tableroMuelles.js     → .tm-*
+       shared/components/registroActividad.js  → .ra-*
+
+   más el interruptor de tema (.btn-tema) y la leyenda del
+   semáforo, que salen en la misma barra.
+
+   ── POR QUÉ UNA HOJA Y NO UNA COPIA POR PANEL ──
+
+   Los diez paneles de la aplicación —portería, supervisor y
+   clientes de las tres bodegas, más administrador— pintan la
+   misma grilla de muelles. Con los estilos copiados en cada
+   carpeta, mover un pixel del camión son diez ediciones y, a la
+   tercera, tres bodegas con tres camiones distintos. Que estén
+   aquí es lo que hace que el dibujo sea uno solo.
+
+   ── POR QUÉ EL COLOR NO ESTÁ EN EL COMPONENTE ──
+
+   El JS escribe las clases y esta hoja las pinta. Un componente
+   que trajera su propio color no se podría retematizar, y aquí
+   hay dos temas y tres colores de bodega que atender.
+
+   ── FUNCIONA EN CLARO Y EN OSCURO ──
+
+   No hay un solo color literal debajo: todo sale de tokens que
+   css/tema-oscuro.css redefine bajo `html[data-tema="oscuro"]`.
+   Los valores CLAROS del semáforo se declaran aquí, en `:root`;
+   los oscuros ganan por especificidad, sin depender del orden de
+   los <link>.
+   ========================================================= */
+
+:root {
+    /* El semáforo en claro. Salen de base.css, que ya los tiene
+       calibrados para leerse sobre blanco. Se les da un nombre
+       propio para que el tablero pida "el color de pasado de
+       meta" y no "el rojo": en oscuro es otro rojo, y quien
+       escriba una regla nueva no tiene por qué acordarse. */
+    --sem-ok:    var(--green-600);
+    --sem-media: var(--amber-600);
+    --sem-alta:  var(--red-600);
+    --sem-libre: var(--gray-200);
+
+    --sem-ok-suave:    var(--green-50);
+    --sem-media-suave: var(--amber-50);
+    --sem-alta-suave:  var(--red-50);
+}
+
+
+/* ── Interruptor de tema, en la barra superior ───────────── */
+
+.btn-tema {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin-left: 10px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-md);
+    background: var(--surface);
+    color: var(--text-2);
+    font-size: 17px;
+    cursor: pointer;
+    flex: none;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.btn-tema:hover {
+    background: var(--surface-3);
+    color: var(--text-1);
+    border-color: var(--brand-claro);
+}
+
+.btn-tema:focus-visible {
+    outline: 2px solid var(--brand-claro);
+    outline-offset: 2px;
+}
+
+
+/* ── Leyenda del semáforo ────────────────────────────────── */
+
+.leyenda-muelles {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11.5px;
+    color: var(--text-3);
+}
+
+.leyenda-muelles .punto {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    margin-left: 10px;
+}
+
+.leyenda-muelles .punto.libre { background: var(--sem-libre); }
+.leyenda-muelles .punto.ok    { background: var(--sem-ok); }
+.leyenda-muelles .punto.media { background: var(--sem-media); }
+.leyenda-muelles .punto.alta  { background: var(--sem-alta); }
+
+
+/* =========================================================
+   TARJETAS DE MUELLE
+   ========================================================= */
+
+.tm-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 28px;
+}
+
+.tm-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--sem-libre);
+    border-radius: var(--radius-lg);
+    padding: 13px 15px 15px;
+    /* Alta como la tarjeta ocupada más llena, para que una fila con
+       muelles libres y ocupados mantenga la línea. */
+    min-height: 268px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.3s, box-shadow 0.2s;
+}
+
+/* Un muelle libre se lee como hueco, no como tarjeta apagada: el
+   fondo retrocede al del contenedor para que el ojo cuente de un
+   vistazo cuántos sitios quedan. */
+.tm-card.tm-libre { background: var(--surface-2); box-shadow: none; }
+
+.tm-card.tm-ocupado-card { cursor: pointer; }
+.tm-card.tm-ocupado-card:hover { box-shadow: var(--shadow-md); }
+
+/* Donde la tarjeta no abre nada —el panel de clientes, que es de
+   solo lectura— no debe anunciar que se puede pulsar. */
+.tm-grid.tm-sin-clic .tm-card { cursor: default; }
+
+.tm-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 9px;
+}
+
+.tm-num {
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-1);
+}
+
+.tm-estado {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--surface-3);
+    color: var(--text-3);
+}
+
+.tm-body { flex: 1; display: flex; flex-direction: column; }
+
+
+/* =========================================================
+   EL DIBUJO DEL MUELLE
+
+   Lo construye construirDibujo() en tableroMuelles.js. Dos
+   escenas en el mismo SVG —la bahía vacía y el camión— que se
+   alternan según el muelle esté libre u ocupado.
+
+   En oscuro no hay una sola regla nueva: el camión cambia de tono
+   porque cambian --surface-3, --text-3 y el semáforo, no porque
+   exista una versión oscura del dibujo.
+   ========================================================= */
+
+.tm-dibujo {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin-bottom: 10px;
+
+    /* El dibujo no recibe clics: los deja pasar a la tarjeta.
+       Sin esto, el `event.target` de un clic sobre el camión es el
+       <path> de la cabina, y toda la lógica de "¿pulsó un botón o
+       la tarjeta?" tendría que trepar desde dentro del SVG. */
+    pointer-events: none;
+}
+
+/* Grupos estructurales del SVG: existen para poder enseñar una
+   escena u otra y para animar las ruedas como una pieza. No llevan
+   pintura propia. */
+.tm-bahia, .tm-ruedas { pointer-events: none; }
+
+/* ── Lo que hay en las dos escenas ── */
+
+.tm-anden       { fill: var(--text-3); opacity: 0.35; }
+.tm-anden-borde { fill: var(--text-3); opacity: 0.55; }
+.tm-suelo       { stroke: var(--border-md); stroke-width: 1.5; }
+
+/* ── Escena vacía ──
+   Punteada y sin relleno: dice "aquí cabe un camión" en vez de
+   dejar un hueco en blanco. El vacío se lee como sitio disponible
+   y no como tarjeta a medio cargar. */
+
+.tm-bahia-silueta {
+    fill: none;
+    stroke: var(--text-3);
+    stroke-width: 1.5;
+    stroke-dasharray: 6 5;
+    opacity: 0.4;
+}
+
+.tm-bahia-guia {
+    stroke: var(--sem-libre);
+    stroke-width: 3;
+    stroke-linecap: round;
+    opacity: 0.6;
+}
+
+/* ── El camión ── */
+
+.tm-remolque {
+    fill: var(--surface-3);
+    stroke: var(--border-md);
+    stroke-width: 1.5;
+}
+
+.tm-remolque-puerta { stroke: var(--border-md); stroke-width: 1.5; }
+
+/* La carga. Nace a ancho completo y se encoge con scaleX; el JS
+   solo fija el destino. `fill-box` hace que el origen sea la caja
+   del propio rect y no el lienzo entero del SVG — sin eso, el
+   encogido tira la carga hacia la izquierda del viewBox en vez de
+   dejarla pegada a las puertas. */
+.tm-carga {
+    fill: var(--sem-ok);
+    transform-box: fill-box;
+    transform-origin: left center;
+    transform: scaleX(0);
+    transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), fill 0.3s;
+}
+
+.tm-chasis  { fill: var(--text-3); opacity: 0.5; }
+.tm-cabina  { fill: var(--brand-claro); transition: fill 0.3s; }
+.tm-ventana { fill: var(--surface); opacity: 0.55; }
+
+.tm-rueda     { fill: var(--text-1); opacity: 0.75; }
+.tm-rueda-eje { fill: var(--surface); opacity: 0.6; }
+
+/* El camión se apoya en el andén al pasar el ratón. Es un guiño de
+   2px: suficiente para que la tarjeta se sienta viva, no tanto como
+   para distraer en una pantalla abierta ocho horas. */
+.tm-camion { transition: transform 0.25s ease-out; }
+.tm-ocupado-card:hover .tm-camion { transform: translateX(-2px); }
+
+
+/* ── Contenido de la tarjeta ─────────────────────────────── */
+
+/* El rótulo del muelle libre. No lleva `flex:1` ni altura mínima:
+   el hueco ya lo dibuja la bahía punteada de arriba y esto es solo
+   su pie. Con altura propia empujaría la tarjeta libre a ser más
+   alta que la ocupada y la fila quedaría descuadrada. */
+.tm-vacio {
+    text-align: center;
+    padding: 6px 0 2px;
+    color: var(--text-3);
+    font-size: 12.5px;
+    letter-spacing: 0.04em;
+}
+
+.tm-ocupado { display: flex; flex-direction: column; flex: 1; }
+
+.tm-ocupado-card { border-left-color: var(--sem-ok); }
+.tm-ocupado-card .tm-estado {
+    background: var(--sem-ok-suave);
+    color: var(--sem-ok);
+}
+
+.tm-placa {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+    color: var(--text-1);
+}
+
+.tm-conductor {
+    font-size: 12.5px;
+    color: var(--text-2);
+    /* Un nombre largo no puede empujar la tarjeta y descuadrar la
+       fila entera del tablero. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tm-tipologia {
+    font-size: 10.5px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 4px;
+}
+
+/* Hueco para lo que cada panel mete de su cosecha: el badge de
+   canal y el selector de modalidad del supervisor, el avance
+   editable. El componente no sabe qué va aquí; solo dónde va. */
+.tm-extras { margin-top: 8px; }
+.tm-extras:empty { margin-top: 0; }
+
+.tm-avance { margin-top: 10px; }
+
+.tm-avance-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.tm-fase {
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-2);
+}
+
+.tm-pct {
+    font-size: 13.5px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-1);
+}
+
+.tm-meta {
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--sem-ok);
+    line-height: 1.35;
+}
+
+.tm-meta.tm-sin-meta { color: var(--text-3); font-weight: 500; }
+
+/* Los botones se van al fondo de la tarjeta. `margin-top:auto` y
+   no un hueco fijo: así quedan alineados entre todas las tarjetas
+   de la fila aunque una tenga tipología larga y otra no. */
+.tm-acciones {
+    margin-top: auto;
+    padding-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.tm-acciones:empty { padding-top: 0; }
+
+/* ── Niveles contra la meta de la tipología ── */
+
+.tm-card.nivel-media { border-left-color: var(--sem-media); }
+.tm-card.nivel-media .tm-meta   { color: var(--sem-media); }
+.tm-card.nivel-media .tm-carga  { fill: var(--sem-media); }
+.tm-card.nivel-media .tm-estado { background: var(--sem-media-suave); color: var(--sem-media); }
+
+.tm-card.nivel-alta { border-left-color: var(--sem-alta); }
+.tm-card.nivel-alta .tm-meta   { color: var(--sem-alta); }
+.tm-card.nivel-alta .tm-carga  { fill: var(--sem-alta); }
+.tm-card.nivel-alta .tm-estado { background: var(--sem-alta-suave); color: var(--sem-alta); }
+
+/* El camión que se pasó de su meta también se marca. Es la única
+   pieza del dibujo que cambia de color con el semáforo: pintar
+   además el remolque y las ruedas convertiría la tarjeta en un
+   bloque rojo y se perdería justo lo que hay que mirar, que es
+   cuánta carga lleva. */
+.tm-card.nivel-alta .tm-cabina { fill: var(--sem-alta); }
+
+.tm-card.tm-cancelado { opacity: 0.55; }
+
+
+/* =========================================================
+   REGISTRO DE ACTIVIDAD
+   ========================================================= */
+
+.ra-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 4px 2px;
+    margin-bottom: 24px;
+}
+
+/* Contenedor de las filas. Existe para que el aviso de "sin
+   movimientos" quede FUERA de la lista: si compartieran padre, el
+   `:last-child` de abajo unas veces sería una fila y otras el
+   aviso, y la última línea perdería o ganaría su borde según
+   hubiera datos o no. */
+.ra-lista { display: block; }
+
+.ra-fila {
+    display: grid;
+    grid-template-columns: 54px 20px 104px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 14px;
+    font-size: 12.5px;
+    border-bottom: 1px solid var(--border);
+}
+
+.ra-fila:last-child { border-bottom: none; }
+
+.ra-hora {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-3);
+    font-size: 12px;
+}
+
+.ra-fila > i { color: var(--text-3); font-size: 15px; }
+
+.ra-placa { font-weight: 700; letter-spacing: -0.01em; color: var(--text-1); }
+
+.ra-texto {
+    color: var(--text-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ra-quien { color: var(--text-3); font-size: 11.5px; }
+
+/* El color por tipo de evento se aplica solo al icono. Pintar la
+   fila entera convertiría la franja en un arcoíris y ninguna línea
+   destacaría sobre otra. */
+.ra-entrada > i      { color: var(--sem-ok); }
+.ra-salida > i       { color: var(--text-2); }
+.ra-cancelacion > i  { color: var(--sem-alta); }
+.ra-autorizacion > i { color: var(--sem-media); }
+.ra-ubicacion > i    { color: var(--brand-claro); }
+
+.ra-vacio {
+    padding: 22px;
+    text-align: center;
+    color: var(--text-3);
+    font-size: 13px;
+}
+
+
+/* ── Pantallas ──────────────────────────────────────────── */
+
+@media (max-width: 1400px) {
+    .tm-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 1100px) {
+    .tm-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 720px) {
+    .tm-grid { grid-template-columns: 1fr; }
+    .leyenda-muelles { display: none; }
+    /* En pantalla estrecha la franja de actividad se queda sin
+       sitio para el operador y el texto; se sacrifica el operador,
+       que es el dato menos urgente de la línea. */
+    .ra-fila { grid-template-columns: 48px 18px 92px 1fr; }
+    .ra-quien { display: none; }
+}
+
+/* Quien pidió menos movimiento no debería recibirlo tampoco por
+   CSS. El JS ya lo respeta (shared/components/animaciones.js);
+   esto cubre las transiciones, que son del navegador. */
+@media (prefers-reduced-motion: reduce) {
+    .tm-card,
+    .tm-carga,
+    .tm-camion,
+    .tm-cabina,
+    .btn-tema {
+        transition: none;
+    }
+}

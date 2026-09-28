@@ -1,34 +1,29 @@
 /* =========================================================
-   INLOTRANS — Operación J3 — Operador
-   Estilos específicos de este rol
+   INLOTRANS — Operación J3 — Operador (portería)
+   Estilos propios de este rol.
 
-   Todo lo genérico (botones, formularios, tablas, modales,
-   badges, grilla de muelles) vive en css/components.css.
-   Este archivo queda disponible para overrides puntuales de
-   esta vista si aparecen más adelante.
+   Lo genérico (botones, formularios, tablas, modales, badges)
+   está en css/components.css. El tablero de muelles, el registro
+   de actividad, el interruptor de tema y la leyenda del semáforo
+   están en css/tablero.css, compartidos por los diez paneles —
+   ahí es donde se toca el aspecto de las tarjetas, no aquí.
+
+   Lo que queda en este archivo es el avance en solo lectura, que
+   es propio del operario.
    ========================================================= */
 
-/* Override: mismo layout de la grilla de muelles que usa
-   Supervisor (4 columnas × 2 filas para los 8 muelles, en vez
-   de lo que traiga por defecto components.css). Se carga
-   después de components.css, así que gana por cascada. */
-.muelles-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  margin-bottom: 28px;
-}
 
-@media (max-width: 900px) {
-  .muelles-grid { grid-template-columns: repeat(2, 1fr); }
-}
 /* =========================================================
    AVANCE EN SOLO LECTURA (operario)
 
-   El operario ve el avance pero no lo edita: aquí no hay
-   estilos de botón a propósito. El objetivo es que pueda
-   decirle al supervisor en qué punto va cada muelle sin
-   tener que ir a preguntarle.
+   El operario ve el avance pero no lo edita: aquí no hay estilos
+   de botón a propósito. El objetivo es que pueda decirle al
+   supervisor en qué punto va cada muelle sin tener que ir a
+   preguntarle.
+
+   Lo usan la tabla de Registros y la ficha del vehículo. La
+   tarjeta de muelle ya no: allí el avance lo cuenta el remolque
+   del dibujo.
    ========================================================= */
 
 .avance-estado {
@@ -38,9 +33,9 @@
   line-height: 1.35;
 }
 
-.avance-estado-ok      { color: var(--green-600); }
-.avance-estado-espera  { color: var(--amber-600); }
-.avance-estado-bloqueo { color: var(--red-600); }
+.avance-estado-ok      { color: var(--sem-ok); }
+.avance-estado-espera  { color: var(--sem-media); }
+.avance-estado-bloqueo { color: var(--sem-alta); }
 .avance-estado-neutro  { color: var(--text-3); font-weight: 400; }
 
 /* Versión compacta para la celda de la tabla de Registros */
@@ -62,14 +57,15 @@
 }
 
 .avance-mini-vacio { color: var(--text-3); }
+
 /* Cuánto falta para desbloquear la salida, en la celda compacta
-   de la tabla de Registros y en la tarjeta del muelle. */
+   de la tabla de Registros. */
 .avance-mini-falta {
   margin-top: 4px;
   font-size: 10.5px;
   font-weight: 600;
   line-height: 1.3;
-  color: var(--red-600);
+  color: var(--sem-alta);
 }
 
 .avance-mini-estado {

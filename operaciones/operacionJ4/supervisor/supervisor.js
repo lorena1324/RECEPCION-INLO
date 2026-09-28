@@ -95,6 +95,11 @@ import {
   renderChartFranjaHoraria
 } from "../../../shared/services/estadisticas.js";
 
+
+import { conectarBotonTema } from "../../../shared/utils/tema.js";
+import { iniciarAnimaciones } from "../../../shared/components/animaciones.js";
+import { crearTableroMuelles } from "../../../shared/components/tableroMuelles.js";
+import { crearRegistroActividad } from "../../../shared/components/registroActividad.js";
 const OPERACION = "J4";
 const RUTA_LOGIN = "../../../index.html";
 
@@ -304,6 +309,11 @@ function registrosFiltrados() {
    ========================================================= */
 
 function iniciarNavegacion() {
+    /* El interruptor de claro/oscuro. El tema ya lo aplicó el
+       script en línea del <head> antes del primer pintado; esto
+       solo deja el botón escuchando y con el icono que toca. */
+    conectarBotonTema(document.getElementById('btn-tema'));
+
   document.querySelectorAll(".nav-item").forEach((btn) => {
     btn.addEventListener("click", () => mostrarVista(btn.dataset.view));
   });
@@ -1571,50 +1581,58 @@ function filaVacia(cols) {
 }
 
 /* =========================================================
-   UBICACIÓN EN VIVO — tablero de 3 muelles + patio
+   TABLERO DE MUELLES (componente compartido)
 
-   La tarjeta de cada muelle es idéntica a la que ve el operador
-   (mismas clases: muelle-card/-top/-num/-status/-body/-placa/
-   -empty, ver operador.js y css/components.css), sin los botones
-   de Mover/Salida — el supervisor solo agrega el % de avance.
+   Antes se armaba una cadena de HTML y se volcaba con innerHTML en
+   cada snapshot: las tarjetas destruidas y recreadas cada vez que
+   cambiaba cualquier vehículo. Ahora reconcilia — cada muelle
+   conserva su nodo. Ver shared/components/tableroMuelles.js.
+
+   El selector de modalidad y el avance EDITABLE siguen siendo
+   los de este panel: se pasan por el hueco `extras` sin tocarlos.
+   El avance es como el supervisor registra el %, y la forma de no
+   romperlo es no reescribirlo.
    ========================================================= */
+
+let tableroMuelles = null;
+
+/* Perezoso: la primera pintada lo crea. Así no hay que acordarse
+   de arrancarlo en el sitio exacto del init. */
+function tablero() {
+    if (!tableroMuelles) {
+        iniciarAnimaciones();
+        tableroMuelles = crearTableroMuelles(document.getElementById("grid-muelles"), {
+            extras: extrasDeMuelle,
+            acciones: accionesDeMuelle,
+            // Este panel dibuja su propio avance en `extras`; sin
+            // esto la tarjeta enseñaría dos.
+            mostrarAvance: false
+        });
+    }
+    return tableroMuelles;
+}
+
+function extrasDeMuelle(r) {
+    return `<div style="margin-top:4px;"><span class="badge badge-canal">${escapar(r.canal || "—")}</span></div>` +
+           selectorModalidad(r) + renderAvance(r);
+}
+
+function accionesDeMuelle(r) {
+    return `<button class="btn btn-sm" data-novedades="${r.id}"><i class="ti ti-info-circle"></i> Novedades</button>`;
+}
 
 function renderUbicacion() {
   const base = registrosFiltrados();
   const enMuelle = getRegistrosEnMuelle(base);
   const ocupacion = getMuellesOcupacion(enMuelle, numerosMuelle);
 
-  const grid = document.getElementById("grid-muelles");
-  let html = "";
-
-  // Object.keys y no `numerosMuelle`: si un vehículo quedó en un
-  // muelle que ya no está en la numeración, getMuellesOcupacion lo
-  // agrega al final y aquí se sigue viendo hasta que salga.
-  Object.keys(ocupacion).forEach((n) => {
-    const r = ocupacion[n];
-
-    // La alerta del muelle sale de la meta de la tipología del
-    // vehículo — no de un umbral igual para todos.
-    const nivel = r ? nivelMuelle(r) : "normal";
-
-    html += `
-      <div class="muelle-card ${r ? "ocupado" : "libre"} ${nivel !== "normal" ? "muelle-" + nivel : ""}">
-        <div class="muelle-card-top">
-          <span class="muelle-card-num">Muelle ${n}</span>
-          <span class="muelle-card-status ${r ? "ocupado" : "libre"}">${r ? "OCUPADO" : "LIBRE"}</span>
-        </div>
-        ${r ? avisoMetaMuelle(r) : ""}
-        <div class="muelle-card-body">
-          ${r
-            ? `<div class="muelle-card-placa">${escapar(r.placa)}</div><div>${escapar(r.conductor || "—")}</div>` +
-              `<div style="margin-top:4px;"><span class="badge badge-canal">${escapar(r.canal || "—")}</span> ${chipCobro(r)}</div>${renderAvance(r)}` +
-              `<div style="margin-top:6px;"><button class="btn btn-sm" data-novedades="${r.id}"><i class="ti ti-info-circle"></i> Novedades</button></div>`
-            : `<div class="muelle-card-empty">Disponible</div>`}
-        </div>
-      </div>`;
+  tablero().actualizar({
+    numeros: typeof numerosMuelle !== "undefined" && numerosMuelle.length
+      ? numerosMuelle
+      : Array.from({ length: numMuelles }, (_, i) => i + 1),
+    registros: enMuelle,
+    config: configBodega
   });
-
-  grid.innerHTML = html;
 
   const enPatio = ordenarPorPrioridad(getRegistrosEnPatio(base), configBodega);
   document.getElementById("tabla-patio-body").innerHTML = enPatio.map(filaPatio).join("") || filaVacia(8);

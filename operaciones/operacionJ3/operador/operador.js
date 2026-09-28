@@ -46,9 +46,6 @@ import {
     getDiaOperativo,
     getLocationDurations,
     minutosEnPatio,
-    minutosEnMuelle,
-    nivelContraMeta,
-    faseActual,
     ordenarPorPrioridad,
     prioridadDe,
     enMuelleFueraDeMeta,
@@ -58,8 +55,7 @@ import {
 
 import {
     suscribirseAConfig,
-    tiemposDe,
-    modalidadDe,
+    numerosDeMuelle,
     distingueModalidad,
     etiquetaCampo,
     formatoCampo,
@@ -71,6 +67,11 @@ import { fichaVehiculo } from "../../../shared/services/detalleVehiculo.js";
 
 import { nowLocal, today, fmtDt, formatDuration, fechaDentroDeRango, todayOperativo } from "../../../shared/utils/tiempos.js";
 import { exportarExcel } from "../../../shared/utils/excel.js";
+import { conectarBotonTema } from "../../../shared/utils/tema.js";
+
+import { iniciarAnimaciones } from "../../../shared/components/animaciones.js";
+import { crearTableroMuelles } from "../../../shared/components/tableroMuelles.js";
+import { crearRegistroActividad } from "../../../shared/components/registroActividad.js";
 
 const OPERACION = "J3";
 const RUTA_LOGIN = "../../../index.html";
@@ -93,6 +94,44 @@ const CLIENTE_POR_DEFECTO = 'Pepsico';
 
 let numMuelles = MUELLES_POR_DEFECTO;
 let horaCorte = HORA_CORTE_POR_DEFECTO;
+
+/* Los números REALES de los muelles, no 1..N. En J3 arrancan en 1,
+   pero se resuelven igual para que las tres bodegas compartan este
+   archivo sin excepciones: en J4 son el 9, el 10 y el 11, y
+   llamarlos 1, 2 y 3 obliga a traducir a quien mira la pantalla y
+   después camina hasta el muelle. */
+let numerosMuelle = [];
+
+/* Los dos componentes compartidos del dashboard. Se crean UNA vez
+   en el arranque y se actualizan; no se recrean en cada pintada,
+   que es justamente lo que hacía el innerHTML de antes. */
+let tableroMuelles = null;
+let registroActividad = null;
+
+/* Perezoso: la primera pintada los crea. Así no hay que acordarse
+   de arrancarlos en el sitio exacto del init de cada rol — los diez
+   paneles arrancan a su manera y depender del orden en diez
+   archivos distintos es pedir un `null` en el peor momento. */
+function componentes() {
+    if (!tableroMuelles) {
+        /* Se pide el motor de animación y NO se espera: todo
+           funciona sin él. Si el CDN no responde, el panel queda
+           estático en vez de quedarse en blanco. */
+        iniciarAnimaciones();
+
+        /* Clic en la tarjeta —fuera de los botones— abre la ficha
+           del vehículo. La tabla de patio ya ofrecía ese atajo con
+           un botón de info; en el muelle la tarjeta entera sirve de
+           botón, que es un blanco más fácil de acertar con prisa. */
+        tableroMuelles = crearTableroMuelles(document.getElementById('muelles-grid'), {
+            acciones: accionesDeMuelle,
+            onSeleccion: openModalDetalle
+        });
+
+        registroActividad = crearRegistroActividad(document.getElementById('registro-actividad'));
+    }
+    return tableroMuelles;
+}
 
 function clienteBodega() {
     return (configBodega && configBodega.cliente) || CLIENTE_POR_DEFECTO;
@@ -314,7 +353,10 @@ function pintarPromedio(id, p) {
    y puede cambiar sin desplegar nada. */
 function pintarTituloMuelles() {
     var el = document.getElementById('muelles-titulo');
-    if (el) el.textContent = 'Muelles (1 a ' + numMuelles + ')';
+    if (!el) return;
+    el.textContent = numerosMuelle.length
+        ? 'Muelles (' + numerosMuelle[0] + ' a ' + numerosMuelle[numerosMuelle.length - 1] + ')'
+        : 'Muelles';
 }
 
 /*
@@ -396,37 +438,26 @@ function renderDashboard() {
     // otra.
     pintarAlertaMuelle(enMuelle);
 
-    // Grilla de muelles
-    var ocupacion = getMuellesOcupacion(enMuelle, numMuelles);
-    var htmlGrid = '';
-    for (var n = 1; n <= numMuelles; n++) {
-        var rec = ocupacion[n];
+    /* Grilla de muelles.
 
-        // La alerta del muelle sale de la meta de la tipología del
-        // vehículo, no de un umbral igual para todos: una mula
-        // arrumada no debería tardar lo mismo que una paletizada.
-        var nivel = rec ? nivelMuelle(rec) : 'normal';
+       Antes esto armaba una cadena de HTML y la volcaba entera con
+       innerHTML en cada snapshot de Firestore: ocho tarjetas
+       destruidas y recreadas cada vez que cambiaba cualquier
+       vehículo de la bodega. Funcionaba mientras nada se moviera.
 
-        htmlGrid += '<div class="muelle-card ' + (rec ? 'ocupado' : 'libre') +
-            (nivel !== 'normal' ? ' muelle-' + nivel : '') + '">' +
-            '<div class="muelle-card-top">' +
-                '<span class="muelle-card-num">Muelle ' + n + '</span>' +
-                '<span class="muelle-card-status ' + (rec ? 'ocupado' : 'libre') + '">' + (rec ? 'OCUPADO' : 'LIBRE') + '</span>' +
-            '</div>' +
-            (rec ? avisoMetaMuelle(rec) : '') +
-            '<div class="muelle-card-body">' +
-                (rec
-                    ? '<div class="muelle-card-placa">' + rec.placa + '</div><div>' + rec.conductor + '</div>' +
-                      renderAvanceSoloLectura(rec, false) +
-                      '<div style="margin-top:6px;display:flex;gap:4px;">' +
-                        '<button class="btn btn-sm btn-primary" data-editar="' + rec.id + '">Mover</button>' +
-                        '<button class="btn btn-sm" data-observacion="' + rec.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
-                        '<button class="btn btn-sm btn-danger" data-salida="' + rec.id + '"' + attrsBotonSalida(rec) + '>Salida</button>' +
-                      '</div>'
-                    : '<div class="muelle-card-empty">Disponible</div>') +
-            '</div></div>';
-    }
-    document.getElementById('muelles-grid').innerHTML = htmlGrid;
+       Ahora lo lleva el componente compartido, que compara contra
+       lo último pintado y toca solo lo que cambió. Lo que eso da:
+       las animaciones no se cortan a media transición, el navegador
+       no rehace la grilla para mover un porcentaje, y el botón que
+       el operario tiene bajo el dedo no desaparece y vuelve justo
+       cuando lo está pulsando. */
+    componentes().actualizar({
+        numeros: numerosMuelle && numerosMuelle.length
+            ? numerosMuelle
+            : Array.from({ length: numMuelles }, function (_, i) { return i + 1; }),
+        registros: enMuelle,
+        config: configBodega
+    });
 
     // Tabla de patio
     var tbody = document.getElementById('dash-table');
@@ -448,6 +479,22 @@ function renderDashboard() {
             '</tr>';
         }).join('');
     }
+
+    /* Actividad reciente. Recibe TODOS los registros y no solo los
+       activos: lo último que pasó en la bodega incluye las salidas,
+       que es justo el evento que desaparecería si aquí se filtrara
+       por "sigue adentro". */
+    registroActividad.actualizar(registros);
+}
+
+
+/* Los botones de una tarjeta de muelle. Se los pasa el panel al
+   componente, que sabe dónde ponerlos pero no cuáles son: en
+   portería se mueve y se despacha, y en otros roles no. */
+function accionesDeMuelle(rec) {
+    return '<button class="btn btn-sm btn-primary" data-editar="' + rec.id + '">Mover</button>' +
+           '<button class="btn btn-sm" data-observacion="' + rec.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
+           '<button class="btn btn-sm btn-danger" data-salida="' + rec.id + '"' + attrsBotonSalida(rec) + '>Salida</button>';
 }
 
 /* =========================================================
@@ -462,42 +509,13 @@ function renderDashboard() {
    J3 distingue cómo viene la mercancía, así que la meta que
    aplica depende también de eso: la misma mula arrumada y
    paletizada son dos tiempos distintos.
+
+   El nivel por tarjeta y el texto de "40 min de 105" ya no se
+   calculan aquí: los hace el componente de muelles, con las mismas
+   funciones de shared/services. Lo que queda en este archivo es el
+   BANNER de arriba, que es otra cosa — un resumen de toda la
+   bodega, no el estado de un muelle.
    ========================================================= */
-
-function nivelMuelle(r) {
-    return nivelContraMeta(
-        minutosEnMuelle(r),
-        tiemposDe(configBodega, r.tipologia, faseActual(r), modalidadDe(r))
-    );
-}
-
-/* Cuánto lleva en muelle y contra qué meta. Se muestra siempre que
-   haya meta, no solo al pasarse: el operario necesita ver que va
-   en 40 de 105 minutos para saber que va bien, no enterarse solo
-   cuando ya es tarde.
-
-   Sin meta lo dice en voz alta: un muelle sin cifra se lee como
-   "va bien", y lo que pasa es que ese vehículo no tiene tipología
-   asignada — que es justo lo que hay que ir a corregir. */
-function avisoMetaMuelle(r) {
-
-    var meta = tiemposDe(configBodega, r.tipologia, faseActual(r), modalidadDe(r));
-    var min = minutosEnMuelle(r);
-
-    if (!meta) {
-        return '<div class="muelle-meta sin-meta"><i class="ti ti-help-circle"></i> ' +
-               formatDuration(min) + ' en muelle · sin meta (falta tipología)</div>';
-    }
-
-    var nivel = nivelContraMeta(min, meta);
-    var icono = nivel === 'alta' ? 'ti-alert-triangle' : nivel === 'media' ? 'ti-clock-exclamation' : 'ti-clock-check';
-
-    return '<div class="muelle-meta ' + nivel + '"><i class="ti ' + icono + '"></i> ' +
-           formatDuration(min) + ' de ' + formatDuration(meta.meta) +
-           (distingueModalidad(configBodega) ? ' · ' + modalidadDe(r).toLowerCase() : '') +
-           (nivel !== 'normal' ? ' · ' + formatDuration(min - meta.meta) + ' por encima' : '') +
-           '</div>';
-}
 
 function pintarAlertaMuelle(enMuelle) {
 
@@ -1375,6 +1393,13 @@ function iniciarPagina(perfil) {
     var d = new Date();
     document.getElementById('topbar-date').textContent = d.toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
+    /* El interruptor de claro/oscuro. El tema en sí ya lo aplicó el
+       script en línea del <head> antes del primer pintado; esto solo
+       deja el botón escuchando y con el icono que toca. */
+    conectarBotonTema(document.getElementById('btn-tema'));
+
+    numerosMuelle = numerosDeMuelle(configBodega, numMuelles);
+
     escribirFechaHora('f-fecha-ingreso', 'f-hora-h', 'f-hora-m', nowLocal());
     var ayer = new Date(today() + 'T00:00:00');
     ayer.setDate(ayer.getDate() - 1);
@@ -1408,6 +1433,7 @@ function iniciarPagina(perfil) {
         // el operario tenga que recargar.
         numMuelles = config.muelles || MUELLES_POR_DEFECTO;
         horaCorte = config.horaCorte != null ? config.horaCorte : HORA_CORTE_POR_DEFECTO;
+        numerosMuelle = numerosDeMuelle(config, numMuelles);
 
         pintarTituloMuelles();
         pintarEtiquetasCampos();
