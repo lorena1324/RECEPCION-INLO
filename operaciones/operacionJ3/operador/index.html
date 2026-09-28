@@ -206,7 +206,12 @@
 
             <!-- ENTRADA -->
             <div id="view-entrada" class="view">
-                <div class="form-card">
+                <!-- `data-enter`: con el foco en cualquier campo de este
+                     bloque, Enter registra la entrada, igual que en el
+                     login. Lo lleva shared/utils/teclado.js. Va aquí y
+                     no en el <div class="form-grid"> para que también
+                     funcione desde el pie, donde están los botones. -->
+                <div class="form-card" data-enter="btn-registrar">
                     <div class="form-grid">
 
                         <div class="form-group">

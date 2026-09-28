@@ -77,6 +77,7 @@ import { exportarExcel } from "../../../shared/utils/excel.js";
 
 
 import { conectarBotonTema } from "../../../shared/utils/tema.js";
+import { activarEnvioConEnter } from "../../../shared/utils/teclado.js";
 import { iniciarAnimaciones } from "../../../shared/components/animaciones.js";
 import { crearTableroMuelles } from "../../../shared/components/tableroMuelles.js";
 import { crearRegistroActividad } from "../../../shared/components/registroActividad.js";
@@ -1023,6 +1024,16 @@ async function registrarEntrada() {
         tipologiaNombre: ''
     };
 
+    /* El botón se apaga mientras Firestore guarda.
+
+       No es adorno defensivo: hasta que se puso Enter había que
+       acertarle al botón dos veces para duplicar un vehículo, y
+       ahora basta con el reflejo de pulsar Enter dos veces. Se
+       reenciende en el `finally`, así que un fallo de red no deja
+       el formulario muerto. */
+    var btnRegistrar = document.getElementById('btn-registrar');
+    if (btnRegistrar) btnRegistrar.disabled = true;
+
     setSyncStatus('syncing');
 
     try {
@@ -1035,6 +1046,8 @@ async function registrarEntrada() {
         setSyncStatus('error');
         toast('Error al guardar. Intenta de nuevo.', 'red', 'ti-x');
         console.error('Error al registrar entrada:', error);
+    } finally {
+        if (btnRegistrar) btnRegistrar.disabled = false;
     }
 }
 
@@ -1430,6 +1443,11 @@ function iniciarPagina(perfil) {
        script en línea del <head> antes del primer pintado; esto
        solo deja el botón escuchando y con el icono que toca. */
     conectarBotonTema(document.getElementById('btn-tema'));
+
+    /* Enter envía, como en el login. Con el foco en un modal
+       abierto pulsa su botón primario; en el formulario de
+       entrada, el de registrar. Ver shared/utils/teclado.js. */
+    activarEnvioConEnter();
 
 
     perfilActual = perfil;

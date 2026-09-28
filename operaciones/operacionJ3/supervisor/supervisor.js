@@ -93,7 +93,8 @@ import {
 } from "../../../shared/services/estadisticas.js";
 
 
-import { conectarBotonTema } from "../../../shared/utils/tema.js";
+import { conectarBotonTema } from "../../../shared/utils/tema.js";
+import { activarEnvioConEnter } from "../../../shared/utils/teclado.js";
 import { iniciarAnimaciones } from "../../../shared/components/animaciones.js";
 import { crearTableroMuelles } from "../../../shared/components/tableroMuelles.js";
 import { crearRegistroActividad } from "../../../shared/components/registroActividad.js";
@@ -299,6 +300,11 @@ function iniciarNavegacion() {
        script en línea del <head> antes del primer pintado; esto
        solo deja el botón escuchando y con el icono que toca. */
     conectarBotonTema(document.getElementById('btn-tema'));
+
+    /* Enter envía, como en el login. Con el foco en un modal
+       abierto pulsa su botón primario; en el formulario de
+       entrada, el de registrar. Ver shared/utils/teclado.js. */
+    activarEnvioConEnter();
 
   document.querySelectorAll(".nav-item").forEach((btn) => {
     btn.addEventListener("click", () => mostrarVista(btn.dataset.view));
