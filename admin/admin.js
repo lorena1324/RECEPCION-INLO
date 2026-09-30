@@ -45,6 +45,7 @@ import {
     crearCitaCancelada,
     corregirRegistro,
     actualizarModalidad,
+    actualizarTipologia,
     estaCancelado
 } from "../shared/services/vehiculos.js";
 
@@ -125,6 +126,7 @@ import { activarEnvioConEnter } from "../shared/utils/teclado.js";
 
 import { iniciarAnimaciones } from "../shared/components/animaciones.js";
 import { crearTableroMuelles } from "../shared/components/tableroMuelles.js";
+import { crearRegistroActividad } from "../shared/components/registroActividad.js";
 
 
 /* =========================================================
@@ -146,10 +148,12 @@ import { crearTableroMuelles } from "../shared/components/tableroMuelles.js";
    ========================================================= */
 
 let tableroMuelles = null;
+let registroActividad = null;
 
 function tablero() {
     if (!tableroMuelles) {
         iniciarAnimaciones();
+        registroActividad = crearRegistroActividad(document.getElementById('registro-actividad'));
         tableroMuelles = crearTableroMuelles(document.getElementById('muelles-grid'), {
             extras: extrasDeMuelle,
             acciones: accionesDeMuelle,
@@ -163,7 +167,7 @@ function tablero() {
 }
 
 function extrasDeMuelle(rec) {
-    return selectorModalidad(rec) + renderAvance(rec);
+    return selectorTipologiaMuelle(rec) + selectorModalidad(rec) + renderAvance(rec);
 }
 
 function accionesDeMuelle(rec) {
@@ -674,6 +678,18 @@ function renderDashboard() {
        pantallas no puedan mostrar horas pico distintas. */
     renderChartFranjaHoraria('chart-franja-horaria-dashboard', deHoy, horaCorte());
     renderUltimosMovimientos(base);
+
+    /* Actividad reciente. NO es lo mismo que "últimos movimientos"
+       de la línea de arriba, aunque lo parezca: aquella lista los
+       VEHÍCULOS que más atención piden ahora, y esta los HECHOS que
+       acaban de ocurrir —quién registró una entrada, quién dejó una
+       novedad, qué se canceló—. Una responde "¿qué tengo delante?" y
+       la otra "¿qué acaba de pasar?".
+
+       Se le pasan TODOS los registros y no solo los activos: lo
+       último que pasó en la bodega incluye las salidas, que es justo
+       el evento que desaparecería al filtrar por "sigue adentro". */
+    if (registroActividad) registroActividad.actualizar(registros);
 }
 
 /* Reparte los vehículos que esperan en patio según su nivel de
@@ -764,6 +780,67 @@ async function marcarModalidad(id, modalidad) {
     } catch (error) {
         console.error('No se pudo marcar la modalidad:', error);
         toast('No se pudo marcar la modalidad', 'red', 'ti-alert-triangle');
+    }
+}
+
+
+/* =========================================================
+   LA TIPOLOGÍA DEL VEHÍCULO, DESDE LA TARJETA DEL MUELLE
+
+   La misma que el supervisor asigna en su tablero. Aquí estaba,
+   pero solo dentro del modal de CORRECCIÓN —aún más enterrada que
+   en supervisor, porque corregir un registro es otra intención:
+   se entra ahí a arreglar algo mal digitado, no a clasificar un
+   camión que acaba de llegar.
+
+   El administrador tiene acceso total y eso incluye poder hacer
+   lo mismo que el rol al que suple. Si una función se queda fuera
+   de este panel, el rol que existe para resolver incidencias es
+   justamente el que no puede resolverlas.
+
+   No se toca el modal de corrección: sigue donde estaba, con su
+   propio selector, para el caso de un vehículo que YA SALIÓ.
+   ========================================================= */
+
+function tipologiasDeLaBodega() {
+    return (cfgGuardada && cfgGuardada.tipologias) || [];
+}
+
+function opcionesTipologia(r) {
+    return ['<option value="">Sin asignar</option>']
+        .concat(tipologiasDeLaBodega().map(function (t) {
+            return '<option value="' + escapar(t.id) + '"' +
+                   (t.id === r.tipologia ? ' selected' : '') + '>' +
+                   escapar(t.nombre) + '</option>';
+        }))
+        .join('');
+}
+
+/* Cuando ya hay tipología va discreto: la tarjeta la enseña arriba
+   en grande y esto es solo para corregirla. Cuando falta se pone en
+   rojo y lo dice, porque es la razón por la que ese camión no va a
+   poder salir y conviene que se vea desde el otro lado del tablero,
+   no al abrir un modal. */
+function selectorTipologiaMuelle(r) {
+
+    if (r.horaSalida) return '';
+    if (!tipologiasDeLaBodega().length) return '';
+
+    var falta = !r.tipologia;
+
+    return '<div class="tm-clasificar' + (falta ? ' falta' : '') + '">' +
+           '<label>' + (falta ? 'Falta la tipología — no puede salir' : 'Tipología') + '</label>' +
+           '<select data-set-tipologia="' + escapar(r.id) + '">' + opcionesTipologia(r) + '</select>' +
+           '</div>';
+}
+
+async function asignarTipologia(id, tipologiaId) {
+    try {
+        await actualizarTipologia(id, buscarTipologia(cfgGuardada, tipologiaId), perfilActual.nombre);
+        toast('Tipología asignada', 'blue', 'ti-truck');
+    } catch (error) {
+        console.error('No se pudo asignar la tipología:', error);
+        toast('No se pudo asignar la tipología', 'red', 'ti-alert-triangle');
     }
 }
 
@@ -3916,6 +3993,11 @@ function wireDelegatedClicks() {
         var btnCobrar = e.target.closest('[data-cobrar]');
         if (btnCobrar) { openModalCobro(btnCobrar.getAttribute('data-cobrar')); return; }
 
+        // El desplegable de tipología no es un botón: escucha
+        // 'change', más abajo. Aquí solo se atrapa el clic para que
+        // no se lo lleve ningún otro handler de la lista.
+        if (e.target.closest('[data-set-tipologia]')) return;
+
         // "id:Modalidad" — el id no lleva ":", así que basta con
         // partir por el primero.
         var btnModalidad = e.target.closest('[data-modalidad]');
@@ -3990,6 +4072,16 @@ function iniciarPagina(perfil) {
     ayer.setDate(ayer.getDate() - 1);
     document.getElementById('f-fecha-ingreso').min = ayer.toISOString().slice(0, 10);
     document.getElementById('f-fecha-ingreso').max = today();
+
+    /* La tipología se asigna desde un <select>, así que va por
+       'change' y no por clic. En el body y no en la tarjeta: las
+       tarjetas del muelle las crea el componente y su contenido se
+       reescribe, así que enlazarlas una por una se perdería en el
+       primer repintado. */
+    document.body.addEventListener('change', function (e) {
+        var sel = e.target.closest('[data-set-tipologia]');
+        if (sel) asignarTipologia(sel.getAttribute('data-set-tipologia'), sel.value);
+    });
 
     // Selector de operación del topbar (J3 / J4 / B9)
     document.getElementById('selector-operacion').addEventListener('change', function (e) {

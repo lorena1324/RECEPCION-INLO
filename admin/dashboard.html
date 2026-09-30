@@ -345,6 +345,22 @@
                         <tbody id="tabla-dashboard-body"></tbody>
                     </table>
                 </div>
+
+                <!-- Registro de actividad en vivo.
+
+                     No es lo mismo que la tabla de arriba, aunque lo
+                     parezca: aquella lista los VEHÍCULOS que más
+                     atención piden ahora, y esta los HECHOS que acaban
+                     de ocurrir. Una responde "¿qué tengo delante?" y la
+                     otra "¿qué acaba de pasar?".
+
+                     Tampoco es una consulta nueva: se arma con el
+                     `historial` que cada vehículo ya trae. Cero
+                     lecturas extra de Firestore. -->
+                <div class="section-header">
+                    <div class="section-title">Actividad reciente</div>
+                </div>
+                <div id="registro-actividad" class="ra-wrap"></div>
             </div>
 
             <!-- ENTRADA -->

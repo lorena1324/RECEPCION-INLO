@@ -312,10 +312,55 @@
 }
 
 /* Hueco para lo que cada panel mete de su cosecha: el badge de
-   canal y el selector de modalidad del supervisor, el avance
+   canal, la tipología y la modalidad del supervisor, el avance
    editable. El componente no sabe qué va aquí; solo dónde va. */
 .tm-extras { margin-top: 8px; }
 .tm-extras:empty { margin-top: 0; }
+
+
+/* ── Asignar la tipología desde la propia tarjeta ─────────────
+
+   La pone el supervisor mirando el camión abierto en el muelle.
+   Antes había que abrir la ficha del vehículo y bajar hasta
+   Clasificación; ahora está donde se toma la decisión.
+
+   Dos estados, y la diferencia es deliberada. Con tipología ya
+   puesta va discreto: la tarjeta la enseña arriba en grande y
+   esto es solo para corregirla. Sin ella se pone en rojo y lo
+   dice con todas las letras, porque es la razón por la que ese
+   camión no va a poder salir — y eso tiene que verse desde el
+   otro lado del tablero, no al abrir un modal. */
+
+.tm-clasificar { margin-top: 9px; }
+
+.tm-clasificar label {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+    margin-bottom: 3px;
+}
+
+.tm-clasificar select {
+    width: 100%;
+    font-size: 12px;
+    padding: 4px 6px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-md);
+    background: var(--surface);
+    color: var(--text-1);
+    cursor: pointer;
+}
+
+.tm-clasificar select:focus-visible {
+    outline: 2px solid var(--brand-claro);
+    outline-offset: 1px;
+}
+
+.tm-clasificar.falta label  { color: var(--sem-alta); }
+.tm-clasificar.falta select { border-color: var(--sem-alta); }
 
 .tm-avance { margin-top: 10px; }
 

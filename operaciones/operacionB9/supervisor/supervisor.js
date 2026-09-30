@@ -1165,7 +1165,7 @@ function tablero() {
 
 function extrasDeMuelle(r) {
     return `<div style="margin-top:4px;"><span class="badge badge-canal">${escapar(r.canal || "—")}</span></div>` +
-           selectorModalidad(r) + renderAvance(r);
+           selectorTipologiaMuelle(r) + selectorModalidad(r) + renderAvance(r);
 }
 
 function accionesDeMuelle(r) {
@@ -1242,21 +1242,61 @@ function bloqueNovedadAccion(r) {
           </div>`;
 }
 
+/* ── LA TIPOLOGÍA DEL VEHÍCULO ──────────────────────────────
+
+   La asigna el supervisor, que es quien ve el camión abierto en
+   el muelle. Y no es un dato de papeleo: de ella cuelgan la
+   tarifa que se cobra y la meta de tiempo contra la que se mide
+   el muelle, y mientras falte el vehículo NO PUEDE SALIR.
+
+   Por eso el mismo desplegable está en dos sitios: en la ficha
+   del vehículo, donde se revisa todo junto, y en la tarjeta del
+   muelle, que es donde el supervisor está mirando cuando lo
+   decide. Las opciones salen de una sola función para que las dos
+   listas no se separen nunca.
+   ───────────────────────────────────────────────────────── */
+
+function tipologiasDeLaBodega() {
+  return (configBodega && configBodega.tipologias) || [];
+}
+
+function opcionesTipologia(r) {
+  return ['<option value="">Sin asignar</option>']
+    .concat(tipologiasDeLaBodega().map((t) =>
+      `<option value="${escapar(t.id)}"${t.id === r.tipologia ? " selected" : ""}>${escapar(t.nombre)}</option>`))
+    .join("");
+}
+
+/* La versión de la tarjeta del muelle.
+
+   Cuando ya hay tipología va discreto: la tarjeta ya la enseña
+   arriba en grande y esto es solo para corregirla. Cuando falta
+   se pone en rojo y lo dice, porque es la razón por la que ese
+   camión no va a poder salir y conviene que se vea desde el otro
+   lado del tablero, no al abrir un modal. */
+function selectorTipologiaMuelle(r) {
+
+  if (r.horaSalida) return "";
+  if (!tipologiasDeLaBodega().length) return "";
+
+  const falta = !r.tipologia;
+
+  return `<div class="tm-clasificar${falta ? " falta" : ""}">
+            <label>${falta ? "Falta la tipología — no puede salir" : "Tipología"}</label>
+            <select data-set-tipologia="${escapar(r.id)}">${opcionesTipologia(r)}</select>
+          </div>`;
+}
+
 function bloqueClasificacion(r) {
 
   if (r.horaSalida) return "";
 
-  const lista = (configBodega && configBodega.tipologias) || [];
-
-  const opciones = ['<option value="">Sin asignar</option>']
-    .concat(lista.map((t) =>
-      `<option value="${escapar(t.id)}"${t.id === r.tipologia ? " selected" : ""}>${escapar(t.nombre)}</option>`))
-    .join("");
+  const lista = tipologiasDeLaBodega();
 
   // Sin tipologías configuradas no hay nada que elegir. Se dice en
   // vez de mostrar un desplegable vacío que parecería roto.
   const selector = lista.length
-    ? `<select data-set-tipologia="${escapar(r.id)}">${opciones}</select>`
+    ? `<select data-set-tipologia="${escapar(r.id)}">${opcionesTipologia(r)}</select>`
     : '<span class="texto-ayuda">El administrador todavía no ha configurado las tipologías de esta bodega.</span>';
 
   const falta = !r.tipologia && lista.length
