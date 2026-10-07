@@ -78,6 +78,7 @@ import {
     guardarTarifas,
     validarConfig,
     nuevaTipologia,
+    MODELOS_3D,
     buscarTipologia,
     nombreTipologiaDe,
     hayTipologias,
@@ -125,7 +126,9 @@ import { conectarBotonTema } from "../shared/utils/tema.js";
 import { activarEnvioConEnter } from "../shared/utils/teclado.js";
 
 import { iniciarAnimaciones } from "../shared/components/animaciones.js";
-import { crearTableroMuelles } from "../shared/components/tableroMuelles.js";
+// Muelles en 3D: misma interfaz que el tablero de siempre, al que
+// vuelve solo si el equipo no tiene WebGL o el motor no carga.
+import { crearTableroMuelles3D as crearTableroMuelles } from "../shared/components/tableroMuelles3D.js";
 import { crearRegistroActividad } from "../shared/components/registroActividad.js";
 
 
@@ -158,6 +161,10 @@ function tablero() {
             extras: extrasDeMuelle,
             acciones: accionesDeMuelle,
             onSeleccion: openModalDetalle,
+            // La fila del patio también va en el tablero 3D, con los
+            // mismos botones de la tabla de patio.
+            accionesPatio: accionesDePatio,
+            reemplazaPatio: 'dash-table',
             // Este panel dibuja su propio avance en `extras`; sin
             // esto la tarjeta enseñaría dos.
             mostrarAvance: false
@@ -168,6 +175,14 @@ function tablero() {
 
 function extrasDeMuelle(rec) {
     return selectorTipologiaMuelle(rec) + selectorModalidad(rec) + renderAvance(rec);
+}
+
+/* Los botones de un vehículo en patio: los mismos de su fila en la
+   tabla de patio. Los usa la ficha del patio en el tablero 3D. */
+function accionesDePatio(r) {
+    return '<button class="btn btn-sm btn-primary" data-editar="' + r.id + '">Mover</button>' +
+           '<button class="btn btn-sm" data-observacion="' + r.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
+           '<button class="btn btn-sm" data-detalle="' + r.id + '"><i class="ti ti-info-circle"></i> Detalle</button>';
 }
 
 function accionesDeMuelle(rec) {
@@ -648,7 +663,8 @@ function renderDashboard() {
     tablero().actualizar({
         numeros: numeros,
         registros: enMuelle,
-        config: cfgGuardada
+        config: cfgGuardada,
+        patio: ordenarPorPrioridad(enPatio, cfgGuardada)
     });
 
     // Tabla de patio
@@ -3396,6 +3412,17 @@ function renderCfgTipologias() {
                     '<label>Nombre de la tipología</label>' +
                     '<input type="text" data-cfg-nombre="' + i + '" value="' + escapar(t.nombre) + '" placeholder="Ej: Tractomula">' +
                 '</div>' +
+                // Con qué carrocería se dibuja en el tablero de muelles 3D.
+                '<div class="cfg-campo">' +
+                    '<label>Vehículo en 3D</label>' +
+                    '<select data-cfg-modelo3d="' + i + '">' +
+                        '<option value="">Automático (por el nombre)</option>' +
+                        Object.keys(MODELOS_3D).map(function (clave) {
+                            return '<option value="' + clave + '"' + (t.modelo3d === clave ? ' selected' : '') + '>' +
+                                   MODELOS_3D[clave] + '</option>';
+                        }).join('') +
+                    '</select>' +
+                '</div>' +
                 campoTarifa +
                 '<button class="btn btn-sm" data-cfg-borrar-tipologia="' + i + '">' +
                     '<i class="ti ti-trash"></i> Quitar' +
@@ -3915,6 +3942,12 @@ function wireConfiguracion() {
         var nombre = e.target.getAttribute('data-cfg-nombre');
         if (nombre !== null) {
             cfgBorrador.tipologias[Number(nombre)].nombre = e.target.value;
+            return;
+        }
+
+        var modelo3d = e.target.getAttribute('data-cfg-modelo3d');
+        if (modelo3d !== null) {
+            cfgBorrador.tipologias[Number(modelo3d)].modelo3d = e.target.value;
             return;
         }
 

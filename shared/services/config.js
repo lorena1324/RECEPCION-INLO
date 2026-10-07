@@ -570,10 +570,30 @@ export function tiemposEnCero() {
     return t;
 }
 
+/* =========================================================
+   CÓMO SE DIBUJA EN EL TABLERO 3D
+
+   Cada tipología dice con qué carrocería se pinta en el tablero
+   de muelles 3D (shared/components/tableroMuelles3D.js). Las
+   claves son las clases del motor (cliente/src/3d/vehiculos).
+
+   Vacío = automático: se deduce del nombre ("Mula" → tractomula,
+   "Turbo" → turbo…). Es el valor de partida para no obligar a
+   reconfigurar las tipologías que ya existían.
+   ========================================================= */
+
+export const MODELOS_3D = {
+    turbo: "Turbo",
+    sencillo: "Sencillo",
+    dobleTroque: "Doble troque",
+    tractomula: "Tractomula"
+};
+
 export function nuevaTipologia(nombre) {
     return {
         id: "tpl_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         nombre: nombre || "",
+        modelo3d: "",
         tiempos: tiemposEnCero()
     };
 }
@@ -600,6 +620,9 @@ function normalizarTipologia(t) {
     return {
         id: t && t.id ? t.id : nuevaTipologia().id,
         nombre: t && t.nombre ? String(t.nombre) : "",
+        // Sin este campo aquí, guardar la configuración lo borraría:
+        // todo lo que no sale de normalizar() no llega a Firestore.
+        modelo3d: t && Object.prototype.hasOwnProperty.call(MODELOS_3D, t.modelo3d) ? t.modelo3d : "",
         tiempos: tiempos
     };
 }

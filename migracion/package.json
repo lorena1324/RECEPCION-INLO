@@ -1,0 +1,12 @@
+{
+  "name": "inlotrans-migracion",
+  "private": true,
+  "type": "module",
+  "description": "Herramientas para sacar los datos de Firebase y llevarlos a PostgreSQL",
+  "scripts": {
+    "exportar": "node exportar-firestore.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

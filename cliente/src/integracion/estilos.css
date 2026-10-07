@@ -1,0 +1,47 @@
+/* =========================================================
+   Estilos del motor 3D dentro de la app actual
+
+   Van dentro de un Shadow DOM: no salen a la página (no le
+   cambian nada a los paneles) y el CSS de la página no entra.
+   Por eso NO se importa el "preflight" de Tailwind — no hay
+   nada que resetear afuera — y se ponen aquí a mano los pocos
+   valores base que necesitan los componentes.
+   ========================================================= */
+
+/* El orden de las capas decide quién gana: las utilidades tienen
+   que poder más que los valores base de abajo. */
+@layer theme, base, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "../tema.css";
+
+@source "../";
+
+@layer base {
+    :host {
+        display: block;
+        height: 100%;
+        color: var(--color-texto);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+    }
+
+    *, ::before, ::after {
+        box-sizing: border-box;
+        border: 0 solid;
+        margin: 0;
+        padding: 0;
+    }
+
+    button, select, input {
+        font: inherit;
+        color: inherit;
+        background: none;
+    }
+
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; }
+    ul { list-style: none; }
+    table { border-collapse: collapse; }
+}

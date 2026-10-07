@@ -1,0 +1,22 @@
+/* =========================================================
+   Tokens de diseño
+
+   Todos los colores de la interfaz del motor 3D salen de aquí
+   (los importa integracion/estilos.css). El tablero es oscuro
+   por defecto (sala de control); los colores de fase y de
+   estado viven en 3d/TableroMuelles3D.jsx porque los usa
+   también el 3D.
+   ========================================================= */
+
+@theme {
+    --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+
+    --color-fondo: #0b1017;
+    --color-panel: #121a25;
+    --color-superficie: #182231;
+    --color-borde: #243246;
+    --color-texto: #e7edf6;
+    --color-texto-suave: #93a3b8;
+
+    --color-marca: #3987e5;
+}

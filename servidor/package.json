@@ -1,0 +1,14 @@
+{
+  "name": "@inlotrans/servidor",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --watch src/index.js",
+    "start": "node --env-file-if-exists=.env src/index.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "pg": "^8.23.1",
+    "socket.io": "^4.8.4"
+  }
+}

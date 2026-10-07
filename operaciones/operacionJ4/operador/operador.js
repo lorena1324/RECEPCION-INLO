@@ -79,7 +79,9 @@ import { exportarExcel } from "../../../shared/utils/excel.js";
 import { conectarBotonTema } from "../../../shared/utils/tema.js";
 import { activarEnvioConEnter } from "../../../shared/utils/teclado.js";
 import { iniciarAnimaciones } from "../../../shared/components/animaciones.js";
-import { crearTableroMuelles } from "../../../shared/components/tableroMuelles.js";
+// Muelles en 3D: misma interfaz que el tablero de siempre, al que
+// vuelve solo si el equipo no tiene WebGL o el motor no carga.
+import { crearTableroMuelles3D as crearTableroMuelles } from "../../../shared/components/tableroMuelles3D.js";
 import { crearRegistroActividad } from "../../../shared/components/registroActividad.js";
 const OPERACION = "J4";
 const RUTA_LOGIN = "../../../index.html";
@@ -177,7 +179,11 @@ function componentes() {
         iniciarAnimaciones();
         tableroMuelles = crearTableroMuelles(document.getElementById('muelles-grid'), {
             acciones: accionesDeMuelle,
-            onSeleccion: openModalDetalle
+            onSeleccion: openModalDetalle,
+            // La fila del patio también va en el tablero 3D, con los
+            // mismos botones de la tabla de patio.
+            accionesPatio: accionesDePatio,
+            reemplazaPatio: 'dash-table'
         });
         registroActividad = crearRegistroActividad(document.getElementById('registro-actividad'));
     }
@@ -186,6 +192,14 @@ function componentes() {
 
 /* Los botones de una tarjeta. Se los pasa el panel al componente,
    que sabe dónde ponerlos pero no cuáles son. */
+/* Los botones de un vehículo en patio: los mismos de su fila en la
+   tabla de patio. Los usa la ficha del patio en el tablero 3D. */
+function accionesDePatio(r) {
+    return '<button class="btn btn-sm btn-primary" data-editar="' + r.id + '">Mover</button>' +
+           '<button class="btn btn-sm" data-observacion="' + r.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
+           '<button class="btn btn-sm" data-detalle="' + r.id + '"><i class="ti ti-info-circle"></i> Detalle</button>';
+}
+
 function accionesDeMuelle(rec) {
     return '<button class="btn btn-sm btn-primary" data-editar="' + rec.id + '">Mover</button>' +
            '<button class="btn btn-sm" data-observacion="' + rec.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
@@ -525,7 +539,8 @@ function renderDashboard() {
             ? numerosMuelle
             : Array.from({ length: numMuelles }, function (_, i) { return i + 1; }),
         registros: enMuelle,
-        config: configBodega
+        config: configBodega,
+        patio: ordenarPorPrioridad(enPatio, configBodega)
     });
 
     // Tabla de patio

@@ -291,7 +291,7 @@
 
 .cfg-tipologia-head {
     display: grid;
-    grid-template-columns: minmax(150px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) auto;
+    grid-template-columns: minmax(150px, 2fr) minmax(150px, 1.2fr) minmax(110px, 1fr) minmax(110px, 1fr) auto;
     gap: 14px;
     align-items: end;
     padding: 14px 16px;
@@ -303,7 +303,16 @@
 
 /* En las bodegas que no cobran no hay columnas de tarifa: el nombre
    toma el espacio que dejaron, en vez de quedar un hueco. */
-.cfg-tipologia-head.sin-tarifa { grid-template-columns: 1fr auto; }
+.cfg-tipologia-head.sin-tarifa { grid-template-columns: 2fr minmax(150px, 1fr) auto; }
+
+.cfg-campo select { width: 100%; }
+
+/* Con el selector del 3D son cinco columnas: en pantalla angosta
+   se parten en dos para que ninguna quede aplastada. */
+@media (max-width: 900px) {
+    .cfg-tipologia-head,
+    .cfg-tipologia-head.sin-tarifa { grid-template-columns: 1fr 1fr; }
+}
 
 /* Las tres cifras calculadas de la tarifa. Van sobre el fondo de la
    cabecera y sin marco de campo para que se lean como resultado y

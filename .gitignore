@@ -1,0 +1,10 @@
+# Migración: la clave da acceso total a Firebase y el export
+# contiene datos reales y hashes de contraseñas. Nunca a git.
+migracion/clave-servicio.json
+migracion/export/
+migracion/node_modules/
+
+# Proyecto Node
+node_modules/
+cliente/dist/
+servidor/.env

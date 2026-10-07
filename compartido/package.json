@@ -1,0 +1,9 @@
+{
+  "name": "@inlotrans/compartido",
+  "private": true,
+  "type": "module",
+  "description": "Reglas de negocio que usan por igual el cliente y el servidor",
+  "exports": {
+    "./dominio": "./dominio/index.js"
+  }
+}

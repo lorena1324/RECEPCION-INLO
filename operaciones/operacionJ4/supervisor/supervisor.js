@@ -99,7 +99,9 @@ import {
 import { conectarBotonTema } from "../../../shared/utils/tema.js";
 import { activarEnvioConEnter } from "../../../shared/utils/teclado.js";
 import { iniciarAnimaciones } from "../../../shared/components/animaciones.js";
-import { crearTableroMuelles } from "../../../shared/components/tableroMuelles.js";
+// Muelles en 3D: misma interfaz que el tablero de siempre, al que
+// vuelve solo si el equipo no tiene WebGL o el motor no carga.
+import { crearTableroMuelles3D as crearTableroMuelles } from "../../../shared/components/tableroMuelles3D.js";
 import { crearRegistroActividad } from "../../../shared/components/registroActividad.js";
 const OPERACION = "J4";
 const RUTA_LOGIN = "../../../index.html";
@@ -1652,7 +1654,11 @@ function tablero() {
             acciones: accionesDeMuelle,
             // Este panel dibuja su propio avance en `extras`; sin
             // esto la tarjeta enseñaría dos.
-            mostrarAvance: false
+            mostrarAvance: false,
+            // La fila del patio también va en el tablero 3D; su botón es
+            // el mismo del muelle (Novedades), como en la tabla de patio.
+            accionesPatio: accionesDeMuelle,
+            reemplazaPatio: "tabla-patio-body"
         });
     }
     return tableroMuelles;
@@ -1677,7 +1683,8 @@ function renderUbicacion() {
       ? numerosMuelle
       : Array.from({ length: numMuelles }, (_, i) => i + 1),
     registros: enMuelle,
-    config: configBodega
+    config: configBodega,
+    patio: ordenarPorPrioridad(getRegistrosEnPatio(base), configBodega)
   });
 
   const enPatio = ordenarPorPrioridad(getRegistrosEnPatio(base), configBodega);

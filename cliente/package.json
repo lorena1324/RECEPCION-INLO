@@ -1,0 +1,29 @@
+{
+  "name": "@inlotrans/cliente",
+  "private": true,
+  "type": "module",
+  "description": "Fuente del motor 3D de muelles. Se compila a shared/vendor/muelles3d, que es lo que carga la app.",
+  "scripts": {
+    "dev": "vite build --config vite.muelles3d.config.js --watch",
+    "build": "vite build --config vite.muelles3d.config.js",
+    "build:muelles3d": "vite build --config vite.muelles3d.config.js"
+  },
+  "dependencies": {
+    "@inlotrans/compartido": "*",
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.1",
+    "@react-three/postprocessing": "^3.1.3",
+    "@tabler/icons-react": "^3.49.0",
+    "motion": "^14.0.0",
+    "postprocessing": "^6.39.5",
+    "react": "~19.3.0",
+    "react-dom": "~19.3.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "^6.1.2",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.3"
+  }
+}

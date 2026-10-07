@@ -1,0 +1,19 @@
+{
+  "name": "inlotrans",
+  "private": true,
+  "type": "module",
+  "description": "INLOTRANS — recepción de vehículos. `npm run dev` abre el sistema en http://localhost:3100 (login).",
+  "workspaces": [
+    "compartido",
+    "cliente",
+    "servidor"
+  ],
+  "scripts": {
+    "dev": "concurrently -n app,3d -c blue,magenta \"npm run dev -w servidor\" \"npm run dev -w cliente\"",
+    "build": "npm run build -w cliente",
+    "start": "npm run start -w servidor"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

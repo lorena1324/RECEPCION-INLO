@@ -1,0 +1,98 @@
+/* =========================================================
+   INLOTRANS — Tablero de muelles en 3D
+   (shared/components/tableroMuelles3D.js)
+
+   Solo el marco: el dibujo vive en un Shadow DOM con sus propios
+   estilos. La ficha del vehículo reutiliza las clases tm-* del
+   tablero de siempre (tablero.css), así que se ve igual que una
+   tarjeta de muelle y sigue el tema claro/oscuro.
+   ========================================================= */
+
+/* El contenedor deja de ser la grilla de tarjetas. */
+.tm-grid.tm3d-contenedor {
+    display: block;
+}
+
+.tm3d {
+    position: relative;
+    height: 560px;
+    border-radius: var(--radius-xl);
+    border: 0.5px solid var(--border);
+    overflow: hidden;
+    background: #121a25;
+    box-shadow: var(--shadow-sm);
+}
+
+/* Expandido: ocupa toda la ventana, por encima de la barra
+   lateral (50) y del encabezado (40) pero DEBAJO de los modales
+   (200), que tienen que poder abrirse encima del tablero. */
+.tm3d.tm3d-expandido {
+    position: fixed;
+    inset: 0;
+    height: auto;
+    z-index: 150;
+    border-radius: 0;
+    border: 0;
+}
+
+body.tm3d-sin-scroll {
+    overflow: hidden;
+}
+
+/* `.tm-card` trae su propio display, que le ganaría al atributo
+   hidden: sin esto la ficha no se podría cerrar. */
+.tm3d-ficha[hidden] {
+    display: none !important;
+}
+
+/* La ficha flota a la derecha de la escena. */
+.tm3d-ficha.tm-card {
+    pointer-events: auto;
+    width: min(340px, calc(100vw - 48px));
+    max-height: 100%;
+    overflow-y: auto;
+    margin: 0;
+    box-shadow: var(--shadow-md);
+}
+
+.tm3d-ficha .tm-head {
+    align-items: center;
+}
+
+.tm3d-cerrar {
+    margin-left: 8px;
+    border: 0;
+    background: transparent;
+    color: var(--text-3);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    padding: 2px 4px;
+}
+
+.tm3d-cerrar:hover {
+    color: var(--text-1);
+    background: var(--surface-3);
+}
+
+/* La tabla de patio de la página, mientras el 3D la reemplaza. */
+.tm3d-reemplazado {
+    display: none !important;
+}
+
+.tm3d-datos {
+    font-size: 12px;
+    color: var(--text-3);
+    margin: 4px 0 8px;
+}
+
+.tm3d-detalle {
+    width: 100%;
+    margin-top: 10px;
+    justify-content: center;
+}
+
+@media (max-width: 720px) {
+    .tm3d { height: 440px; }
+}
