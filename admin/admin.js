@@ -120,6 +120,7 @@ import { fichaVehiculo } from "../shared/services/detalleVehiculo.js";
 import { nowLocal, today, fmtDt, formatDuration, fechaDentroDeRango, todayOperativo, sumarDias } from "../shared/utils/tiempos.js";
 import { exportarExcel } from "../shared/utils/excel.js";
 import { renderPanelEstadisticas, renderChartFranjaHoraria } from "../shared/services/estadisticas.js";
+import { conectarFiltroFechas } from "../shared/components/filtroFechas.js";
 
 
 import { conectarBotonTema } from "../shared/utils/tema.js";
@@ -2825,15 +2826,20 @@ function suscribir() {
    silencio los contenedores que un panel no traiga.
    ========================================================= */
 
-var estadPeriodoActual = 'todo';
-var rangoRecortado = 0;
 var MAX_DIAS_RANGO = 366;
+/* El rango de fechas de Estadísticas. Ver shared/components/filtroFechas.js. */
+let filtroFechas = null;
 
 function iniciarPeriodoEstadisticas() {
-    document.querySelectorAll('#view-estadisticas .filter-pills .pill').forEach(function (btn) {
-        btn.addEventListener('click', function () { setPeriodoEstadisticas(btn.dataset.periodo, btn); });
+    // Rango de fechas libre: Desde/Hasta siempre visibles y aplicados
+    // al cambiar; los atajos (Hoy, 7 días, Este mes…) solo los llenan.
+    filtroFechas = conectarFiltroFechas({
+        raiz: document.getElementById("view-estadisticas"),
+        horaCorte: () => horaCorte(),
+        diasConDatos: () => registros.map((r) => getDiaOperativo(r, horaCorte())),
+        inicial: "todo",
+        onCambio: renderEstadisticas
     });
-    document.getElementById('estad-aplicar-rango').addEventListener('click', renderEstadisticas);
     // El mismo filtro global del topbar, visto desde aquí: escribe la
     // misma variable y sincroniza el otro desplegable.
     document.getElementById('ontime-canal').addEventListener('change', function (e) {
@@ -2843,89 +2849,20 @@ function iniciarPeriodoEstadisticas() {
     });
 }
 
-function setPeriodoEstadisticas(periodo, btn) {
-
-    estadPeriodoActual = periodo;
-    document.querySelectorAll('#view-estadisticas .filter-pills .pill').forEach(function (el) { el.classList.remove('active'); });
-    if (btn) btn.classList.add('active');
-
-    var custom = document.getElementById('estad-rango-custom');
-    if (periodo === 'personalizado') {
-        custom.style.display = 'flex';
-        if (!document.getElementById('estad-hasta').value) {
-            var hoyOp = todayOperativo(horaCorte());
-            document.getElementById('estad-hasta').value = hoyOp;
-            document.getElementById('estad-desde').value = hoyOp;
-        }
-        return; // esperar a que el usuario pulse "Aplicar"
-    }
-
-    custom.style.display = 'none';
-    renderEstadisticas();
-}
-
 function getDiasOperativosDelPeriodo() {
-
-    var hoyOp = todayOperativo(horaCorte());
-
-    if (estadPeriodoActual === 'personalizado') {
-        var desde = document.getElementById('estad-desde').value;
-        var hasta = document.getElementById('estad-hasta').value;
-        return buildDayRange(desde || hoyOp, hasta || hoyOp);
-    }
-
-    if (estadPeriodoActual === 'todo') {
-        var dias = {};
-        registros.forEach(function (r) {
-            var d = getDiaOperativo(r, horaCorte());
-            if (d) dias[d] = true;
-        });
-        var lista = Object.keys(dias);
-        if (!lista.length) lista.push(hoyOp);
-        rangoRecortado = 0;
-        return lista.sort();
-    }
-
-    var nDias = estadPeriodoActual === '3dias' ? 3
-        : estadPeriodoActual === 'semana' ? 7
-        : estadPeriodoActual === 'mes' ? 30 : 1;
-
-    var salida = [];
-    rangoRecortado = 0;
-    for (var i = nDias - 1; i >= 0; i--) salida.push(sumarDias(hoyOp, -i));
-    return salida;
-}
-
-/* El rango personalizado tiene tope (un año) porque cada día es un
-   punto en las gráficas, pero cuando recorta lo dice en vez de
-   dejar al usuario creyendo que vio todo lo que pidió. */
-function buildDayRange(desde, hasta) {
-
-    var dias = [];
-    var cur = desde;
-    while (cur <= hasta && dias.length < MAX_DIAS_RANGO) {
-        dias.push(cur);
-        cur = sumarDias(cur, 1);
-    }
-
-    var pedidos = Math.round(
-        (new Date(hasta + 'T12:00:00Z') - new Date(desde + 'T12:00:00Z')) / 86400000
-    ) + 1;
-    rangoRecortado = Math.max(0, pedidos - dias.length);
-
-    return dias.length ? dias : [todayOperativo(horaCorte())];
+    // El rango lo lleva el filtro de fechas (filtroFechas.js).
+    return filtroFechas ? filtroFechas.dias() : [todayOperativo(horaCorte())];
 }
 
 function pintarAvisoRango() {
-    var el = document.getElementById('estad-aviso-rango');
+    const el = document.getElementById("estad-aviso-rango");
     if (!el) return;
-    if (estadPeriodoActual !== 'personalizado' || !rangoRecortado) {
-        el.style.display = 'none';
-        return;
+    const fuera = filtroFechas ? filtroFechas.recortado() : 0;
+    el.style.display = fuera ? "" : "none";
+    if (fuera) {
+        el.textContent = "El rango pedido es más largo de lo que este panel puede graficar: se están " +
+            "mostrando los primeros " + MAX_DIAS_RANGO + " días y quedaron " + fuera + " por fuera.";
     }
-    el.style.display = '';
-    el.textContent = 'El rango pedido es más largo de lo que este panel puede graficar: se están ' +
-        'mostrando los primeros ' + MAX_DIAS_RANGO + ' días y quedaron ' + rangoRecortado + ' por fuera.';
 }
 
 function renderEstadisticas() {

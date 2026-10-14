@@ -94,6 +94,7 @@ import {
   renderPanelEstadisticas,
   renderChartFranjaHoraria
 } from "../../../shared/services/estadisticas.js";
+import { conectarFiltroFechas } from "../../../shared/components/filtroFechas.js";
 
 
 import { conectarBotonTema } from "../../../shared/utils/tema.js";
@@ -132,7 +133,6 @@ if (typeof Chart !== "undefined" && typeof ChartDataLabels !== "undefined") {
   Chart.defaults.set("plugins.datalabels", { display: false });
 }
 
-let estadPeriodoActual = "hoy";
 
 let registros = [];
 let canalFiltro = ""; // "" = todos, "MQ", "3PD" — filtro global (Dashboard + Registros + Estadísticas)
@@ -2174,93 +2174,35 @@ function botonCancelar(r) {
    ========================================================= */
 
 const MAX_DIAS_RANGO = 366;
-let rangoRecortado = 0;
+/* El rango de fechas de Estadísticas. Ver shared/components/filtroFechas.js. */
+let filtroFechas = null;
 
 function iniciarPeriodoEstadisticas() {
-  document.querySelectorAll("#view-estadisticas .filter-pills .pill").forEach((btn) => {
-    btn.addEventListener("click", () => setPeriodoEstadisticas(btn.dataset.periodo, btn));
+  // Rango de fechas libre: Desde/Hasta siempre visibles y aplicados
+  // al cambiar; los atajos (Hoy, 7 días, Este mes…) solo los llenan.
+  filtroFechas = conectarFiltroFechas({
+      raiz: document.getElementById("view-estadisticas"),
+      horaCorte: () => horaCorte,
+      diasConDatos: () => registros.map((r) => getDiaOperativo(r, horaCorte)),
+      inicial: "hoy",
+      onCambio: renderEstadisticas
   });
-  document.getElementById("estad-aplicar-rango").addEventListener("click", renderEstadisticas);
-}
-
-function setPeriodoEstadisticas(p, btn) {
-  estadPeriodoActual = p;
-  document.querySelectorAll("#view-estadisticas .filter-pills .pill").forEach((el) => el.classList.remove("active"));
-  if (btn) btn.classList.add("active");
-
-  const custom = document.getElementById("estad-rango-custom");
-  if (p === "personalizado") {
-    custom.style.display = "flex";
-    if (!document.getElementById("estad-hasta").value) {
-      const hoyOp = todayOperativo(horaCorte);
-      document.getElementById("estad-hasta").value = hoyOp;
-      document.getElementById("estad-desde").value = hoyOp;
-    }
-    return; // esperar a que el usuario pulse "Aplicar"
-  }
-
-  custom.style.display = "none";
-  renderEstadisticas();
 }
 
 function getDiasOperativosDelPeriodo() {
-  const hoyOp = todayOperativo(horaCorte);
-
-  if (estadPeriodoActual === "personalizado") {
-    const desde = document.getElementById("estad-desde").value;
-    const hasta = document.getElementById("estad-hasta").value;
-    return buildDayRange(desde || hoyOp, hasta || hoyOp);
-  }
-
-  if (estadPeriodoActual === "todo") {
-    const base = registrosFiltrados();
-    const dias = new Set();
-    base.forEach((r) => {
-      const d = getDiaOperativo(r, horaCorte);
-      if (d) dias.add(d);
-    });
-    if (!dias.size) dias.add(hoyOp);
-    rangoRecortado = 0;
-    return Array.from(dias).sort();
-  }
-
-  const nDias = estadPeriodoActual === "3dias" ? 3 : estadPeriodoActual === "semana" ? 7 : estadPeriodoActual === "mes" ? 30 : 1;
-  const dias = [];
-  rangoRecortado = 0;
-  for (let i = nDias - 1; i >= 0; i--) dias.push(sumarDias(hoyOp, -i));
-  return dias;
-}
-
-/* El rango personalizado estaba topado en 60 días y recortaba en
-   silencio: quien pedía tres meses veía dos y no se enteraba. El
-   tope sigue existiendo (un año) porque cada día del rango es un
-   punto en las gráficas, pero ahora cuando recorta lo dice. */
-function buildDayRange(desde, hasta) {
-  const dias = [];
-  let cur = desde;
-  while (cur <= hasta && dias.length < MAX_DIAS_RANGO) {
-    dias.push(cur);
-    cur = sumarDias(cur, 1);
-  }
-
-  const pedidos = Math.round(
-    (new Date(hasta + "T12:00:00Z") - new Date(desde + "T12:00:00Z")) / 86400000
-  ) + 1;
-  rangoRecortado = Math.max(0, pedidos - dias.length);
-
-  return dias.length ? dias : [todayOperativo(horaCorte)];
+    // El rango lo lleva el filtro de fechas (filtroFechas.js).
+    return filtroFechas ? filtroFechas.dias() : [todayOperativo(horaCorte)];
 }
 
 function pintarAvisoRango() {
-  const el = document.getElementById("estad-aviso-rango");
-  if (!el) return;
-  if (estadPeriodoActual !== "personalizado" || !rangoRecortado) {
-    el.style.display = "none";
-    return;
-  }
-  el.style.display = "";
-  el.textContent = "El rango pedido es más largo de lo que este panel puede graficar: se están " +
-    "mostrando los primeros " + MAX_DIAS_RANGO + " días y quedaron " + rangoRecortado + " por fuera.";
+    const el = document.getElementById("estad-aviso-rango");
+    if (!el) return;
+    const fuera = filtroFechas ? filtroFechas.recortado() : 0;
+    el.style.display = fuera ? "" : "none";
+    if (fuera) {
+        el.textContent = "El rango pedido es más largo de lo que este panel puede graficar: se están " +
+            "mostrando los primeros " + MAX_DIAS_RANGO + " días y quedaron " + fuera + " por fuera.";
+    }
 }
 
 function renderEstadisticas() {

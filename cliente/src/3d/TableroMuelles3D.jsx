@@ -1,4 +1,4 @@
-/* =========================================================
+﻿/* =========================================================
    INLOTRANS
    Tablero de muelles en 3D
 
@@ -26,7 +26,7 @@ import { crearModelo } from "./vehiculos/index.js";
 import { usarOrbitaConInercia } from "./usarOrbitaConInercia.js";
 import Bodega from "./escenario/Bodega.jsx";
 import {
-    LARGO_CUPO, MUELLE, SEPARACION_PATIO, Z_CARRIL, Z_MUELLE, Z_PATIO,
+    LARGO_CUPO, MUELLE, SEPARACION_PATIO, Z_CARRIL, Z_FICHA, Z_MUELLE, Z_PATIO,
     anchoBodega, cuposPatio, xDeCupo, xDeMuelle, xEntrada, xSalida
 } from "./escenario/medidas.js";
 
@@ -137,7 +137,7 @@ function semillaDe(id) {
     aparecen directamente en su sitio: si no, el tablero arrancaría
     con un desfile de camiones cada vez que alguien recarga.
 */
-function VehiculoEnEscena({ vehiculo, destino, saliendo, animarLlegada, total, verInterior, etiqueta, compacta, onSalio, onSeleccionar }) {
+function VehiculoEnEscena({ vehiculo, destino, saliendo, animarLlegada, total, verInterior, etiqueta, compacta, escala, onSalio, onSeleccionar }) {
 
     const modelo = useMemo(
         () => crearModelo(vehiculo.modelo3d, { semilla: semillaDe(vehiculo.id) }),
@@ -198,7 +198,7 @@ function VehiculoEnEscena({ vehiculo, destino, saliendo, animarLlegada, total, v
             {/* Los del patio llevan su puesto en la fila y su espera */}
             {etiqueta && !saliendo && (
                 <CuandoConectado>
-                    <Html position={[0, alturaPiso + carga.alto + 0.9, carga.largo / 2]} center distanceFactor={compacta ? 30 : 22} zIndexRange={[8, 0]}>
+                    <Html position={[0, alturaPiso + carga.alto + 0.9, carga.largo / 2]} center distanceFactor={(compacta ? 30 : 22) * escala} zIndexRange={[8, 0]}>
                         <button
                             onClick={onSeleccionar}
                             className="select-none whitespace-nowrap rounded-md border-2 bg-[#0d131c]/90 px-1.5 py-0.5 text-[11px] font-bold text-white shadow-md"
@@ -218,7 +218,7 @@ function VehiculoEnEscena({ vehiculo, destino, saliendo, animarLlegada, total, v
    TARJETA SOBRE CADA MUELLE
    --------------------------------------------------------- */
 
-function TarjetaMuelle({ muelle, x, seleccionado, compacta, semaforo, onSeleccionar }) {
+function TarjetaMuelle({ muelle, x, seleccionado, compacta, escala, semaforo, onSeleccionar }) {
 
     const v = muelle.vehiculo;
     const { color: borde, aviso, colorAviso } = estadoMuelle(muelle, semaforo);
@@ -252,7 +252,7 @@ function TarjetaMuelle({ muelle, x, seleccionado, compacta, semaforo, onSeleccio
         <Html
             position={[x, MUELLE.alturaAnden + MUELLE.altoPuerta + 1.55, 0.4]}
             center
-            distanceFactor={20}
+            distanceFactor={20 * escala}
             zIndexRange={[9, 0]}
         >
             <button
@@ -282,6 +282,55 @@ function TarjetaMuelle({ muelle, x, seleccionado, compacta, semaforo, onSeleccio
                             </div>
                         )}
                     </>
+                )}
+            </button>
+        </Html>
+    );
+}
+
+
+/* ---------------------------------------------------------
+   FICHA EN EL PISO, FRENTE AL VEHÍCULO
+   --------------------------------------------------------- */
+
+/*
+    La franja de la bahía que queda libre entre el frente del vehículo
+    y la línea de pare: placa, fase, tipología, avance y tiempo.
+*/
+function FichaFrente({ muelle, x, compacta, escala, semaforo, onSeleccionar }) {
+
+    const v = muelle.vehiculo;
+    if (!v) return null;
+
+    const { color } = estadoMuelle(muelle, semaforo);
+
+    return (
+        <Html position={[x, 0.05, Z_FICHA]} center distanceFactor={(compacta ? 30 : 20) * escala} zIndexRange={[7, 0]}>
+            <button
+                onClick={onSeleccionar}
+                className={`select-none rounded-md border-l-4 bg-[#0d131c]/90 text-left leading-tight text-white shadow-md ${compacta ? "w-24 px-1.5 py-1" : "w-44 px-2.5 py-2"}`}
+                style={{ borderColor: color, opacity: v.cancelado ? 0.55 : 1 }}
+            >
+                <div className="flex items-baseline justify-between gap-1">
+                    <span className={`font-extrabold tracking-wide ${compacta ? "text-[11px]" : "text-base"}`}>{v.placa}</span>
+                    <span className={`font-bold text-[#c3cbd6] ${compacta ? "text-[8px]" : "text-[10px]"}`}>M{muelle.numero}</span>
+                </div>
+
+                {!compacta && v.conductor && <div className="mt-0.5 truncate text-[11px] text-[#c3cbd6]">{v.conductor}</div>}
+                {!compacta && (v.textoTipologia || v.tipologia?.nombre) && (
+                    <div className="truncate text-[11px] text-[#c3cbd6]">{v.textoTipologia || v.tipologia.nombre}</div>
+                )}
+
+                <div className={`flex justify-between ${compacta ? "mt-0.5 text-[8px]" : "mt-1.5 text-[11px]"}`}>
+                    <span>{v.fase}</span>
+                    <span className="font-bold">{v.porcentaje}%</span>
+                </div>
+                <div className={`overflow-hidden rounded-full bg-[#263244] ${compacta ? "mt-0.5 h-0.5" : "mt-1 h-1"}`}>
+                    <div className="h-full rounded-full" style={{ width: `${v.porcentaje}%`, background: colorFase(v.fase) }} />
+                </div>
+
+                {!compacta && v.meta && (
+                    <div className="mt-1.5 text-[10px] font-semibold leading-snug" style={{ color }}>{v.meta}</div>
                 )}
             </button>
         </Html>
@@ -394,7 +443,8 @@ export default function TableroMuelles3D({
     semaforo = null,
     pausado = false,
     calidad = "alta",
-    compacta = false
+    compacta = false,
+    escala = 1              // agrandado en pantalla completa (televisor visto de lejos)
 }) {
 
     const total = muelles.length;
@@ -498,6 +548,7 @@ export default function TableroMuelles3D({
                     total={total}
                     etiqueta={etiqueta}
                     compacta={compacta}
+                    escala={escala}
                     verInterior={verCargaTodos || (numero != null && numero === seleccionado)}
                     onSalio={onSalio}
                     onSeleccionar={() => {
@@ -515,6 +566,18 @@ export default function TableroMuelles3D({
                         x={xDeMuelle(i, total)}
                         seleccionado={m.numero === seleccionado}
                         compacta={compacta}
+                        escala={escala}
+                        semaforo={semaforo}
+                        onSeleccionar={() => onSeleccionar(m.numero)}
+                    />
+                ))}
+                {muelles.map((m, i) => (
+                    <FichaFrente
+                        key={m.numero}
+                        muelle={m}
+                        x={xDeMuelle(i, total)}
+                        compacta={compacta}
+                        escala={escala}
                         semaforo={semaforo}
                         onSeleccionar={() => onSeleccionar(m.numero)}
                     />

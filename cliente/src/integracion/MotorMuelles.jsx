@@ -17,6 +17,7 @@ import { useEffect, useSyncExternalStore, useState } from "react";
 import { IconBox, IconBolt, IconMaximize, IconMinimize, IconRotate360, IconTruckLoading } from "@tabler/icons-react";
 
 import TableroMuelles3D from "../3d/TableroMuelles3D.jsx";
+import { usarEscalaPantalla } from "../3d/usarEscalaPantalla.js";
 import { AvancePorMuelle, ListaPatio, ResumenMuelles } from "../tablero/Indicadores.jsx";
 
 export default function MotorMuelles({ almacen, acciones }) {
@@ -25,6 +26,10 @@ export default function MotorMuelles({ almacen, acciones }) {
     const [giro, setGiro] = useState(false);
     const [verCarga, setVerCarga] = useState(false);
     const [calidad, setCalidad] = useState("alta");
+    // Pantalla completa = televisor visto de lejos: todo se agranda
+    // según la altura de la pantalla.
+    const escala = usarEscalaPantalla(e.expandido);
+    const zoom = escala === 1 ? undefined : { zoom: escala };
 
     /* Al expandir o encoger, el lienzo cambia de tamaño sin que la
        ventana lo haga. Se avisa con un "resize" para que el canvas
@@ -77,6 +82,7 @@ export default function MotorMuelles({ almacen, acciones }) {
                     verCargaTodos={verCarga}
                     calidad={calidad}
                     compacta={!e.expandido}
+                    escala={escala}
                     semaforo={e.semaforo}
                     pausado={e.pausado}
                 />
@@ -84,7 +90,7 @@ export default function MotorMuelles({ almacen, acciones }) {
                 {/* Columna izquierda: el resumen (expandido) y la fila
                     del patio, que reemplaza a la tabla de patio de la
                     página para que todo quede en un solo sitio. */}
-                <div className="pointer-events-none absolute bottom-3 left-3 top-3 z-20 flex flex-col items-start gap-2 [&>*]:pointer-events-auto">
+                <div style={zoom} className="pointer-events-none absolute bottom-3 left-3 top-3 z-20 flex flex-col items-start gap-2 [&>*]:pointer-events-auto">
                     {e.expandido && <ResumenMuelles muelles={e.muelles} enPatio={e.patio.length} />}
                     <ListaPatio
                         patio={e.patio}
@@ -95,13 +101,13 @@ export default function MotorMuelles({ almacen, acciones }) {
                 </div>
 
                 {e.expandido && (
-                    <div className={`absolute top-3 z-20 ${e.hayFicha ? "right-[360px]" : "right-3"}`}>
+                    <div style={zoom} className={`absolute top-3 z-20 ${e.hayFicha ? "right-[360px]" : "right-3"}`}>
                         <AvancePorMuelle muelles={e.muelles} onSeleccionar={acciones.onSeleccionar} />
                     </div>
                 )}
 
                 {/* La ficha del vehículo: HTML de la página */}
-                <div className="pointer-events-none absolute bottom-3 right-3 top-3 z-30 flex flex-col items-end">
+                <div style={zoom} className="pointer-events-none absolute bottom-3 right-3 top-3 z-30 flex flex-col items-end">
                     <slot name="ficha" />
                 </div>
             </div>

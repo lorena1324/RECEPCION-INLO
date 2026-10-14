@@ -73,6 +73,13 @@ import { resumenCaja } from "./cobros.js";
 
 import { diaOperativo, sumarDias } from "../utils/tiempos.js";
 
+import {
+    abrirDetalle,
+    conmutadorGrafica,
+    tablasInteractivas,
+    tarjetaDinamica
+} from "../components/indicadoresDinamicos.js";
+
 
 const ESTAD_COLORS = {
     azul: "#2563eb", azulClaro: "#93c5fd",
@@ -192,6 +199,16 @@ export function renderPanelEstadisticas(opts) {
     const mejorDia = diaConMasMovimiento(baseOperativa, HORA_CORTE);
     setTexto("es-pico", mejorDia ? fmtDiaCorto(mejorDia.dia) + " (" + mejorDia.total + ")" : "—");
 
+    /* El periodo anterior: los mismos N días justo antes del rango
+       elegido. Lo usan las tarjetas (para decir cuánto subió o bajó
+       cada cifra) y las tendencias de más abajo. */
+    const diasPrev = new Set(diasPeriodoAnterior(dias));
+    const previosTodos = base.filter((r) => diasPrev.has(getDiaOperativo(r, HORA_CORTE)));
+    const recsPrev = previosTodos.filter((r) => !estaCancelado(r));
+
+    pintarTarjetasVivas({ dias, operativos, recsPrev, previosTodos, baseOperativa, mejorDia,
+        totalEntradas, totalSalidas, promPatio, promMuelle, cargues });
+
     /* ── Análisis: no dependen de Chart.js, van antes del early-return ── */
     renderOnTime(operativos);
 
@@ -213,8 +230,6 @@ export function renderPanelEstadisticas(opts) {
     renderTopDesfase("ontime-top-tarde", operativos, 1);
     renderListadoVehiculos("ontime-listado", operativos);
 
-    const diasPrev = new Set(diasPeriodoAnterior(dias));
-    const recsPrev = baseOperativa.filter((r) => diasPrev.has(getDiaOperativo(r, HORA_CORTE)));
     renderTendencias(operativos, recsPrev);
     renderPerdidaOperacion(operativos);
     renderArbolOportunidades(operativos);
@@ -225,15 +240,34 @@ export function renderPanelEstadisticas(opts) {
        meta, qué entró a la caja y qué tan lleno estuvo el patio. */
     const cancelados = recs.filter((r) => estaCancelado(r));
     renderCancelaciones(recs, cancelados);
+
+    const porDiaCancel = agruparPorDia(cancelados, dias);
+    tarjetaDinamica("es-cancel-total", {
+        valor: cancelados.length,
+        texto: textoDe("es-cancel-total"),
+        formato: entero,
+        anterior: previosTodos.filter((r) => estaCancelado(r)).length,
+        serie: dias.map((d) => porDiaCancel.get(d).length),
+        mejor: "bajar",
+        detalle: () => ({ titulo: "Operaciones canceladas", subtitulo: textoRango(dias), filas: cancelados })
+    });
     renderImpactoCancelados(operativos, cancelados, dias, opts.config);
     renderTipologias(operativos, opts.config, opts.etiquetaUmbral);
     renderCaja(operativos, opts.cobros);
     renderNivelServicio(operativos, dias, opts.config);
 
+    const vista = document.getElementById("view-estadisticas");
+    tablasInteractivas(vista);
+
     // Las tarjetas y las tablas de arriba ya quedaron listas; las
     // gráficas se reintentan solas en el siguiente render cuando
     // Chart.js termine de cargar.
     if (typeof Chart === "undefined") return;
+
+    /* Para el detalle al tocar una gráfica: los vehículos de cada
+       día del rango, ya agrupados una sola vez. */
+    const delDia = agruparPorDia(operativos, dias);
+    const rango = textoRango(dias);
 
     /* ── Entradas y salidas por día (entradas divididas Patio/Muelle) ── */
     const salidasPorDia = dias.map((d) => baseOperativa.filter((r) => r.horaSalida && diaOperativo(r.horaSalida, HORA_CORTE) === d).length);
@@ -256,7 +290,18 @@ export function renderPanelEstadisticas(opts) {
                 tooltip: { callbacks: { label: tooltipConPct } },
                 datalabels: { display: mostrarSiHayDato, anchor: "end", align: "top", offset: 2, color: "#3A3A38", font: { size: 10, weight: "600" }, formatter: etiquetaConPct }
             },
-            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+            ...alTocar((i, serie) => {
+                const dia = dias[i];
+                if (serie === 2) {
+                    return { titulo: "Salidas del " + fmtDiaCorto(dia), filas: baseOperativa.filter((r) => r.horaSalida && diaOperativo(r.horaSalida, HORA_CORTE) === dia) };
+                }
+                const aMuelle = serie === 1;
+                return {
+                    titulo: "Entradas a " + (aMuelle ? "muelle" : "patio") + " del " + fmtDiaCorto(dia),
+                    filas: delDia.get(dia).filter((r) => (getDestino(r).indexOf("Muelle") === 0) === aMuelle)
+                };
+            })
         }
     });
 
@@ -270,7 +315,13 @@ export function renderPanelEstadisticas(opts) {
     renderChart("chart-tipo", {
         type: "doughnut",
         data: { labels: ["Cargue", "Descargue", "Ambos"], datasets: [{ data: [soloCargue, soloDescargue, ambos], backgroundColor: [ESTAD_COLORS.azul, ESTAD_COLORS.ambar, ESTAD_COLORS.teal] }] },
-        options: { plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: tooltipConPct } }, datalabels: { display: mostrarSiHayDato, color: "#fff", font: { size: 11, weight: "700" }, formatter: etiquetaConPct } } }
+        options: {
+            plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: tooltipConPct } }, datalabels: { display: mostrarSiHayDato, color: "#fff", font: { size: 11, weight: "700" }, formatter: etiquetaConPct } },
+            ...alTocar((i) => {
+                const tipo = ["Cargue", "Descargue", "Ambos"][i];
+                return { titulo: "Operación: " + tipo, subtitulo: rango, filas: operativos.filter((r) => r.tipo === tipo) };
+            })
+        }
     });
 
     /* ── Por operador ── */
@@ -280,7 +331,10 @@ export function renderPanelEstadisticas(opts) {
     renderChart("chart-operador", {
         type: "bar",
         data: { labels: opLabels, datasets: [{ label: "Vehículos atendidos", data: opLabels.map((k) => porOperador[k]), backgroundColor: ESTAD_COLORS.teal, borderRadius: 4 }] },
-        options: { indexAxis: "y", layout: { padding: { right: 52 } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: tooltipConPct } }, datalabels: { display: mostrarSiHayDato, anchor: "end", align: "right", color: "#3A3A38", font: { size: 10, weight: "600" }, formatter: etiquetaConPct } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+        options: {
+            indexAxis: "y", layout: { padding: { right: 52 } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: tooltipConPct } }, datalabels: { display: mostrarSiHayDato, anchor: "end", align: "right", color: "#3A3A38", font: { size: 10, weight: "600" }, formatter: etiquetaConPct } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+            ...alTocar((i) => ({ titulo: "Atendidos por " + opLabels[i], subtitulo: rango, filas: operativos.filter((r) => (r.operadorEntrada || "—") === opLabels[i]) }))
+        }
     });
 
     /* ── Tiempo promedio en patio por día ── */
@@ -299,9 +353,10 @@ export function renderPanelEstadisticas(opts) {
                 tooltip: { callbacks: { label: (ctx) => formatearMinutos(ctx.raw) } },
                 datalabels: { display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, align: "top", color: "#854F0B", font: { size: 10, weight: "600" }, formatter: (v) => formatearMinutos(v) }
             },
-            scales: { y: ejeTiempo() }
+            scales: { y: ejeTiempo() },
+            ...alTocar((i) => ({ titulo: "Tiempo en patio del " + fmtDiaCorto(dias[i]), subtitulo: "Del que más esperó al que menos", filas: terminadosPor(delDia.get(dias[i]), "patio") }))
         }
-    });
+    }, { formato: formatearMinutos });
 
     /* ── Por canal ── */
     const porCanal = {};
@@ -310,7 +365,10 @@ export function renderPanelEstadisticas(opts) {
     renderChart("chart-canal", {
         type: "bar",
         data: { labels: canalLabels, datasets: [{ label: "Vehículos", data: canalLabels.map((k) => porCanal[k]), backgroundColor: ESTAD_COLORS.azulClaro, borderRadius: 4 }] },
-        options: { plugins: { legend: { display: false }, tooltip: { callbacks: { label: tooltipConPct } }, datalabels: { display: mostrarSiHayDato, anchor: "end", align: "top", color: "#3A3A38", font: { size: 10, weight: "600" }, formatter: etiquetaConPct } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+        options: {
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: tooltipConPct } }, datalabels: { display: mostrarSiHayDato, anchor: "end", align: "top", color: "#3A3A38", font: { size: 10, weight: "600" }, formatter: etiquetaConPct } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+            ...alTocar((i) => ({ titulo: "Canal " + canalLabels[i], subtitulo: rango, filas: operativos.filter((r) => canalDe(r) === canalLabels[i]) }))
+        }
     });
 
     /* ── Muelles más usados ── */
@@ -324,7 +382,10 @@ export function renderPanelEstadisticas(opts) {
     renderChart("chart-muelles-general", {
         type: "bar",
         data: { labels: muelleLabels, datasets: [{ label: "Veces usado", data: muelleLabels.map((k) => porMuelle[k]), backgroundColor: ESTAD_COLORS.teal, borderRadius: 4 }] },
-        options: { indexAxis: "y", layout: { padding: { right: 52 } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: tooltipConPct } }, datalabels: { display: mostrarSiHayDato, anchor: "end", align: "right", color: "#3A3A38", font: { size: 10, weight: "600" }, formatter: etiquetaConPct } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+        options: {
+            indexAxis: "y", layout: { padding: { right: 52 } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: tooltipConPct } }, datalabels: { display: mostrarSiHayDato, anchor: "end", align: "right", color: "#3A3A38", font: { size: 10, weight: "600" }, formatter: etiquetaConPct } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+            ...alTocar((i) => ({ titulo: muelleLabels[i], subtitulo: rango, filas: operativos.filter((r) => getDestino(r) === muelleLabels[i]) }))
+        }
     });
 
     /* ── Tiempo promedio en muelle por día ── */
@@ -340,14 +401,171 @@ export function renderPanelEstadisticas(opts) {
                 tooltip: { callbacks: { label: (ctx) => formatearMinutos(ctx.raw) } },
                 datalabels: { display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, align: "top", color: "#0d5a52", font: { size: 10, weight: "600" }, formatter: (v) => formatearMinutos(v) }
             },
-            scales: { y: ejeTiempo() }
+            scales: { y: ejeTiempo() },
+            ...alTocar((i) => ({ titulo: "Tiempo en muelle del " + fmtDiaCorto(dias[i]), subtitulo: "Del que más tardó al que menos", filas: terminadosPor(delDia.get(dias[i]), "muelle") }))
         }
-    });
+    }, { formato: formatearMinutos });
 
     /* ── Tablas ── */
     renderTablaPorCanal(operativos, canalLabels);
     renderTablaPorTipo(operativos);
     renderTablaMuellesPorOperario(operativos);
+
+    // Las tablas recién pintadas: ordenar, barras, exportar.
+    tablasInteractivas(vista);
+}
+
+
+/* =========================================================
+   TARJETAS VIVAS
+
+   Las cifras de arriba, con tres cosas más (ver
+   shared/components/indicadoresDinamicos.js): cuánto subieron o
+   bajaron contra el periodo anterior, cómo se movieron día a día
+   y, al tocarlas, la tabla de vehículos que forman la cifra.
+
+   Los números son LOS MISMOS que ya se escribieron en las
+   tarjetas: aquí no se recalcula nada distinto, solo se calcula
+   lo mismo sobre el periodo anterior y sobre cada día.
+   ========================================================= */
+
+const entero = (v) => String(Math.round(v));
+const porciento = (v) => Math.round(v) + "%";
+
+function textoDe(id) {
+    const el = document.getElementById(id);
+    return el ? el.textContent : "";
+}
+
+function textoRango(dias) {
+    if (!dias.length) return "";
+    return dias.length === 1
+        ? "Día " + fmtDiaCorto(dias[0])
+        : "Del " + fmtDiaCorto(dias[0]) + " al " + fmtDiaCorto(dias[dias.length - 1]);
+}
+
+// Una sola pasada: día operativo → sus registros.
+function agruparPorDia(lista, dias) {
+    const mapa = new Map(dias.map((d) => [d, []]));
+    lista.forEach((r) => {
+        const g = mapa.get(getDiaOperativo(r, HORA_CORTE));
+        if (g) g.push(r);
+    });
+    return mapa;
+}
+
+function pctCargue(lista) {
+    if (!lista.length) return null;
+    const c = lista.filter((r) => r.tipo === "Cargue" || r.tipo === "Ambos").length;
+    return Math.round((c / lista.length) * 100);
+}
+
+// Los que pasaron por esa ubicación y ya salieron, del que más
+// tardó al que menos: son los que forman el promedio.
+function terminadosPor(lista, ubicacion) {
+    return lista
+        .filter((r) => r.horaSalida && (getLocationDurations(r)[ubicacion] || 0) > 0)
+        .sort((a, b) => (getLocationDurations(b)[ubicacion] || 0) - (getLocationDurations(a)[ubicacion] || 0));
+}
+
+function pintarTarjetasVivas(d) {
+
+    const { dias, operativos, recsPrev, baseOperativa, mejorDia } = d;
+    const porDia = agruparPorDia(operativos, dias);
+    const serie = (fn) => dias.map((dia) => fn(porDia.get(dia)));
+    const rango = textoRango(dias);
+
+    tarjetaDinamica("es-total", {
+        valor: d.totalEntradas,
+        texto: String(d.totalEntradas),
+        formato: entero,
+        anterior: recsPrev.length,
+        serie: serie((g) => g.length),
+        detalle: () => ({ titulo: "Entradas del periodo", subtitulo: rango, filas: operativos })
+    });
+
+    tarjetaDinamica("es-salidas", {
+        valor: d.totalSalidas,
+        texto: String(d.totalSalidas),
+        formato: entero,
+        anterior: recsPrev.filter((r) => !!r.horaSalida).length,
+        serie: serie((g) => g.filter((r) => !!r.horaSalida).length),
+        detalle: () => ({ titulo: "Vehículos que ya salieron", subtitulo: rango, filas: operativos.filter((r) => !!r.horaSalida) })
+    });
+
+    tarjetaDinamica("es-promedio", {
+        valor: d.promPatio.promedio,
+        texto: formatearPromedio(d.promPatio),
+        formato: formatearMinutos,
+        anterior: promedioMinutos(recsPrev, "patio").promedio,
+        serie: serie((g) => promedioMinutos(g, "patio").promedio),
+        mejor: "bajar",
+        detalle: () => ({
+            titulo: "Tiempo en patio",
+            subtitulo: "Los vehículos terminados que forman el promedio, del que más esperó al que menos · " + rango,
+            filas: terminadosPor(operativos, "patio")
+        })
+    });
+
+    tarjetaDinamica("es-promedio-muelle", {
+        valor: d.promMuelle.promedio,
+        texto: formatearPromedio(d.promMuelle),
+        formato: formatearMinutos,
+        anterior: promedioMinutos(recsPrev, "muelle").promedio,
+        serie: serie((g) => promedioMinutos(g, "muelle").promedio),
+        mejor: "bajar",
+        detalle: () => ({
+            titulo: "Tiempo en muelle",
+            subtitulo: "Los vehículos terminados que forman el promedio, del que más tardó al que menos · " + rango,
+            filas: terminadosPor(operativos, "muelle")
+        })
+    });
+
+    tarjetaDinamica("es-cargue-pct", {
+        valor: d.totalEntradas ? pctCargue(operativos) : null,
+        texto: textoDe("es-cargue-pct"),
+        formato: porciento,
+        anterior: pctCargue(recsPrev),
+        serie: serie(pctCargue),
+        detalle: () => ({
+            titulo: "Vehículos con cargue",
+            subtitulo: "Cargue y Ambos · " + rango,
+            filas: operativos.filter((r) => r.tipo === "Cargue" || r.tipo === "Ambos")
+        })
+    });
+
+    // El día pico es una referencia de toda la historia: no se compara,
+    // pero se puede abrir.
+    if (mejorDia) {
+        tarjetaDinamica("es-pico", {
+            valor: null,
+            texto: textoDe("es-pico"),
+            soloDetalle: true,
+            detalle: () => ({
+                titulo: "Día con más movimiento",
+                subtitulo: "Día operativo " + fmtDiaCorto(mejorDia.dia),
+                filas: baseOperativa.filter((r) => getDiaOperativo(r, HORA_CORTE) === mejorDia.dia)
+            })
+        });
+    }
+}
+
+/* Al tocar una barra, un punto o una porción de una gráfica se
+   abre el detalle de esa parte. `filasDe(i, serie)` devuelve
+   { titulo, filas } para el elemento i de la serie. */
+function alTocar(filasDe) {
+    return {
+        onClick: (_evento, elementos) => {
+            if (!elementos || !elementos.length) return;
+            const { index, datasetIndex } = elementos[0];
+            const d = filasDe(index, datasetIndex);
+            if (d && d.filas && d.filas.length) abrirDetalle(d);
+        },
+        onHover: (evento, elementos) => {
+            const lienzo = evento.native && evento.native.target;
+            if (lienzo) lienzo.style.cursor = elementos && elementos.length ? "pointer" : "default";
+        }
+    };
 }
 
 
@@ -482,11 +700,15 @@ function fmtDiaCorto(diaOp) {
   return new Date(diaOp + "T00:00:00").toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit" });
 }
 
-export function renderChart(canvasId, config) {
+/* opciones.formato: número → texto para la vista de tabla (las
+   gráficas de tiempo pasan formatearMinutos). Toda gráfica dentro
+   de una .stat-box queda con su conmutador "Gráfica | Tabla". */
+export function renderChart(canvasId, config, opciones) {
   const ctx = document.getElementById(canvasId);
   if (!ctx || typeof Chart === "undefined") return;
   destruirSiExiste(canvasId);
   charts[canvasId] = new Chart(ctx, config);
+  conmutadorGrafica(ctx, config, opciones && opciones.formato);
 }
 
 export function destruirSiExiste(id) {

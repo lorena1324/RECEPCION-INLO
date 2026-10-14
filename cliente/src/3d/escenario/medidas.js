@@ -25,6 +25,9 @@ export const FONDO_BODEGA = 28;
 
 export const Z_MUELLE = 0.3;    // la puerta trasera del vehículo
 export const Z_CARRIL = 21;
+// Donde se pinta la ficha del vehículo: entre su frente (una
+// tractomula llega a z ≈ 15,7) y la línea de pare (z = 23).
+export const Z_FICHA = 19.4;
 // La cola de los vehículos estacionados. Lejos del carril a
 // propósito: una tractomula (15,4 m) parada en el carril no alcanza
 // a meterse en la fila de cupos.
@@ -33,8 +36,10 @@ export const LARGO_CUPO = 17;   // cabe una tractomula
 
 export const SEPARACION_PATIO = 4.4;
 
+// M1 queda a la DERECHA de quien mira la fachada desde el patio, como
+// en la bodega real (el índice crece hacia -x).
 export function xDeMuelle(indice, total) {
-    return (indice - (total - 1) / 2) * MUELLE.separacion;
+    return ((total - 1) / 2 - indice) * MUELLE.separacion;
 }
 
 export function anchoBodega(total) {
