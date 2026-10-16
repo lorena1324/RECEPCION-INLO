@@ -34,7 +34,7 @@
    ========================================================= */
 
 import { fmtDt, formatDuration, duracion } from "../utils/tiempos.js";
-import { getDestino, getLocationDurations, canalDe } from "./eventos.js";
+import { getDestino, getLocationDurations, getTiempoSinCabezote, canalDe } from "./eventos.js";
 import { estaCancelado, llegoAunqueCancelado } from "./vehiculos.js";
 import { modalidadDe, nombreTipologiaDe } from "./config.js";
 
@@ -187,6 +187,7 @@ function bloqueIdentificacion(rec, etiquetas, distingueModalidad, config) {
 function bloqueTrazabilidad(rec, mostrarOperarios) {
 
     const duraciones = getLocationDurations(rec);
+    const sinCabezote = getTiempoSinCabezote(rec);
 
     return titulo("Trazabilidad") +
         fila("Estado", estadoDe(rec)) +
@@ -199,6 +200,12 @@ function bloqueTrazabilidad(rec, mostrarOperarios) {
         fila("Ubicación", getDestino(rec)) +
         fila("Tiempo en patio", formatDuration(duraciones.patio)) +
         fila("Tiempo en muelle", formatDuration(duraciones.muelle)) +
+        // Solo si el contenedor llegó a quedarse sin cabezote alguna vez.
+        (sinCabezote.veces
+            ? fila("Tiempo sin cabezote", formatDuration(sinCabezote.minutos) +
+                (sinCabezote.abierto ? " (en curso)" : "") +
+                (sinCabezote.veces > 1 ? " · " + sinCabezote.veces + " veces" : ""))
+            : "") +
         fila("Tiempo en planta", tiempoEnPlanta(rec)) +
         fila("Salida", fmtDt(rec.horaSalida)) +
         (mostrarOperarios ? filaSiHay("Despachado por", rec.operadorSalida) : "");

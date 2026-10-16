@@ -949,6 +949,40 @@ export async function actualizarTipologia(id, tipologia, operador) {
 
 
 /* =========================================================
+   CONTENEDOR SIN CABEZOTE
+
+   Un articulado puede dejar el contenedor (o el semirremolque) en
+   el muelle y llevarse el cabezote. Mientras está así, el 3D dibuja
+   solo el contenedor y corre un reloj aparte: el tiempo sin
+   cabezote (ver getTiempoSinCabezote en eventos.js).
+
+   Lo marca el supervisor desde la tarjeta del muelle, que es
+   quien ve la operación. Cada cambio queda en el historial con su
+   hora: de ahí se calcula el tiempo, así que es una decisión que
+   mueve un indicador, no una nota.
+
+   `sin` true  → el cabezote se fue
+   `sin` false → el cabezote volvió a acoplarse
+   ========================================================= */
+
+export async function marcarSinCabezote(id, sin, operador) {
+
+    const entrada = {
+        fecha: nowLocal(),
+        tipo: "cabezote",
+        estado: sin ? "sin" : "con",
+        operador: operador || "",
+        texto: sin ? "Cabezote retirado: el contenedor quedó solo en el muelle" : "Cabezote acoplado de nuevo"
+    };
+
+    await updateDoc(doc(db, COLECCION, id), {
+        sinCabezote: !!sin,
+        historial: arrayUnion(entrada)
+    });
+}
+
+
+/* =========================================================
    AVANZAR A LA FASE DE CARGUE (cuando el descargue llega al 100%)
 
    Solo aplica a vehículos "Ambos": el descargue siempre va

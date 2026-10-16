@@ -84,6 +84,7 @@ import {
     hayTipologias,
     numerosDeMuelle,
     umbralesPatio,
+    umbralesSinCabezote,
     umbralesTiempo,
     tiemposDe,
     tarifasPorDefecto,
@@ -130,6 +131,7 @@ import { iniciarAnimaciones } from "../shared/components/animaciones.js";
 // Muelles en 3D: misma interfaz que el tablero de siempre, al que
 // vuelve solo si el equipo no tiene WebGL o el motor no carga.
 import { crearTableroMuelles3D as crearTableroMuelles } from "../shared/components/tableroMuelles3D.js";
+import { bloqueSinCabezote, alClicSinCabezote } from "../shared/components/sinCabezote.js";
 import { crearRegistroActividad } from "../shared/components/registroActividad.js";
 
 
@@ -175,7 +177,7 @@ function tablero() {
 }
 
 function extrasDeMuelle(rec) {
-    return selectorTipologiaMuelle(rec) + selectorModalidad(rec) + renderAvance(rec);
+    return selectorTipologiaMuelle(rec) + selectorModalidad(rec) + bloqueSinCabezote(rec, cfgGuardada, { editable: true }) + renderAvance(rec);
 }
 
 /* Los botones de un vehículo en patio: los mismos de su fila en la
@@ -205,7 +207,7 @@ function accionesDeMuelle(rec) {
    Al agregar una bodega nueva hay que sumarla a este mapa, porque
    es también la lista de las que existen. */
 const OPERACIONES = {
-    J3: { nombre: "Pepsico", muelles: 8 },
+    J3: { nombre: "Pepsico", muelles: 7 },
     J4: { nombre: "Alkosto", muelles: 3 },
     B9: { nombre: "EMMA",    muelles: 4 }
 };
@@ -2937,6 +2939,7 @@ function cfgEditable(config) {
         campos: config.campos,
         cobraVehiculos: config.cobraVehiculos,
         limitePatio: config.limitePatio,
+        metaSinCabezote: config.metaSinCabezote,
         minimoCargue: config.minimoCargue,
         minimoDescargue: config.minimoDescargue,
         capacidadDiaria: config.capacidadDiaria,
@@ -3062,6 +3065,8 @@ function renderConfiguracion() {
     document.getElementById('cfg-iva').value = cfgTarifas.ivaPorcentaje;
     pintarBloqueCobro();
     document.getElementById('cfg-limite-patio').value = cfgBorrador.limitePatio || '';
+    document.getElementById('cfg-meta-sincabezote').value = cfgBorrador.metaSinCabezote || '';
+    pintarMetaSinCabezote();
     document.getElementById('cfg-minimo-cargue').value = cfgBorrador.minimoCargue;
     document.getElementById('cfg-minimo-descargue').value = cfgBorrador.minimoDescargue;
     document.getElementById('cfg-capacidad').value = cfgBorrador.capacidadDiaria || 0;
@@ -3135,6 +3140,20 @@ function pintarNotasIdentidad() {
     document.getElementById('cfg-nota-hora-corte').textContent = hh
         ? 'El día operativo va de las ' + hh + ':00 a las ' + hh + ':00 del día siguiente.'
         : 'Hora fuera de rango: debe estar entre 0 y 23.';
+}
+
+/* La meta del contenedor sin cabezote: en cero no hay meta, y el panel lo dice
+   en vez de dejar un guion que parezca un campo roto. */
+function pintarMetaSinCabezote() {
+    var u = umbralesSinCabezote(cfgBorrador);
+    document.getElementById('cfg-urgente-sincabezote').textContent =
+        u.urgente ? u.urgente + ' min' : '—';
+
+    var nota = document.getElementById('cfg-nota-sincabezote');
+    var min = cfgBorrador.metaSinCabezote || 0;
+    nota.textContent = min
+        ? 'Equivale a ' + Math.floor(min / 60) + 'h ' + (min % 60) + 'min'
+        : 'Sin meta: el tiempo se mide pero no genera alertas';
 }
 
 function pintarUrgentePatio() {
@@ -3830,6 +3849,12 @@ function wireConfiguracion() {
         pintarUrgentePatio();
     });
 
+    document.getElementById('cfg-meta-sincabezote').addEventListener('input', function (e) {
+        if (!cfgBorrador) return;
+        cfgBorrador.metaSinCabezote = Number(e.target.value) || 0;
+        pintarMetaSinCabezote();
+    });
+
     document.getElementById('cfg-minimo-cargue').addEventListener('input', function (e) {
         if (!cfgBorrador) return;
         cfgBorrador.minimoCargue = Number(e.target.value) || 0;
@@ -3970,6 +3995,9 @@ function wireDelegatedClicks() {
 
         // "id:Modalidad" — el id no lleva ":", así que basta con
         // partir por el primero.
+        // El contenedor sin cabezote (ver shared/components/sinCabezote.js).
+        if (alClicSinCabezote(e, perfilActual.nombre)) return;
+
         var btnModalidad = e.target.closest('[data-modalidad]');
         if (btnModalidad) {
             var partesMod = btnModalidad.getAttribute('data-modalidad').split(':');

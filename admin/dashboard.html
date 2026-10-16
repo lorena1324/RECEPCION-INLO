@@ -597,6 +597,16 @@
                     <div class="card-resumen-detalle" id="es-promedio-muelle-nota"></div>
                   </div>
                   <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-sincab-total">0</div>
+                    <div class="card-resumen-label"><i class="ti ti-truck-loading"></i> Contenedores sin cabezote</div>
+                    <div class="card-resumen-detalle" id="es-sincab-nota"></div>
+                  </div>
+                  <div class="card-resumen">
+                    <div class="card-resumen-valor" id="es-sincab-promedio">—</div>
+                    <div class="card-resumen-label"><i class="ti ti-clock-pause"></i> Tiempo promedio sin cabezote</div>
+                    <div class="card-resumen-detalle" id="es-sincab-promedio-nota"></div>
+                  </div>
+                  <div class="card-resumen">
                     <div class="card-resumen-valor" id="es-cargue-pct">0%</div>
                     <div class="card-resumen-label"><i class="ti ti-package-import"></i> Con cargue</div>
                   </div>
@@ -1072,6 +1082,26 @@
                     </div>
                 </div>
 
+                <div class="cfg-seccion">
+                    <div class="cfg-seccion-head">
+                        <div>
+                            <h3>Contenedor sin cabezote</h3>
+                            <p class="cfg-ayuda">Cuando un vehículo articulado deja el contenedor en el muelle y se lleva el cabezote, corre un reloj aparte. Esta es la meta de ese tiempo: es el umbral de «Atención» y «Urgente» se dispara al doble. Déjala en 0 si la bodega no mide esta meta: el tiempo se muestra igual, pero sin alertas.</p>
+                        </div>
+                    </div>
+                    <div class="cfg-grid">
+                        <div class="cfg-campo">
+                            <label for="cfg-meta-sincabezote">Meta sin cabezote (minutos)</label>
+                            <input type="number" id="cfg-meta-sincabezote" min="0" step="1">
+                            <span class="cfg-nota" id="cfg-nota-sincabezote"></span>
+                        </div>
+                        <div class="cfg-campo">
+                            <label>Umbral «Urgente»</label>
+                            <div class="cfg-derivado" id="cfg-urgente-sincabezote">—</div>
+                            <span class="cfg-nota">Calculado: el doble de la meta</span>
+                        </div>
+                    </div>
+                </div>
                 <div class="cfg-seccion">
                     <div class="cfg-seccion-head">
                         <div>

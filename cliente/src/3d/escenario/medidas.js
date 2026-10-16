@@ -20,8 +20,12 @@ export const MUELLE = {
     alturaAnden: 1.25   // piso interior = altura del piso del furgón
 };
 
-export const ALTO_MURO = 8.6;
-export const FONDO_BODEGA = 28;
+// Nave alta de estantería de 5 niveles, como la bodega de MQ
+// (14 m de alto; 87 m de fondo en MQ, de los cuales 12 son la bahía
+// de muelles, que aquí es el patio: quedan 75 de nave y 1 de margen).
+// El fondo no afecta muelles ni patio: solo lo que se ve por dentro.
+export const ALTO_MURO = 14;
+export const FONDO_BODEGA = 76;
 
 export const Z_MUELLE = 0.3;    // la puerta trasera del vehículo
 export const Z_CARRIL = 21;

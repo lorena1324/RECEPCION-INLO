@@ -23,10 +23,22 @@ export const MULTIPLICADOR_URGENTE = 2;
 // Carrocerías que existen en 3D. La clave es lo que se guarda en
 // la tipología; la clase vive en el cliente (3d/vehiculos).
 export const MODELOS_3D = {
+    van: "Van / camioneta",
+    nhr: "Camión liviano (NHR)",
     turbo: "Turbo",
     sencillo: "Sencillo",
     dobleTroque: "Doble troque",
-    tractomula: "Tractomula"
+    refrigerado: "Camión refrigerado",
+    estacas: "Camión de estacas",
+    lona: "Camión de lona",
+    miniMula: "Mini mula",
+    tractomulaFurgon: "Tractomula furgón",
+    tractomula: "Tractomula (contenedor)",
+    tractomulaRefrigerada: "Tractomula refrigerada",
+    tractomulaLona: "Tractomula de lona",
+    tractomulaPlataforma: "Tractomula plataforma",
+    semirremolque: "Semirremolque sin cabezote",
+    contenedorSinCabezote: "Contenedor sin cabezote"
 };
 
 export const MODELO_3D_POR_DEFECTO = "sencillo";

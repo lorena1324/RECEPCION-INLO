@@ -152,6 +152,122 @@ export function getLocationDurations(r) {
     return { patio: Math.round(patio), muelle: Math.round(muelle) };
 }
 
+/* ── TIEMPO CON EL CONTENEDOR SIN CABEZOTE ────────────────
+
+   Un articulado puede dejar el contenedor en el muelle y llevarse
+   el cabezote. Cada vez que pasa, el historial recibe un evento
+   `cabezote` con `estado: 'sin'` (el cabezote se fue) y, cuando
+   vuelve, otro con `estado: 'con'`. El tiempo sin cabezote es la
+   suma de esos tramos, igual que getLocationDurations() suma los
+   de patio y muelle.
+
+   Un tramo abierto se cierra solo cuando el vehículo sale o se
+   cancela: no hay contenedor "sin cabezote" fuera de la planta.
+
+   Devuelve:
+     minutos   suma de todos los tramos (el abierto cuenta hasta ahora)
+     cerrados  suma de los tramos YA terminados (los que sí se pueden
+               promediar sin que la cifra cambie sola en cada repintado)
+     tramos    cuántos tramos terminados hay
+     abierto   true si ahora mismo está sin cabezote
+     veces     cuántas veces se separó
+   ───────────────────────────────────────────────────────── */
+
+export function getTiempoSinCabezote(r) {
+
+    var hist = getHistorial(r).slice().sort(function (a, b) {
+        return new Date(a.fecha || 0) - new Date(b.fecha || 0);
+    });
+
+    var cerrados = 0, tramos = 0, veces = 0;
+    var desde = null;
+
+    function cerrar(fecha) {
+        if (desde === null) return;
+        var diff = (fecha - desde) / 60000;
+        if (diff > 0) { cerrados += diff; tramos++; }
+        desde = null;
+    }
+
+    hist.forEach(function (item) {
+
+        var fecha = new Date(item.fecha || 0);
+
+        if (item.tipo === 'cabezote') {
+            if (item.estado === 'sin') {
+                if (desde === null) { desde = fecha; veces++; }
+            } else {
+                cerrar(fecha);
+            }
+            return;
+        }
+
+        if (item.tipo === 'salida' || item.tipo === 'cancelacion') cerrar(fecha);
+    });
+
+    var abierto = desde !== null && !r.horaSalida;
+    var enCurso = 0;
+    if (abierto) {
+        enCurso = Math.max(0, (new Date() - desde) / 60000);
+    }
+
+    return {
+        minutos: Math.round(cerrados + enCurso),
+        cerrados: Math.round(cerrados),
+        tramos: tramos,
+        abierto: abierto,
+        veces: veces
+    };
+}
+
+/* Minutos que el contenedor lleva sin cabezote AHORA (el tramo en
+   curso). Cero si tiene el cabezote o ya salió. */
+export function minutosSinCabezoteAhora(r) {
+    if (!r || r.horaSalida || !r.sinCabezote) return 0;
+    return getTiempoSinCabezote(r).minutos;
+}
+
+/*
+    Reparte una lista de registros para el estadístico:
+
+      contenedores  vehículos que estuvieron sin cabezote alguna vez
+      ahora         los que lo están en este momento
+      promedio      minutos promedio por separación TERMINADA (null si
+                    todavía no hay ninguna que medir)
+      mayor         la separación terminada más larga
+      total         minutos acumulados de las terminadas
+
+    Se promedian solo los tramos terminados, por la misma razón que
+    los promedios de patio y muelle (ver visitasTerminadas): un tramo
+    abierto crece en cada repintado y entra a medias.
+*/
+export function resumenSinCabezote(recs) {
+
+    var contenedores = 0, ahora = 0, tramos = 0, total = 0, mayor = 0;
+
+    (recs || []).forEach(function (r) {
+
+        var t = getTiempoSinCabezote(r);
+        if (!t.veces) return;
+
+        contenedores++;
+        if (t.abierto) ahora++;
+        tramos += t.tramos;
+        total += t.cerrados;
+        if (t.tramos && t.cerrados / t.tramos > mayor) mayor = t.cerrados / t.tramos;
+    });
+
+    return {
+        contenedores: contenedores,
+        ahora: ahora,
+        tramos: tramos,
+        total: Math.round(total),
+        promedio: tramos ? Math.round(total / tramos) : null,
+        mayor: Math.round(mayor)
+    };
+}
+
+
 /* ── PROMEDIOS DE TIEMPO ──────────────────────────────────
 
    Un promedio de "tiempo en patio" o "tiempo en muelle" solo
@@ -637,6 +753,7 @@ export function iconoHistorial(tipo) {
         : tipo === 'canal' ? 'ti-route'
         : tipo === 'observacion' ? 'ti-message-2'
         : tipo === 'avance' ? 'ti-percentage'
+        : tipo === 'cabezote' ? 'ti-truck-loading'
         : tipo === 'autorizacion' ? 'ti-shield-check'
         : 'ti-edit';
 }
@@ -657,6 +774,12 @@ export function tituloHistorial(item) {
 
     if (item.tipo === 'avance') {
         return 'Avance de cargue/descargue actualizado';
+    }
+
+    if (item.tipo === 'cabezote') {
+        return item.estado === 'sin'
+            ? 'Cabezote retirado: el contenedor quedó solo'
+            : 'Cabezote acoplado de nuevo';
     }
 
     if (item.tipo === 'autorizacion') {

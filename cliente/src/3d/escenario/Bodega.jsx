@@ -2,23 +2,24 @@
    INLOTRANS
    Bodega: fachada de muelles, patio e interior en corte
 
-   El techo no se dibuja a propósito (vista en corte): desde la
-   cámara del tablero se ve la estantería adentro, como en una
-   maqueta.
+   Aquí van el patio y los muelles (puertas); la nave por dentro
+   y por fuera está en Nave.jsx. El techo no se dibuja a
+   propósito (vista en corte): desde la cámara del tablero se ve
+   la estantería adentro, como en una maqueta.
    ========================================================= */
 
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import * as THREE from "three";
+import { useEffect, useMemo, useRef } from "react";
 import { animate } from "motion";
 
 import {
-    relieveCorrugado, relievePuertaSeccional, repetir,
-    texturaAsfalto, texturaConcreto, texturaFranjas, texturaPisoInterior, texturaTexto
+    relievePuertaSeccional, repetir,
+    texturaAsfalto, texturaConcreto, texturaFranjas, texturaTexto
 } from "../texturas.js";
 import {
-    ALTO_MURO, FONDO_BODEGA, LARGO_CUPO, MUELLE, SEPARACION_PATIO, Z_PATIO,
+    LARGO_CUPO, MUELLE, SEPARACION_PATIO, Z_PATIO,
     anchoBodega, cuposPatio, xDeCupo, xDeMuelle
 } from "./medidas.js";
+import Edificio from "./Nave.jsx";
 
 const { anchoPuerta, altoPuerta, alturaAnden } = MUELLE;
 
@@ -214,151 +215,6 @@ function Muelle({ x, ocupado, colorEstado, seleccionado }) {
                     <meshStandardMaterial color="#e8b923" roughness={0.5} />
                 </mesh>
             ))}
-        </group>
-    );
-}
-
-
-/* ---------------------------------------------------------
-   EDIFICIO
-   --------------------------------------------------------- */
-
-function Edificio({ total, nombre }) {
-
-    const ancho = anchoBodega(total);
-    const fachada = useMemo(() => repetir(relieveCorrugado(), ancho / 1.2, 1), [ancho]);
-    const lateral = useMemo(() => repetir(relieveCorrugado(), FONDO_BODEGA / 1.2, 1), []);
-    const piso = useMemo(() => repetir(texturaPisoInterior(), ancho / 6, FONDO_BODEGA / 6), [ancho]);
-    const letrero = useMemo(() => texturaTexto(nombre, { ancho: 2048, alto: 220, fondo: "#f3f4f6", color: "#1b2533", tamano: 120 }), [nombre]);
-
-    const lamina = { color: "#c3c9d1", roughness: 0.55, metalness: 0.45, bumpScale: 2.5 };
-
-    return (
-        <group>
-            {/* Muro de muelles */}
-            <mesh position={[0, ALTO_MURO / 2, -0.25]} castShadow receiveShadow>
-                <boxGeometry args={[ancho, ALTO_MURO, 0.5]} />
-                <meshStandardMaterial {...lamina} bumpMap={fachada} />
-            </mesh>
-
-            {/* Zócalo de concreto bajo los muelles */}
-            <mesh position={[0, alturaAnden / 2, 0.02]} receiveShadow>
-                <boxGeometry args={[ancho, alturaAnden, 0.06]} />
-                <meshStandardMaterial color="#8d939b" roughness={0.95} />
-            </mesh>
-
-            {/* Remate superior */}
-            <mesh position={[0, ALTO_MURO + 0.12, -0.25]} castShadow>
-                <boxGeometry args={[ancho + 0.3, 0.25, 0.8]} />
-                <meshStandardMaterial color="#5b626c" roughness={0.6} />
-            </mesh>
-
-            {/* Letrero */}
-            <mesh position={[0, ALTO_MURO - 0.85, 0.02]}>
-                <planeGeometry args={[Math.min(ancho * 0.55, 22), 1.18]} />
-                <meshStandardMaterial map={letrero} roughness={0.6} />
-            </mesh>
-
-            {/* Muros laterales y de fondo */}
-            {[-1, 1].map((lado) => (
-                <mesh key={lado} position={[lado * ancho / 2, ALTO_MURO / 2, -FONDO_BODEGA / 2]} castShadow receiveShadow>
-                    <boxGeometry args={[0.5, ALTO_MURO, FONDO_BODEGA]} />
-                    <meshStandardMaterial {...lamina} bumpMap={lateral} />
-                </mesh>
-            ))}
-            <mesh position={[0, ALTO_MURO / 2, -FONDO_BODEGA]} receiveShadow>
-                <boxGeometry args={[ancho, ALTO_MURO, 0.5]} />
-                <meshStandardMaterial {...lamina} bumpMap={fachada} />
-            </mesh>
-
-            {/* Piso interior, a la altura del andén */}
-            <mesh position={[0, alturaAnden / 2, -FONDO_BODEGA / 2 - 0.25]} receiveShadow>
-                <boxGeometry args={[ancho - 0.5, alturaAnden, FONDO_BODEGA - 0.5]} />
-                <meshStandardMaterial map={piso} roughness={0.55} />
-            </mesh>
-
-            {/* Vigas del techo (sin cubierta: vista en corte) */}
-            {Array.from({ length: Math.floor(ancho / 7) }, (_, i) => -ancho / 2 + 3.5 + i * 7).map((x) => (
-                <mesh key={x} position={[x, ALTO_MURO - 0.2, -FONDO_BODEGA / 2]} castShadow>
-                    <boxGeometry args={[0.18, 0.35, FONDO_BODEGA]} />
-                    <meshStandardMaterial color="#8b939d" metalness={0.6} roughness={0.4} />
-                </mesh>
-            ))}
-
-            <Estanterias ancho={ancho} />
-        </group>
-    );
-}
-
-
-/* ---------------------------------------------------------
-   ESTANTERÍA (instanciada: cientos de piezas en 3 llamadas)
-   --------------------------------------------------------- */
-
-function Estanterias({ ancho }) {
-
-    const parales = useRef();
-    const vigas = useRef();
-    const cargas = useRef();
-
-    const piezas = useMemo(() => {
-
-        const filas = [-6, -11, -16, -21];
-        const niveles = [0.15, 1.95, 3.75].map((y) => alturaAnden + y);
-        const paso = 2.8;
-        const desde = -ancho / 2 + 3;
-        const bahias = Math.floor((ancho - 6) / paso);
-
-        const p = [], v = [], c = [];
-        let semilla = 7;
-        const azar = () => ((semilla = (semilla * 16807) % 2147483647) / 2147483647);
-
-        for (const z of filas) {
-            for (let b = 0; b <= bahias; b++) {
-                const x = desde + b * paso;
-                for (const dz of [-0.55, 0.55]) p.push([x, alturaAnden + 2.7, z + dz]);
-                if (b === bahias) continue;
-
-                for (const y of niveles) {
-                    for (const dz of [-0.55, 0.55]) v.push([x + paso / 2, y + 1.55, z + dz]);
-                    for (const dx of [-0.66, 0.66]) {
-                        if (azar() < 0.78) c.push([x + paso / 2 + dx, y + 0.72, z, azar()]);
-                    }
-                }
-            }
-        }
-        return { p, v, c };
-    }, [ancho]);
-
-    useLayoutEffect(() => {
-        const m = new THREE.Matrix4();
-        const color = new THREE.Color();
-        piezas.p.forEach(([x, y, z], i) => parales.current.setMatrixAt(i, m.makeTranslation(x, y, z)));
-        piezas.v.forEach(([x, y, z], i) => vigas.current.setMatrixAt(i, m.makeTranslation(x, y, z)));
-        piezas.c.forEach(([x, y, z, t], i) => {
-            cargas.current.setMatrixAt(i, m.makeTranslation(x, y, z));
-            cargas.current.setColorAt(i, color.set(t < 0.25 ? "#e9e4da" : t < 0.5 ? "#c39a62" : t < 0.8 ? "#b58a52" : "#7f8b99"));
-        });
-        for (const r of [parales, vigas, cargas]) {
-            r.current.instanceMatrix.needsUpdate = true;
-            if (r.current.instanceColor) r.current.instanceColor.needsUpdate = true;
-        }
-    }, [piezas]);
-
-    return (
-        <group>
-            <instancedMesh ref={parales} args={[null, null, piezas.p.length]} castShadow>
-                <boxGeometry args={[0.09, 5.4, 0.09]} />
-                <meshStandardMaterial color="#2a5ea8" roughness={0.5} metalness={0.4} />
-            </instancedMesh>
-            <instancedMesh ref={vigas} args={[null, null, piezas.v.length]} castShadow>
-                <boxGeometry args={[2.8, 0.12, 0.08]} />
-                <meshStandardMaterial color="#e07a1f" roughness={0.5} metalness={0.3} />
-            </instancedMesh>
-            <instancedMesh ref={cargas} args={[null, null, piezas.c.length]} castShadow receiveShadow>
-                <boxGeometry args={[1.18, 1.4, 1.0]} />
-                <meshStandardMaterial roughness={0.8} />
-            </instancedMesh>
         </group>
     );
 }

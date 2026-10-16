@@ -24,7 +24,7 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { animate } from "motion";
 
-import { relieveCorrugado, repetir } from "../texturas.js";
+import { relieveBandaLlanta, relieveCorrugado, repetir, texturaCintaReflectiva, texturaTexto } from "../texturas.js";
 
 // Una estiba estándar colombiana: 1,0 × 1,2 m.
 const ESTIBA = { ancho: 1.0, largo: 1.2, base: 0.15 };
@@ -32,6 +32,22 @@ const ESTIBA = { ancho: 1.0, largo: 1.2, base: 0.15 };
 const RESORTE = { type: "spring", stiffness: 60, damping: 18 };
 
 const TONOS_CARTON = ["#c9a46c", "#b98f58", "#d6b582", "#bf9a63"];
+
+/*
+    La especificación de un articulado sin cabezote: se quita la
+    cabina y la separación, y solo quedan los ejes del semirremolque
+    (los que están lejos de la quinta rueda; los del tractocamión y
+    el direccional se fueron con el cabezote).
+*/
+function especificacionSinCabezote(esp) {
+    return {
+        ...esp,
+        sinCabezote: true,
+        cabina: { largo: 0, alto: 0, ancho: 0 },
+        separacion: 0,
+        ejes: esp.ejes.filter((z) => z < esp.carga.largo - 2.5)
+    };
+}
 
 export class ModeloVehiculo extends THREE.Group {
 
@@ -56,12 +72,20 @@ export class ModeloVehiculo extends THREE.Group {
         vehículo sale siempre igual, y vehículos distintos no
         salen todos idénticos.
     */
-    constructor({ semilla = 0 } = {}) {
+    constructor({ semilla = 0, rotulo = "", sinCabezote = false } = {}) {
 
         super();
 
         const Clase = this.constructor;
         this.esp = Clase.especificacion;
+
+        // Un articulado que dejó el contenedor en el muelle y se llevó el
+        // cabezote: la misma carrocería, sin cabina ni tractocamión.
+        if (sinCabezote && Clase.articulado && !this.esp.sinCabezote) {
+            this.esp = especificacionSinCabezote(this.esp);
+        }
+        this.rotulo = String(rotulo || "").trim();
+        this.materialesRotulo = [];
         this.colorCabina = Clase.coloresCabina[semilla % Clase.coloresCabina.length];
         this.colorCarga = Clase.coloresCarga[semilla % Clase.coloresCarga.length];
 
@@ -81,8 +105,15 @@ export class ModeloVehiculo extends THREE.Group {
         this.construir();
     }
 
+    // Un semirremolque o contenedor "sin cabezote" (`sinCabezote` en la
+    // especificación) termina donde termina la carga: no hay cabina.
+    get sinCabezote() {
+        return !!this.esp.sinCabezote;
+    }
+
     get largoTotal() {
         const { carga, separacion, cabina } = this.esp;
+        if (this.sinCabezote) return carga.largo;
         return carga.largo + separacion + cabina.largo;
     }
 
@@ -103,8 +134,45 @@ export class ModeloVehiculo extends THREE.Group {
         this.construirCabina();
         this.construirFurgon();
         this.construirRuedas();
+        this.construirDetalles();
+        this.construirRotulo();
         this.construirCarga();
         this.construirIndicadorAvance();
+    }
+
+    /*
+        El nombre de la tipología pintado en los dos costados: es lo
+        que distingue a simple vista un "Turbo Arrumado" de un "Turbo
+        Paletizado" aunque compartan carrocería. Las carrocerías
+        abiertas cambian dónde va con zonaRotulo().
+    */
+    zonaRotulo() {
+        const { carga: c, alturaPiso: p } = this.esp;
+        return { y: p + c.alto * 0.6, alto: Math.min(0.7, c.alto * 0.26), largo: c.largo * 0.7, z: c.largo / 2 };
+    }
+
+    construirRotulo() {
+
+        if (!this.rotulo) return;
+
+        const { carga: c } = this.esp;
+        const zona = this.zonaRotulo();
+        const { r, g, b } = new THREE.Color(this.colorCarga);
+        const claro = 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.35;
+        const mapa = texturaTexto(this.rotulo.toUpperCase(), {
+            ancho: 1024, alto: Math.max(64, Math.round(1024 * zona.alto / zona.largo)),
+            color: claro ? "#1b2533" : "#ffffff", tamano: 200
+        });
+
+        const material = new THREE.MeshStandardMaterial({ map: mapa, transparent: true, depthWrite: false, roughness: 0.6 });
+        this.materialesRotulo.push(material);
+
+        for (const lado of [-1, 1]) {
+            const m = new THREE.Mesh(new THREE.PlaneGeometry(zona.largo, zona.alto), material);
+            m.position.set(lado * (c.ancho / 2 + 0.045), zona.y, zona.z);
+            m.rotation.y = lado * Math.PI / 2;
+            this.add(m);
+        }
     }
 
     construirChasis() {
@@ -134,6 +202,8 @@ export class ModeloVehiculo extends THREE.Group {
     }
 
     construirCabina() {
+
+        if (this.sinCabezote) return;
 
         const { carga, separacion, cabina, ejes, radioRueda } = this.esp;
         const { ancho: W, alto: H, largo: L } = cabina;
@@ -184,6 +254,30 @@ export class ModeloVehiculo extends THREE.Group {
         for (const lado of [-1, 1]) {
             this.redondeada([0.46, 0.1, radioRueda * 2 + 0.35], [lado * this.xRueda, radioRueda * 2 + 0.12, zEje], negro, 0.04);
         }
+
+        // Puertas: junta, manija y peldaño de acceso.
+        const zPuerta = zc + L * 0.02;
+        for (const lado of [-1, 1]) {
+            const x = lado * (W / 2 + 0.006);
+            this.caja([0.012, hAlto * 0.92, 0.014], [x, piso + hBajo + hAlto * 0.5, zPuerta - L * 0.3], negro);
+            this.caja([0.012, hAlto * 0.92, 0.014], [x, piso + hBajo + hAlto * 0.5, zPuerta + L * 0.34], negro);
+            this.caja([0.012, 0.012, L * 0.64], [x, piso + hBajo + hAlto * 0.04, zPuerta + L * 0.02], negro);
+            this.caja([0.035, 0.035, 0.17], [lado * (W / 2 + 0.02), piso + hBajo * 0.95, zPuerta - L * 0.2], cromo);
+            this.caja([0.26, 0.04, 0.3], [lado * (W / 2 + 0.07), piso - 0.2, zPuerta - L * 0.08], negro);
+        }
+
+        // Limpiabrisas, antena y luces de posición del techo.
+        for (const x of [-0.24, 0.1]) {
+            const brazo = this.caja([W * 0.28, 0.016, 0.016], [x * W, piso + hBajo + hAlto * 0.2, zf - 0.005], negro);
+            brazo.rotation.z = 0.12;
+        }
+        const antena = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.9, 6), negro);
+        antena.position.set(W / 2 - 0.12, piso + H + 0.4, zc - L * 0.3);
+        this.add(antena);
+
+        const ambar = new THREE.MeshStandardMaterial({ color: "#ffb02e", emissive: "#ff9d0a", emissiveIntensity: 1.6 });
+        for (const dx of [-0.3, 0, 0.3]) this.caja([0.1, 0.06, 0.06], [dx * W, piso + H + 0.03, zf - 0.08], ambar);
+        for (const lado of [-1, 1]) this.caja([0.1, 0.1, 0.04], [lado * (W / 2 - 0.08), piso + 0.04, zf + 0.17], ambar);
     }
 
     /*
@@ -251,10 +345,24 @@ export class ModeloVehiculo extends THREE.Group {
         const rin = this.crearMaterial("#b6bcc4", { roughness: 0.3, metalness: 0.85 });
         const buje = this.crearMaterial("#5d636b", { roughness: 0.4, metalness: 0.8 });
 
+        // Ocho espárragos en círculo, fundidos en una sola geometría.
+        const geoTuercas = mergeGeometries(Array.from({ length: 8 }, (_, k) => {
+            const a = (k / 8) * Math.PI * 2;
+            return new THREE.CylinderGeometry(r * 0.04, r * 0.04, 0.06, 6)
+                .rotateZ(Math.PI / 2)
+                .translate(0, Math.sin(a) * r * 0.36, Math.cos(a) * r * 0.36);
+        }));
+        const tuerca = this.crearMaterial("#8a9099", { roughness: 0.35, metalness: 0.9 });
+
+        // Banda de rodamiento: rayas anchas que se ven al girar.
+        const geoBanda = new THREE.CylinderGeometry(r * 1.002, r * 1.002, 0.2, 32, 1, true).rotateZ(Math.PI / 2);
+        const banda = this.crearMaterial("#0e1013", { roughness: 1, bumpMap: repetir(relieveBandaLlanta(), 24, 1), bumpScale: 3 });
+
         ejes.forEach((z, i) => {
 
-            // Todos los ejes llevan rueda doble menos el direccional.
-            const doble = i < ejes.length - 1;
+            // Todos los ejes llevan rueda doble menos el direccional
+            // (y, sin cabezote, ninguno es direccional).
+            const doble = this.sinCabezote || i < ejes.length - 1;
 
             for (const lado of [-1, 1]) {
 
@@ -265,12 +373,17 @@ export class ModeloVehiculo extends THREE.Group {
                 const aro = new THREE.Mesh(geoRin, rin);
                 const centro = new THREE.Mesh(geoBuje, buje);
                 aro.position.x = centro.position.x = lado * 0.01;
-                rueda.add(exterior, aro, centro);
+                const tuercas = new THREE.Mesh(geoTuercas, tuerca);
+                tuercas.position.x = lado * 0.19;
+                const rodamiento = new THREE.Mesh(geoBanda, banda);
+                rueda.add(exterior, aro, centro, tuercas, rodamiento);
 
                 if (doble) {
                     const interior = new THREE.Mesh(geoLlanta, llanta);
                     interior.position.x = -lado * 0.34;
-                    rueda.add(interior);
+                    const rodamientoInterior = new THREE.Mesh(geoBanda, banda);
+                    rodamientoInterior.position.x = -lado * 0.34;
+                    rueda.add(interior, rodamientoInterior);
                 }
 
                 rueda.traverse((m) => (m.castShadow = true));
@@ -278,6 +391,60 @@ export class ModeloVehiculo extends THREE.Group {
                 this.ruedas.push(rueda);
             }
         });
+    }
+
+    /*
+        Lo que hace creíble la parte de atrás: luces rojas, placa,
+        cinta reflectiva, lodera y espejo de ruedas. Va aparte de
+        las demás piezas para que una carrocería lo cambie sin
+        reescribir el furgón.
+    */
+    construirDetalles() {
+
+        const { carga: c, alturaPiso: p, ejes, radioRueda: r } = this.esp;
+        const negro = this.crearMaterial("#16181c", { roughness: 0.85 });
+
+        // Luces traseras (posición/freno) y reversa.
+        const rojo = new THREE.MeshStandardMaterial({ color: "#c4161c", emissive: "#e0141b", emissiveIntensity: 1.1 });
+        const blanco = new THREE.MeshStandardMaterial({ color: "#f1f3f5", emissive: "#ffffff", emissiveIntensity: 0.5 });
+        for (const lado of [-1, 1]) {
+            const x = lado * (c.ancho / 2 - 0.2);
+            this.caja([0.14, 0.34, 0.05], [x, p + 0.32, -0.05], negro);
+            this.caja([0.1, 0.12, 0.03], [x, p + 0.43, -0.085], rojo);
+            this.caja([0.1, 0.1, 0.03], [x, p + 0.31, -0.085], new THREE.MeshStandardMaterial({ color: "#d86a10", emissive: "#e07a10", emissiveIntensity: 0.9 }));
+            this.caja([0.1, 0.1, 0.03], [x, p + 0.19, -0.085], blanco);
+        }
+
+        // Placa amarilla (sin caracteres: el 3D no conoce la placa).
+        this.caja([0.46, 0.15, 0.025], [0, 0.86, -0.07], new THREE.MeshStandardMaterial({ color: "#f2c230", roughness: 0.5 }));
+        this.caja([0.42, 0.11, 0.028], [0, 0.86, -0.075], new THREE.MeshStandardMaterial({ color: "#f7d052", roughness: 0.5 }));
+
+        // Cinta reflectiva roja y blanca: atrás, en la barra, y a lo
+        // largo de los dos costados.
+        const cinta = new THREE.MeshStandardMaterial({
+            map: repetir(texturaCintaReflectiva(), c.ancho * 2.2, 1), roughness: 0.35, metalness: 0.2
+        });
+        this.caja([c.ancho * 0.88, 0.07, 0.02], [0, p - 0.12, -0.04], cinta);
+        const cintaLado = new THREE.MeshStandardMaterial({
+            map: repetir(texturaCintaReflectiva(), c.largo * 2.2, 1), roughness: 0.35, metalness: 0.2
+        });
+        for (const lado of [-1, 1]) {
+            this.caja([0.02, 0.07, c.largo * 0.92], [lado * (c.ancho / 2 + 0.012), p + 0.16, c.largo * 0.5], cintaLado);
+        }
+
+        // Loderas detrás del último eje trasero y guardabarros de las
+        // ruedas traseras.
+        // El guardabarros cubre todo el grupo de ejes traseros juntos
+        // (tándem, tridem): ejes a menos de 1,8 m uno del otro.
+        let ultimo = 0;
+        const traseros = this.sinCabezote ? ejes.length : ejes.length - 1;
+        while (ultimo + 1 < traseros && ejes[ultimo + 1] - ejes[ultimo] < 1.8) ultimo++;
+        const zIni = ejes[0];
+        const largoGuarda = ejes[ultimo] - zIni + r * 2 + 0.25;
+        for (const lado of [-1, 1]) {
+            this.caja([0.8, 0.5, 0.025], [lado * (this.xRueda - 0.17), r * 0.95, zIni - r - 0.12], negro);
+            this.redondeada([0.8, 0.06, largoGuarda], [lado * (this.xRueda - 0.17), r * 2 + 0.12, zIni + (ejes[ultimo] - zIni) / 2], negro, 0.03);
+        }
     }
 
     /*
@@ -474,6 +641,8 @@ export class ModeloVehiculo extends THREE.Group {
             }
             m.opacity = opacidad;
         }
+        // El rótulo ya es transparente: solo se atenúa con las paredes.
+        for (const m of this.materialesRotulo) m.opacity = translucido ? 0.3 : 1;
 
         // Las ruedas giran lo que el vehículo avanzó en la dirección
         // en que mira (negativo en reversa).
@@ -494,6 +663,7 @@ export class ModeloVehiculo extends THREE.Group {
             o.geometry?.dispose();
             if (o.material) {
                 o.material.bumpMap?.dispose();
+                o.material.map?.dispose();
                 o.material.dispose();
             }
         });

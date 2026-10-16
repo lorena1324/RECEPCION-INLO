@@ -124,6 +124,88 @@ export function umbralesPatio(config) {
 
 
 /* =========================================================
+   CONTENEDOR SIN CABEZOTE
+
+   Los vehículos articulados (mulas) pueden dejar el contenedor o
+   el semirremolque en el muelle y llevarse el cabezote. Mientras
+   está así corre un reloj aparte del de muelle: el contenedor
+   sigue ocupando la bahía, pero ya no hay conductor ni tractor
+   esperando — y es tiempo que la bodega quiere ver por separado.
+
+   `metaSinCabezote` es cuánto debería tardar, en minutos. Se
+   comporta como el límite de patio (una sola cifra por bodega:
+   la meta es el umbral de «Atención» y el doble es «Urgente»),
+   con una diferencia: en CERO significa "sin meta". Es opcional,
+   y una meta que nadie fijó no puede incumplirse — pintar rojo
+   por un dato que falta sería una alarma falsa.
+   ========================================================= */
+
+export function umbralesSinCabezote(config) {
+    const meta = (config && config.metaSinCabezote) || 0;
+    return {
+        meta: meta,
+        atencion: meta,
+        urgente: meta * MULTIPLICADOR_URGENTE_PATIO
+    };
+}
+
+/* Carrocerías que se separan del cabezote: las articuladas. Las
+   claves son las de MODELOS_3D. */
+export const MODELOS_DESPRENDIBLES = [
+    "miniMula", "tractomulaFurgon", "tractomula",
+    "tractomulaRefrigerada", "tractomulaLona", "tractomulaPlataforma"
+];
+
+/*
+    Con qué carrocería se dibuja un registro. La tipología lo dice
+    (`modelo3d`); si el administrador no lo eligió se deduce del
+    nombre. Si no se reconoce, un camión sencillo: es la forma más
+    común y la que menos engaña.
+
+    Vive aquí y no en el tablero 3D porque ahora también decide algo
+    de negocio —si el vehículo se puede separar del cabezote— y esa
+    pregunta la hacen los paneles, no solo el dibujo.
+*/
+export function carroceriaDe(config, registro) {
+
+    const tipologia = buscarTipologia(config, registro && registro.tipologia);
+    if (tipologia && tipologia.modelo3d) return tipologia.modelo3d;
+
+    const nombre = ((tipologia && tipologia.nombre) || (registro && registro.tipologiaNombre) || "").toLowerCase();
+
+    const sinCabezote = /sin ?(cabezote|cabina|tracto)|semi-?remolque|remolque|trailer/.test(nombre);
+    if (sinCabezote) return /contenedor|40|20 ?pies/.test(nombre) ? "contenedorSinCabezote" : "semirremolque";
+
+    const articulado = /mula|tracto|patineta|articulad/.test(nombre);
+    const frio = /refrigerad|frio|frío|termo|congelad/.test(nombre);
+    const lona = /lona|cortina|curtain/.test(nombre);
+    const abierto = /estaca|plataforma|cama baja|abiert/.test(nombre);
+
+    if (/mini ?mula|minimula/.test(nombre)) return "miniMula";
+    if (articulado && frio) return "tractomulaRefrigerada";
+    if (articulado && lona) return "tractomulaLona";
+    if (articulado && abierto) return "tractomulaPlataforma";
+    if (articulado && /furg[oó]n/.test(nombre)) return "tractomulaFurgon";
+    if (/mula|tracto|patineta|articulad|contenedor|40|20 ?pies/.test(nombre)) return "tractomula";
+    if (frio) return "refrigerado";
+    if (abierto) return "estacas";
+    if (lona) return "lona";
+    if (/doble|troque|dt\b|3 ?ejes/.test(nombre)) return "dobleTroque";
+    if (/\bvan\b|camioneta/.test(nombre)) return "van";
+    if (/nhr|liviano|furgoneta/.test(nombre)) return "nhr";
+    if (/turbo|npr|350/.test(nombre)) return "turbo";
+    return "sencillo";
+}
+
+/* ¿Este vehículo puede quedar sin cabezote? Solo los articulados con
+   tipología asignada: sin ella no se sabe qué es. */
+export function esDesprendible(config, registro) {
+    if (!registro || !registro.tipologia) return false;
+    return MODELOS_DESPRENDIBLES.indexOf(carroceriaDe(config, registro)) !== -1;
+}
+
+
+/* =========================================================
    LOS DOS CAMPOS LIBRES DE LA ENTRADA
 
    En J3 y B9 la portería anota el nombre del CONDUCTOR y su
@@ -305,6 +387,10 @@ export function configPorDefecto(operacion) {
 
         limitePatio: 120,
 
+        // Meta del contenedor sin cabezote, en minutos. 0 = sin meta.
+        // Ver umbralesSinCabezote().
+        metaSinCabezote: 0,
+
         /* ── Umbrales de salida ──────────────────────────────
            Cuánto avance debe tener un vehículo para poder salir.
            100 significa "sin excepción posible". Por debajo de
@@ -362,6 +448,7 @@ function normalizar(operacion, datos) {
         distingueModalidad: booleanODefecto(datos.distingueModalidad, base.distingueModalidad),
         cobraVehiculos: booleanODefecto(datos.cobraVehiculos, base.cobraVehiculos),
         limitePatio: numeroODefecto(datos.limitePatio, base.limitePatio),
+        metaSinCabezote: numeroODefecto(datos.metaSinCabezote, base.metaSinCabezote),
         minimoCargue: numeroODefecto(datos.minimoCargue, base.minimoCargue),
         minimoDescargue: numeroODefecto(datos.minimoDescargue, base.minimoDescargue),
         capacidadDiaria: numeroODefecto(datos.capacidadDiaria, base.capacidadDiaria),
@@ -583,10 +670,22 @@ export function tiemposEnCero() {
    ========================================================= */
 
 export const MODELOS_3D = {
+    van: "Van / camioneta",
+    nhr: "Camión liviano (NHR)",
     turbo: "Turbo",
     sencillo: "Sencillo",
     dobleTroque: "Doble troque",
-    tractomula: "Tractomula"
+    refrigerado: "Camión refrigerado",
+    estacas: "Camión de estacas",
+    lona: "Camión de lona",
+    miniMula: "Mini mula",
+    tractomulaFurgon: "Tractomula furgón",
+    tractomula: "Tractomula (contenedor)",
+    tractomulaRefrigerada: "Tractomula refrigerada",
+    tractomulaLona: "Tractomula de lona",
+    tractomulaPlataforma: "Tractomula plataforma",
+    semirremolque: "Semirremolque sin cabezote",
+    contenedorSinCabezote: "Contenedor sin cabezote"
 };
 
 export function nuevaTipologia(nombre) {
@@ -840,6 +939,11 @@ export function validarConfig(config, tarifas) {
         errores.push("El límite de patio debe ser mayor que cero.");
     }
 
+    // Cero es válido: significa "sin meta" (ver umbralesSinCabezote).
+    if (config.metaSinCabezote < 0) {
+        errores.push("La meta de contenedor sin cabezote no puede ser negativa.");
+    }
+
     if (config.posicionesTotales < 0) {
         errores.push("Las posiciones totales no pueden ser negativas.");
     }
@@ -966,6 +1070,7 @@ export async function guardarConfig(operacion, config, admin) {
         distingueModalidad: limpio.distingueModalidad,
         cobraVehiculos: limpio.cobraVehiculos,
         limitePatio: limpio.limitePatio,
+        metaSinCabezote: limpio.metaSinCabezote,
         minimoCargue: limpio.minimoCargue,
         minimoDescargue: limpio.minimoDescargue,
         capacidadDiaria: limpio.capacidadDiaria,

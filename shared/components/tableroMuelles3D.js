@@ -35,33 +35,11 @@
 import { crearTableroMuelles } from "./tableroMuelles.js";
 
 import { minutosEnMuelle, nivelContraMeta, faseActual, prioridadDe } from "../services/eventos.js";
-import { tiemposDe, modalidadDe, distingueModalidad, etiquetaCampo, buscarTipologia } from "../services/config.js";
+import { tiemposDe, modalidadDe, distingueModalidad, etiquetaCampo, buscarTipologia, carroceriaDe } from "../services/config.js";
+import { datosSinCabezote } from "./sinCabezote.js";
 import { requiereAvanceCompleto, estaCancelado } from "../services/vehiculos.js";
 import { formatDuration } from "../utils/tiempos.js";
 
-
-/* =========================================================
-   CARROCERÍA 3D DE CADA TIPOLOGÍA
-
-   Las tipologías las crea el administrador y hoy no dicen con qué
-   carrocería se dibujan. Mientras exista ese campo (`modelo3d` en
-   la configuración), se deduce del nombre. Si no se reconoce, se
-   dibuja un camión sencillo: es la forma más común y la que menos
-   engaña.
-   ========================================================= */
-
-function carroceriaDe(config, registro) {
-
-    const tipologia = buscarTipologia(config, registro.tipologia);
-    if (tipologia && tipologia.modelo3d) return tipologia.modelo3d;
-
-    const nombre = ((tipologia && tipologia.nombre) || registro.tipologiaNombre || "").toLowerCase();
-
-    if (/mula|tracto|patineta|articulad|contenedor|40|20 ?pies/.test(nombre)) return "tractomula";
-    if (/doble|troque|dt\b|3 ?ejes/.test(nombre)) return "dobleTroque";
-    if (/turbo|npr|350|nhr|furgoneta|camioneta|van/.test(nombre)) return "turbo";
-    return "sencillo";
-}
 
 // "normal/media/alta" del semáforo de siempre → lo que lee el motor.
 const NIVEL = { normal: "ok", media: "atencion", alta: "urgente" };
@@ -210,6 +188,10 @@ function montar3D(contenedor, opciones, alFallar) {
             tipologia: { nombre: registro.tipologiaNombre || "Sin tipología" },
             nivelTiempo: function () { return umbrales ? NIVEL[nivel] : null; },
 
+            // Contenedor sin cabezote: el 3D dibuja solo el contenedor y
+            // rotula el reloj (ver sinCabezote.js).
+            ...datosSinCabezote(registro, config),
+
             // Lo que lee la ficha
             conductor: registro.conductor || "",
             textoTipologia: [registro.tipologiaNombre || "Sin tipología", modalidad].filter(Boolean).join(" · "),
@@ -253,7 +235,8 @@ function montar3D(contenedor, opciones, alFallar) {
                 modelo3d: carroceriaDe(config, registro),
                 cancelado: estaCancelado(registro),
                 tipologia: { nombre: registro.tipologiaNombre || "Sin tipología" },
-                nivelTiempo: function () { return null; }
+                nivelTiempo: function () { return null; },
+                ...datosSinCabezote(registro, config)
             },
             puesto: puesto,
             minutos: p.minutos,
@@ -346,7 +329,7 @@ function montar3D(contenedor, opciones, alFallar) {
             const titulo = document.getElementById("muelles-titulo");
             motor.actualizar({
                 titulo: (titulo && titulo.textContent.trim()) || "Muelles",
-                nombreBodega: "CENTRO DE DISTRIBUCIÓN" + (config && config.operacion ? " · BODEGA " + config.operacion : ""),
+                nombreBodega: "OPERACION PEPSICO INLOTRANS " + (config && config.operacion ? " · BODEGA " + config.operacion : ""),
                 muelles: muelles,
                 patio: patio,
                 salientes: salientes,

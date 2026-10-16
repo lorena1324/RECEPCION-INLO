@@ -269,13 +269,14 @@ textarea { resize: vertical; min-height: 64px; }
 
 .muelle-meta {
     display: flex; align-items: center; gap: 5px;
-    font-size: 11px; font-weight: 600; margin-bottom: 6px;
-    padding: 3px 7px; border-radius: 10px; width: fit-content;
+    font-size: 12.5px; font-weight: 700; margin-bottom: 6px;
+    padding: 4px 9px; border-radius: 10px; width: fit-content;
 }
 .muelle-meta.normal { background: var(--green-50); color: var(--green-600); }
 .muelle-meta.media { background: var(--amber-50); color: var(--amber-600); }
 .muelle-meta.alta { background: var(--red-50); color: var(--red-600); }
-.muelle-meta.sin-meta { background: var(--surface-3); color: var(--text-3); font-weight: 500; }
+/* Falta un dato (la tipología): se resalta en ámbar, no se apaga en gris. */
+.muelle-meta.sin-meta { background: var(--amber-50); color: var(--amber-600); font-weight: 700; }
 
 /* ── Avance de cargue/descargue (dentro de una muelle-card ocupada) ── */
 .avance-selector, .avance-box { margin-top: 8px; padding-top: 8px; border-top: 0.5px dashed var(--border); }

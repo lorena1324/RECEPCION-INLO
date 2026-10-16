@@ -1,4 +1,4 @@
-﻿/* =========================================================
+/* =========================================================
    INLOTRANS
    Tablero de muelles en 3D
 
@@ -81,6 +81,49 @@ function estadoMuelle(muelle, semaforo) {
 }
 
 /*
+    Color del reloj "sin cabezote": el mismo semáforo del resto del
+    tablero. El motor recibe el nivel como lo calcula la página
+    ('normal' | 'media' | 'alta') y el semáforo habla en ok / atención
+    / urgente.
+*/
+const NIVEL_SIN_CABEZOTE = { normal: "ok", media: "atencion", alta: "urgente" };
+
+function colorSinCabezote(v, semaforo) {
+    const n = NIVEL_SIN_CABEZOTE[v.nivelSinCabezote] ?? "ok";
+    return (semaforo ? semaforo[n] : COLOR_NIVEL[n]) ?? "#7d8794";
+}
+
+/*
+    LEGIBILIDAD DE LAS TARJETAS
+
+    Los colores del semáforo (verde, ámbar, rojo) son para PINTAR, no
+    para escribir encima: un rojo sobre el azul casi negro de la
+    tarjeta apenas se lee, y menos desde lejos o en un televisor.
+    Por eso el texto es SIEMPRE claro y sobre fondo oscuro, y el color
+    del estado va de acento: borde y puntito, con un tinte suave de
+    fondo. Así el estado se ve de un vistazo sin sacrificar la lectura.
+*/
+const TEXTO = "#f8fafc";          // lo principal
+const TEXTO_SUAVE = "#d5dde8";    // lo secundario (todavía con buen contraste)
+const AMBAR = "#fbbf24";          // "falta un dato"
+
+// El registro dice "Sin tipología" cuando no se ha asignado ninguna.
+function sinTipologia(v) {
+    return !v.tipologia?.nombre || v.tipologia.nombre === "Sin tipología";
+}
+
+function Chip({ color, children, className = "" }) {
+    return (
+        <div
+            className={`flex items-start gap-1.5 rounded-md border px-2 py-1 font-semibold leading-snug ${className}`}
+            style={{ color: TEXTO, borderColor: color, background: `color-mix(in srgb, ${color} 24%, #0d131c)` }}
+        >
+            <span aria-hidden className="mt-[5px] inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
+            <span>{children}</span>
+        </div>
+    );
+}
+/*
     Cupo de cada vehículo del patio. ESTABLE: el que ya tiene cupo lo
     conserva mientras siga en el patio, y el que llega toma el primero
     libre. Si el cupo saliera del puesto en la fila, cada vez que la
@@ -139,15 +182,49 @@ function semillaDe(id) {
 */
 function VehiculoEnEscena({ vehiculo, destino, saliendo, animarLlegada, total, verInterior, etiqueta, compacta, escala, onSalio, onSeleccionar }) {
 
-    const modelo = useMemo(
-        () => crearModelo(vehiculo.modelo3d, { semilla: semillaDe(vehiculo.id) }),
-        [vehiculo.modelo3d, vehiculo.id]
-    );
+    /*
+        Misma tipología → mismos colores (la semilla sale de ella, no
+        del vehículo) y su nombre pintado en los costados. Quien aún
+        no tiene tipología conserva colores propios y sin rótulo.
+    */
+    const nombreTipologia = vehiculo.tipologia?.nombre;
+    // Dejó el contenedor y se llevó el cabezote: se dibuja solo el contenedor.
+    const sinCabezote = !!vehiculo.sinCabezote;
+    const conTipologia = !!nombreTipologia && nombreTipologia !== "Sin tipología";
+    const semilla = semillaDe(conTipologia ? (vehiculo.tipologia.id ?? nombreTipologia) : vehiculo.id);
+
+    /*
+        Cuando llega la tipología el vehículo cambia de carrocería y el
+        modelo se vuelve a construir. El nuevo debe nacer donde estaba
+        el anterior: si naciera en el origen (0, 0), todos los que
+        cambian de tipología quedarían amontonados contra el muro, y
+        como su destino no cambió, nadie los volvería a mover.
+    */
+    const anterior = useRef(null);
+    const modelo = useMemo(() => {
+        const nuevo = crearModelo(vehiculo.modelo3d, {
+            semilla, rotulo: conTipologia ? nombreTipologia : "", sinCabezote: sinCabezote
+        });
+        if (anterior.current) {
+            nuevo.position.copy(anterior.current.position);
+            nuevo.rotation.y = anterior.current.rotation.y;
+        }
+        return nuevo;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [vehiculo.modelo3d, vehiculo.id, semilla, sinCabezote, conTipologia ? nombreTipologia : ""]);
     const destinoActual = useRef(null);
+
+    // Para saber, en el efecto de abajo, si el modelo cambió desde la
+    // vez anterior.
+    const modeloVisto = useRef(null);
 
     useEffect(() => () => modelo.dispose(), [modelo]);
 
     useEffect(() => {
+
+        const cambioModelo = modeloVisto.current !== null && modeloVisto.current !== modelo;
+        modeloVisto.current = modelo;
+        anterior.current = modelo;
 
         if (saliendo) {
             // Nunca llegó a dibujarse (p. ej. estaba en la cola del
@@ -174,7 +251,13 @@ function VehiculoEnEscena({ vehiculo, destino, saliendo, animarLlegada, total, v
             return;
         }
 
-        if (previo.x === destino.x && previo.z === destino.z) return;
+        // Modelo nuevo (cambió la tipología) que heredó la pose del anterior:
+        // si ya está en su sitio no hay nada que hacer; si lo cambiaron a
+        // mitad de camino, sigue desde donde iba.
+        if (cambioModelo) {
+            if (Math.hypot(modelo.position.x - destino.x, modelo.position.z - destino.z) < 0.05) return;
+        } else if (previo.x === destino.x && previo.z === destino.z) return;
+
         modelo.recorrer([[modelo.position.x, Z_CARRIL], [destino.x, Z_CARRIL], [destino.x, destino.z]]);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -201,8 +284,8 @@ function VehiculoEnEscena({ vehiculo, destino, saliendo, animarLlegada, total, v
                     <Html position={[0, alturaPiso + carga.alto + 0.9, carga.largo / 2]} center distanceFactor={(compacta ? 30 : 22) * escala} zIndexRange={[8, 0]}>
                         <button
                             onClick={onSeleccionar}
-                            className="select-none whitespace-nowrap rounded-md border-2 bg-[#0d131c]/90 px-1.5 py-0.5 text-[11px] font-bold text-white shadow-md"
-                            style={{ borderColor: etiqueta.color }}
+                            className="select-none whitespace-nowrap rounded-lg border-2 bg-[#0d131c]/95 px-2.5 py-1 text-[14px] font-extrabold shadow-lg"
+                            style={{ borderColor: etiqueta.color, color: TEXTO }}
                         >
                             #{etiqueta.puesto} · {etiqueta.texto}
                         </button>
@@ -257,29 +340,30 @@ function TarjetaMuelle({ muelle, x, seleccionado, compacta, escala, semaforo, on
         >
             <button
                 onClick={onSeleccionar}
-                className="w-40 select-none rounded-xl border-2 bg-[#0d131c]/90 px-3 py-2 text-left text-white shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm transition-transform hover:scale-105"
+                className="w-48 select-none rounded-xl border-2 bg-[#0d131c]/95 px-3.5 py-2.5 text-left text-white shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm transition-transform hover:scale-105"
                 style={{ borderColor: borde, opacity: opacidad, transform: seleccionado ? "scale(1.12)" : undefined, boxShadow: seleccionado ? `0 0 0 3px ${borde}55, 0 8px 24px rgba(0,0,0,.45)` : undefined }}
             >
                 <div className="flex items-baseline justify-between">
-                    <span className="text-lg font-extrabold leading-none">M{muelle.numero}</span>
-                    <span className="text-[11px] font-medium text-[#c3cbd6]">
+                    <span className="text-2xl font-extrabold leading-none">M{muelle.numero}</span>
+                    <span className="text-[14px] font-bold" style={{ color: TEXTO_SUAVE }}>
                         {v ? v.placa : "Disponible"}
                     </span>
                 </div>
 
                 {v && (
                     <>
-                        <div className="mt-1 flex justify-between text-xs">
+                        <div className="mt-1.5 flex items-baseline justify-between text-[14px] font-semibold">
                             <span>{v.fase}</span>
-                            <span className="font-bold">{v.porcentaje}%</span>
+                            <span className="text-base font-extrabold">{v.porcentaje}%</span>
                         </div>
-                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#263244]">
+                        <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#2b394f]">
                             <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${v.porcentaje}%`, background: colorFase(v.fase) }} />
                         </div>
                         {aviso && (
-                            <div className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold" style={{ color: colorAviso }}>
-                                <span aria-hidden>⚠</span> {aviso}
-                            </div>
+                            <Chip color={colorAviso ?? borde} className="mt-2 text-[13px]">{aviso}</Chip>
+                        )}
+                        {v.sinCabezote && (
+                            <Chip color={colorSinCabezote(v, semaforo)} className="mt-2 text-[13px]">Sin cabezote · {v.minutosSinCabezote} min</Chip>
                         )}
                     </>
                 )}
@@ -308,29 +392,37 @@ function FichaFrente({ muelle, x, compacta, escala, semaforo, onSeleccionar }) {
         <Html position={[x, 0.05, Z_FICHA]} center distanceFactor={(compacta ? 30 : 20) * escala} zIndexRange={[7, 0]}>
             <button
                 onClick={onSeleccionar}
-                className={`select-none rounded-md border-l-4 bg-[#0d131c]/90 text-left leading-tight text-white shadow-md ${compacta ? "w-24 px-1.5 py-1" : "w-44 px-2.5 py-2"}`}
-                style={{ borderColor: color, opacity: v.cancelado ? 0.55 : 1 }}
+                className={`select-none rounded-lg border-l-[6px] bg-[#0d131c]/95 text-left leading-tight shadow-lg ${compacta ? "w-28 px-2 py-1.5" : "w-[196px] px-3 py-2.5"}`}
+                style={{ borderColor: color, color: TEXTO, opacity: v.cancelado ? 0.55 : 1 }}
             >
-                <div className="flex items-baseline justify-between gap-1">
-                    <span className={`font-extrabold tracking-wide ${compacta ? "text-[11px]" : "text-base"}`}>{v.placa}</span>
-                    <span className={`font-bold text-[#c3cbd6] ${compacta ? "text-[8px]" : "text-[10px]"}`}>M{muelle.numero}</span>
+                <div className="flex items-baseline justify-between gap-2">
+                    <span className={`font-extrabold tracking-wide ${compacta ? "text-[14px]" : "text-[19px]"}`}>{v.placa}</span>
+                    <span className={`rounded px-1.5 font-extrabold ${compacta ? "text-[10px]" : "text-[12px]"}`} style={{ background: "#2b394f", color: TEXTO }}>M{muelle.numero}</span>
                 </div>
 
-                {!compacta && v.conductor && <div className="mt-0.5 truncate text-[11px] text-[#c3cbd6]">{v.conductor}</div>}
-                {!compacta && (v.textoTipologia || v.tipologia?.nombre) && (
-                    <div className="truncate text-[11px] text-[#c3cbd6]">{v.textoTipologia || v.tipologia.nombre}</div>
+                {!compacta && v.conductor && <div className="mt-1 truncate text-[12px] font-semibold uppercase" style={{ color: TEXTO_SUAVE }}>{v.conductor}</div>}
+                {!compacta && (
+                    sinTipologia(v)
+                        ? <Chip color={AMBAR} className="mt-1.5 text-[12px]">{v.textoTipologia || "Sin tipología"}</Chip>
+                        : <div className="mt-0.5 truncate text-[12px]" style={{ color: TEXTO_SUAVE }}>{v.textoTipologia || v.tipologia.nombre}</div>
                 )}
 
-                <div className={`flex justify-between ${compacta ? "mt-0.5 text-[8px]" : "mt-1.5 text-[11px]"}`}>
+                <div className={`flex items-baseline justify-between ${compacta ? "mt-1 text-[10px]" : "mt-1.5 text-[13px]"} font-semibold`}>
                     <span>{v.fase}</span>
-                    <span className="font-bold">{v.porcentaje}%</span>
+                    <span className={`font-extrabold ${compacta ? "" : "text-[15px]"}`}>{v.porcentaje}%</span>
                 </div>
-                <div className={`overflow-hidden rounded-full bg-[#263244] ${compacta ? "mt-0.5 h-0.5" : "mt-1 h-1"}`}>
+                <div className={`overflow-hidden rounded-full bg-[#2b394f] ${compacta ? "mt-0.5 h-1" : "mt-1 h-2"}`}>
                     <div className="h-full rounded-full" style={{ width: `${v.porcentaje}%`, background: colorFase(v.fase) }} />
                 </div>
 
                 {!compacta && v.meta && (
-                    <div className="mt-1.5 text-[10px] font-semibold leading-snug" style={{ color }}>{v.meta}</div>
+                    <Chip color={v.sinMeta ? AMBAR : color} className="mt-1.5 text-[12px]">{v.meta}</Chip>
+                )}
+
+                {v.sinCabezote && (
+                    compacta
+                        ? <div className="mt-1 text-[10px] font-bold" style={{ color: TEXTO }}>Sin cabezote {v.minutosSinCabezote} min</div>
+                        : <Chip color={colorSinCabezote(v, semaforo)} className="mt-1.5 text-[12px]">Sin cabezote · {v.textoSinCabezote}</Chip>
                 )}
             </button>
         </Html>

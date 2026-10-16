@@ -71,6 +71,7 @@ import { iniciarAnimaciones } from "../../../shared/components/animaciones.js";
 // vuelve solo si el equipo no tiene WebGL o el motor no carga.
 import { crearTableroMuelles3D as crearTableroMuelles } from "../../../shared/components/tableroMuelles3D.js";
 import { crearRegistroActividad } from "../../../shared/components/registroActividad.js";
+import { bloqueSinCabezote } from "../../../shared/components/sinCabezote.js";
 const OPERACION = "B9";
 const RUTA_LOGIN = "../../../index.html";
 
@@ -433,7 +434,7 @@ function tablero() {
 
 function extrasDeMuelle(r) {
     return `<div style="margin-top:4px;"><span class="badge badge-canal">${escapar(r.canal || "—")}</span></div>` +
-           renderAvance(r);
+           bloqueSinCabezote(r, configBodega, { editable: false }) + renderAvance(r);
 }
 
 function accionesDeMuelle(r) {

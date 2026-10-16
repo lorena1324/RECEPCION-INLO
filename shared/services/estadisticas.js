@@ -28,6 +28,8 @@
                  es-promedio-muelle, es-cargue-pct, es-pico,
                  es-total-general, es-promedio-nota,
                  es-promedio-muelle-nota
+     Sin cabezote  es-sincab-total, es-sincab-nota,
+                 es-sincab-promedio, es-sincab-promedio-nota
      Gráficas    chart-entradas-dia, chart-franja-horaria,
                  chart-tipo, chart-operador, chart-tiempo-patio,
                  chart-canal, chart-muelles-general,
@@ -61,8 +63,10 @@ import {
     getDestino,
     getDiaOperativo,
     getLocationDurations,
+    getTiempoSinCabezote,
     promedioMinutos,
-    resumenOnTime
+    resumenOnTime,
+    resumenSinCabezote
 } from "./eventos.js";
 
 import { estaCancelado, llegoAunqueCancelado } from "./vehiculos.js";
@@ -207,7 +211,7 @@ export function renderPanelEstadisticas(opts) {
     const recsPrev = previosTodos.filter((r) => !estaCancelado(r));
 
     pintarTarjetasVivas({ dias, operativos, recsPrev, previosTodos, baseOperativa, mejorDia,
-        totalEntradas, totalSalidas, promPatio, promMuelle, cargues });
+        totalEntradas, totalSalidas, promPatio, promMuelle, cargues, config: opts.config });
 
     /* ── Análisis: no dependen de Chart.js, van antes del early-return ── */
     renderOnTime(operativos);
@@ -521,6 +525,8 @@ function pintarTarjetasVivas(d) {
         })
     });
 
+    pintarSinCabezote(d, porDia, serie, rango);
+
     tarjetaDinamica("es-cargue-pct", {
         valor: d.totalEntradas ? pctCargue(operativos) : null,
         texto: textoDe("es-cargue-pct"),
@@ -548,6 +554,66 @@ function pintarTarjetasVivas(d) {
             })
         });
     }
+}
+
+/* =========================================================
+   CONTENEDORES SIN CABEZOTE
+
+   Dos tarjetas: cuántos vehículos dejaron el contenedor solo en el
+   periodo (y cuántos lo están AHORA) y cuánto duró cada vez, en
+   promedio. El promedio cuenta solo las separaciones ya terminadas,
+   por la misma razón que los de patio y muelle: una en curso crece
+   en cada repintado y entraría a medias.
+
+   Si la bodega fijó una meta (config.metaSinCabezote) se dice al
+   lado del promedio, para leerlo contra algo.
+   ========================================================= */
+
+function pintarSinCabezote(d, porDia, serie, rango) {
+
+    const { operativos, recsPrev, config } = d;
+    const r = resumenSinCabezote(operativos);
+    const previo = resumenSinCabezote(recsPrev);
+    const meta = (config && config.metaSinCabezote) || 0;
+
+    const conSeparacion = operativos.filter((x) => getTiempoSinCabezote(x).veces > 0);
+    const masLargos = conSeparacion.slice().sort((a, b) => getTiempoSinCabezote(b).minutos - getTiempoSinCabezote(a).minutos);
+
+    setTexto("es-sincab-nota", r.ahora
+        ? r.ahora + (r.ahora === 1 ? " está" : " están") + " sin cabezote ahora"
+        : "Ninguno sin cabezote en este momento");
+
+    tarjetaDinamica("es-sincab-total", {
+        valor: r.contenedores,
+        texto: String(r.contenedores),
+        formato: entero,
+        anterior: previo.contenedores,
+        serie: serie((g) => resumenSinCabezote(g).contenedores),
+        detalle: () => ({
+            titulo: "Contenedores que quedaron sin cabezote",
+            subtitulo: "Del que más tiempo estuvo solo al que menos · " + rango,
+            filas: masLargos
+        })
+    });
+
+    setTexto("es-sincab-promedio-nota", r.promedio === null
+        ? "Ninguna separación terminada en el periodo"
+        : "sobre " + r.tramos + " separación(es) terminada(s) · la más larga " + formatearMinutos(r.mayor) +
+          (meta ? " · meta " + formatearMinutos(meta) : ""));
+
+    tarjetaDinamica("es-sincab-promedio", {
+        valor: r.promedio,
+        texto: r.promedio === null ? "—" : formatearMinutos(r.promedio),
+        formato: formatearMinutos,
+        anterior: previo.promedio,
+        serie: serie((g) => resumenSinCabezote(g).promedio),
+        mejor: "bajar",
+        detalle: () => ({
+            titulo: "Tiempo promedio con el contenedor sin cabezote",
+            subtitulo: "Del que más tiempo estuvo solo al que menos · " + rango,
+            filas: masLargos
+        })
+    });
 }
 
 /* Al tocar una barra, un punto o una porción de una gráfica se

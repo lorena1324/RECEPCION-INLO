@@ -143,6 +143,40 @@ export function texturaFranjas() {
     }, { color: true });
 }
 
+// Cinta reflectiva de los furgones: rojo y blanco alternados.
+export function texturaCintaReflectiva() {
+    return lienzo("cinta", 64, 16, (ctx, w, h) => {
+        for (let x = 0; x < w; x += 16) {
+            ctx.fillStyle = x % 32 === 0 ? "#d3212a" : "#f3f4f6";
+            ctx.fillRect(x, 0, 16, h);
+        }
+    }, { color: true });
+}
+
+// Rayas de la banda de rodamiento (relieve): una por cada 8 px.
+export function relieveBandaLlanta() {
+    return lienzo("banda", 64, 16, (ctx, w, h) => {
+        ctx.fillStyle = "#808080";
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = "#f0f0f0";
+        for (let x = 0; x < w; x += 16) ctx.fillRect(x, 0, 9, h);
+    });
+}
+
+// Ventanales corridos de la nave: vidrio claro con parteluces.
+export function texturaVidrio() {
+    return lienzo("vidrio", 256, 64, (ctx, w, h) => {
+        ctx.fillStyle = "#cfe0f1";
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        ctx.fillRect(0, 0, w, h * 0.35);
+        ctx.fillStyle = "#7d8597";
+        for (let x = 0; x < w; x += 64) ctx.fillRect(x, 0, 5, h);
+        ctx.fillRect(0, 0, w, 4);
+        ctx.fillRect(0, h - 4, w, 4);
+    }, { color: true });
+}
+
 // Texto pintado en un letrero o en el piso.
 export function texturaTexto(texto, { ancho = 1024, alto = 192, fondo = null, color = "#ffffff", peso = 800, tamano = 110 } = {}) {
     return lienzo(`texto:${texto}:${ancho}:${alto}:${fondo}:${color}:${tamano}`, ancho, alto, (ctx, w, h) => {

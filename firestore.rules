@@ -184,7 +184,11 @@ service cloud.firestore {
                  'pickingDescargue', 'auditoriaDescargue',
                  'cancelado', 'cancelacion', 'horaSalida', 'operadorSalida',
                  'obsSalida', 'anulacionSalida', 'obsUbicacion',
-                 'modalidad', 'tipologia', 'tipologiaNombre'
+                 'modalidad', 'tipologia', 'tipologiaNombre',
+                 // El contenedor sin cabezote lo marca quien ve el muelle:
+                 // el supervisor. Es un interruptor con su evento en el
+                 // historial, sin dinero ni autorizaciones de por medio.
+                 'sinCabezote'
                ]);
       }
 

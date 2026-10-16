@@ -385,15 +385,28 @@
     color: var(--text-1);
 }
 
+/* La línea de meta es una píldora: texto en el color del semáforo sobre
+   su propio tinte suave. Suelto sobre el fondo, un rojo o un verde
+   delgado de 11px apenas se leía; así se lee de lejos y el estado se
+   ve de un vistazo. */
 .tm-meta {
     margin-top: 8px;
-    font-size: 11px;
-    font-weight: 600;
+    padding: 5px 9px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-weight: 700;
     color: var(--sem-ok);
-    line-height: 1.35;
+    background: var(--sem-ok-suave);
+    line-height: 1.4;
 }
 
-.tm-meta.tm-sin-meta { color: var(--text-3); font-weight: 500; }
+/* Sin tipología no hay meta: no es "todo bien", es un dato que falta,
+   y se resalta en ámbar en vez de apagarlo en gris. */
+.tm-meta.tm-sin-meta {
+    color: var(--sem-media);
+    background: var(--sem-media-suave);
+    font-weight: 700;
+}
 
 /* Los botones se van al fondo de la tarjeta. `margin-top:auto` y
    no un hueco fijo: así quedan alineados entre todas las tarjetas
@@ -411,12 +424,12 @@
 /* ── Niveles contra la meta de la tipología ── */
 
 .tm-card.nivel-media { border-left-color: var(--sem-media); }
-.tm-card.nivel-media .tm-meta   { color: var(--sem-media); }
+.tm-card.nivel-media .tm-meta   { color: var(--sem-media); background: var(--sem-media-suave); }
 .tm-card.nivel-media .tm-carga  { fill: var(--sem-media); }
 .tm-card.nivel-media .tm-estado { background: var(--sem-media-suave); color: var(--sem-media); }
 
 .tm-card.nivel-alta { border-left-color: var(--sem-alta); }
-.tm-card.nivel-alta .tm-meta   { color: var(--sem-alta); }
+.tm-card.nivel-alta .tm-meta   { color: var(--sem-alta); background: var(--sem-alta-suave); }
 .tm-card.nivel-alta .tm-carga  { fill: var(--sem-alta); }
 .tm-card.nivel-alta .tm-estado { background: var(--sem-alta-suave); color: var(--sem-alta); }
 

@@ -104,6 +104,7 @@ import { iniciarAnimaciones } from "../../../shared/components/animaciones.js";
 // vuelve solo si el equipo no tiene WebGL o el motor no carga.
 import { crearTableroMuelles3D as crearTableroMuelles } from "../../../shared/components/tableroMuelles3D.js";
 import { crearRegistroActividad } from "../../../shared/components/registroActividad.js";
+import { bloqueSinCabezote, alClicSinCabezote } from "../../../shared/components/sinCabezote.js";
 const OPERACION = "J4";
 const RUTA_LOGIN = "../../../index.html";
 
@@ -1666,7 +1667,7 @@ function tablero() {
 
 function extrasDeMuelle(r) {
     return `<div style="margin-top:4px;"><span class="badge badge-canal">${escapar(r.canal || "—")}</span></div>` +
-           selectorTipologiaMuelle(r) + selectorModalidad(r) + renderAvance(r);
+           selectorTipologiaMuelle(r) + selectorModalidad(r) + bloqueSinCabezote(r, configBodega, { editable: true }) + renderAvance(r);
 }
 
 function accionesDeMuelle(r) {
@@ -1800,6 +1801,9 @@ function iniciarAvanceClicks() {
       incrementarAvance(id, Number(delta));
       return;
     }
+
+    // El contenedor sin cabezote (ver shared/components/sinCabezote.js).
+    if (alClicSinCabezote(e, perfilActual.nombre)) return;
 
     const btnModalidad = e.target.closest("[data-modalidad]");
     if (btnModalidad) {
