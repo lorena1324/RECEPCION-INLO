@@ -65,7 +65,8 @@ import { conectarFiltroFechas } from "../../../shared/components/filtroFechas.js
 
 
 import { conectarBotonTema } from "../../../shared/utils/tema.js";
-import { activarEnvioConEnter } from "../../../shared/utils/teclado.js";
+import { activarEnvioConEnter } from "../../../shared/utils/teclado.js";
+
 import { iniciarAnimaciones } from "../../../shared/components/animaciones.js";
 // Muelles en 3D: misma interfaz que el tablero de siempre, al que
 // vuelve solo si el equipo no tiene WebGL o el motor no carga.
@@ -87,7 +88,7 @@ const RUTA_LOGIN = "../../../index.html";
 
    J3 (Pepsico): el "día" del turno va de 6am a 6am, no de
    medianoche a medianoche. Ver shared/utils/tiempos.js. */
-const MUELLES_POR_DEFECTO = 8;
+const MUELLES_POR_DEFECTO = 7;
 const HORA_CORTE_POR_DEFECTO = 6;
 
 let numMuelles = MUELLES_POR_DEFECTO;
