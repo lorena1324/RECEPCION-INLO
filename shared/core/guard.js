@@ -26,13 +26,29 @@
    Si esa profundidad cambia, ajustar RUTA_LOGIN abajo.
    ========================================================= */
 
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-
-import { auth } from "./firebase.js";
+import { supabase } from "./supabase.js";
 import { obtenerPerfil } from "./auth.js";
 import { obtenerSesion, guardarSesion, cerrarSesionLocal } from "./session.js";
 
 const RUTA_LOGIN = "../../../index.html";
+
+
+/*
+    Lo mismo que hacía onAuthStateChanged de Firebase: avisa una vez al
+    cargar (con el usuario de la sesión guardada, o null) y otra vez si
+    la sesión se cierra (en esta pestaña o en otra).
+*/
+function alCambiarSesion(callback) {
+
+    supabase.auth.getSession().then(function (respuesta) {
+        var sesion = respuesta.data.session;
+        callback(sesion ? { uid: sesion.user.id } : null);
+    });
+
+    supabase.auth.onAuthStateChange(function (evento) {
+        if (evento === "SIGNED_OUT") callback(null);
+    });
+}
 
 
 export function protegerPagina(opciones) {
@@ -44,7 +60,7 @@ export function protegerPagina(opciones) {
 
     return new Promise(function (resolve, reject) {
 
-        onAuthStateChanged(auth, async function (user) {
+        alCambiarSesion(async function (user) {
 
             if (!user) {
                 cerrarSesionLocal();

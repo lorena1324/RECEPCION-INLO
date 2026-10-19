@@ -38,9 +38,9 @@ import {
     setDoc,
     onSnapshot,
     serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+} from "../core/db.js";
 
-import { db } from "../core/firebase.js";
+import { db } from "../core/db.js";
 
 const COLECCION = "config";
 

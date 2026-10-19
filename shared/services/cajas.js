@@ -19,15 +19,14 @@
    mostrar, y `callback(null, error)` lo avisa una vez.
    ========================================================= */
 
-import { auth } from "../core/firebase.js";
+import { supabase } from "../core/supabase.js";
 
 const SEGUNDOS_RESPALDO = 10;
 
 async function tokenDeSesion() {
-    // Al abrir la página la sesión puede estar todavía restaurándose.
-    if (typeof auth.authStateReady === "function") await auth.authStateReady();
-    const usuario = auth.currentUser;
-    return usuario ? usuario.getIdToken() : null;
+    // getSession() espera a que la sesión guardada termine de restaurarse.
+    const { data } = await supabase.auth.getSession();
+    return data.session ? data.session.access_token : null;
 }
 
 /*

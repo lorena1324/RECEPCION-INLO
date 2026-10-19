@@ -15,7 +15,7 @@
      - "Estadísticas" y "Configurar Firebase" NO están aquí:
        las estadísticas se construyen en supervisor/clientes
        (con datos de más de una fuente), y la configuración de
-       Firebase ya no es manual — vive en shared/core/firebase.js.
+       La base de datos vive en shared/core/db.js (Supabase).
    ========================================================= */
 
 import { protegerPagina } from "../../../shared/core/guard.js";
