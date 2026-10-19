@@ -26,14 +26,14 @@
 import { protegerPagina } from "../shared/core/guard.js";
 import { cerrarSesionFirebase } from "../shared/core/auth.js";
 import { cerrarSesionLocal } from "../shared/core/session.js";
-import { db } from "../shared/core/firebase.js";
+import { db } from "../shared/core/db.js";
 
 import {
     collection,
     query,
     where,
     getDocs
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+} from "../shared/core/db.js";
 
 import { obtenerConfig, numerosDeMuelle } from "../shared/services/config.js";
 import { claveDePlaca } from "../shared/services/integridad.js";

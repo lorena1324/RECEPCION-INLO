@@ -31,9 +31,9 @@ import {
     serverTimestamp,
     runTransaction,
     getDocs
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+} from "../core/db.js";
 
-import { db } from "../core/firebase.js";
+import { db } from "../core/db.js";
 import { getDestino, getHistorial, ordenarPorPrioridad } from "../services/eventos.js";
 import { distingueModalidad, hayTipologias } from "./config.js";
 import { nowLocal } from "../utils/tiempos.js";

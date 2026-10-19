@@ -3,13 +3,11 @@
 <head>
 <meta charset="utf-8">
 <title>Pruebas de integridad</title>
-<!-- El SDK de Firebase se reemplaza por una versión en memoria: ver fake-firestore.js -->
+<!-- La base de datos (shared/core/db.js → Supabase) se reemplaza por una versión en memoria: ver fake-firestore.js -->
 <script type="importmap">
 {
   "imports": {
-    "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js": "./fake-app.js",
-    "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js": "./fake-auth.js",
-    "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js": "./fake-firestore.js"
+    "/shared/core/db.js": "./fake-db.js"
   }
 }
 </script>

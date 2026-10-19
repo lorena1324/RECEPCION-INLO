@@ -8,6 +8,8 @@
 import {
     iniciarSesion,
     recuperarContrasena,
+    escucharRecuperacion,
+    cambiarContrasena,
     mapearErrorAuth
 } from "../shared/core/auth.js";
 
@@ -243,11 +245,10 @@ function setLoading(isLoading) {
    ========================================================= */
 
 /*
-    Autenticación real contra Firebase:
+    Autenticación real contra Supabase:
 
-        1. signInWithEmailAndPassword (auth.js)
-        2. Leer perfil en Firestore (colección "usuarios",
-           doc id = uid)
+        1. signInWithPassword (auth.js)
+        2. Leer perfil (tabla "usuarios", id = uid)
         3. Validar que exista y esté activo
         4. Guardar sesión local
         5. Resolver ruta según rol/operación
@@ -453,6 +454,30 @@ function initializeLogin() {
 
     emailInput.focus();
 
+    // Si se llega desde el correo de "olvidé mi contraseña", Supabase abre
+    // una sesión de recuperación: se pide la contraseña nueva aquí mismo.
+    escucharRecuperacion(pedirContrasenaNueva);
+}
+
+
+async function pedirContrasenaNueva() {
+
+    const nueva = window.prompt("Escribe tu nueva contraseña (mínimo 6 caracteres):");
+
+    if (!nueva) return;
+
+    try {
+
+        await cambiarContrasena(nueva);
+
+        showMessage("Contraseña actualizada. Ya puedes iniciar sesión con ella.");
+
+    } catch (error) {
+
+        showMessage(mapearErrorAuth(error));
+
+        console.error("Update password error:", error);
+    }
 }
 
 

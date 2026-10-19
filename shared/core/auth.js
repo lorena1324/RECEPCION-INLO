@@ -1,35 +1,22 @@
 /* =========================================================
    INLOTRANS
-   Autenticación
+   Autenticación (Supabase Auth)
 
    Aquí vive la lógica real de:
      - iniciar sesión
      - obtener el perfil del usuario (rol / operación / cliente)
      - recuperar contraseña
-     - traducir errores de Firebase a mensajes legibles
+     - traducir errores de Supabase a mensajes legibles
    ========================================================= */
 
-import {
-    signInWithEmailAndPassword,
-    sendPasswordResetEmail,
-    signOut
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-
-import {
-    doc,
-    getDoc
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-
-import { auth, db } from "./firebase.js";
+import { supabase } from "./supabase.js";
 
 
 /* =========================================================
-   OBTENER PERFIL DESDE FIRESTORE
+   OBTENER PERFIL
 
-   Se espera un documento en la colección "usuarios"
-   con ID = uid del usuario de Authentication.
-
-   Estructura esperada:
+   Tabla "usuarios" (supabase/esquema.sql), con id = id del
+   usuario de Supabase Auth:
    {
        nombre: "...",
        rol: "operario" | "supervisor" | "cliente" | "administrador",
@@ -41,44 +28,47 @@ import { auth, db } from "./firebase.js";
 
 export async function obtenerPerfil(uid) {
 
-    const ref = doc(db, "usuarios", uid);
+    const { data, error } = await supabase
+        .from("usuarios")
+        .select("nombre, rol, operacion, cliente, activo")
+        .eq("id", uid)
+        .maybeSingle();
 
-    const snap = await getDoc(ref);
+    if (error) throw error;
 
-    return snap.exists() ? snap.data() : null;
+    return data;
 }
 
 
 /* =========================================================
    INICIAR SESIÓN
 
-   Lanza un Error con un `code` (errores de Firebase) o un
-   `message` propio ("PERFIL_NO_ENCONTRADO" / "USUARIO_INACTIVO")
-   que login.js traduce con mapearErrorAuth().
+   Lanza el error de Supabase o un Error propio
+   ("PERFIL_NO_ENCONTRADO" / "USUARIO_INACTIVO") que login.js
+   traduce con mapearErrorAuth().
    ========================================================= */
 
 export async function iniciarSesion(email, password) {
 
-    const credencial = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-    );
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    const perfil = await obtenerPerfil(credencial.user.uid);
+    if (error) throw error;
+
+    const uid = data.user.id;
+    const perfil = await obtenerPerfil(uid);
 
     if (!perfil) {
-        await signOut(auth);
+        await supabase.auth.signOut();
         throw new Error("PERFIL_NO_ENCONTRADO");
     }
 
     if (perfil.activo === false) {
-        await signOut(auth);
+        await supabase.auth.signOut();
         throw new Error("USUARIO_INACTIVO");
     }
 
     return {
-        uid: credencial.user.uid,
+        uid: uid,
         ...perfil
     };
 }
@@ -86,21 +76,47 @@ export async function iniciarSesion(email, password) {
 
 /* =========================================================
    RECUPERAR CONTRASEÑA
+
+   Supabase manda un enlace que vuelve al login con la sesión
+   en modo "recuperación"; ahí login.js pide la contraseña
+   nueva (ver escucharRecuperacion).
    ========================================================= */
 
 export async function recuperarContrasena(email) {
 
-    await sendPasswordResetEmail(auth, email);
+    const volverA = window.location.origin + window.location.pathname;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: volverA });
+
+    if (error) throw error;
+}
+
+export function escucharRecuperacion(alRecuperar) {
+
+    supabase.auth.onAuthStateChange(function (evento) {
+        if (evento === "PASSWORD_RECOVERY") alRecuperar();
+    });
+}
+
+export async function cambiarContrasena(nueva) {
+
+    const { error } = await supabase.auth.updateUser({ password: nueva });
+
+    if (error) throw error;
+
+    await supabase.auth.signOut();
 }
 
 
 /* =========================================================
    CERRAR SESIÓN
+
+   Conserva el nombre que importan todas las páginas.
    ========================================================= */
 
 export async function cerrarSesionFirebase() {
 
-    await signOut(auth);
+    await supabase.auth.signOut();
 }
 
 
@@ -111,29 +127,7 @@ export async function cerrarSesionFirebase() {
 export function mapearErrorAuth(error) {
 
     const code = error?.code || "";
-
-    switch (code) {
-
-        case "auth/invalid-email":
-            return "El correo electrónico no es válido.";
-
-        case "auth/user-disabled":
-            return "Esta cuenta está deshabilitada. Contacta al administrador.";
-
-        case "auth/user-not-found":
-        case "auth/wrong-password":
-        case "auth/invalid-credential":
-            return "Correo o contraseña incorrectos.";
-
-        case "auth/too-many-requests":
-            return "Demasiados intentos fallidos. Espera unos minutos e intenta de nuevo.";
-
-        case "auth/network-request-failed":
-            return "No hay conexión a internet. Verifica tu red e intenta de nuevo.";
-
-        default:
-            break;
-    }
+    const texto = (error?.message || "").toLowerCase();
 
     if (error?.message === "PERFIL_NO_ENCONTRADO") {
         return "Tu usuario no tiene un perfil configurado en el sistema. Contacta al administrador.";
@@ -143,5 +137,33 @@ export function mapearErrorAuth(error) {
         return "Tu cuenta está inactiva. Contacta al administrador.";
     }
 
-    return "No fue posible iniciar sesión. Inténtalo nuevamente.";
+    if (code === "invalid_credentials" || texto.includes("invalid login credentials")) {
+        return "Correo o contraseña incorrectos.";
+    }
+
+    if (code === "email_not_confirmed" || texto.includes("email not confirmed")) {
+        return "Tu correo aún no está confirmado. Contacta al administrador.";
+    }
+
+    if (code === "user_banned") {
+        return "Esta cuenta está deshabilitada. Contacta al administrador.";
+    }
+
+    if (code === "weak_password" || texto.includes("password should be")) {
+        return "La contraseña es muy corta: usa al menos 6 caracteres.";
+    }
+
+    if (code === "validation_failed" || texto.includes("unable to validate email")) {
+        return "El correo electrónico no es válido.";
+    }
+
+    if (code === "over_request_rate_limit" || code === "over_email_send_rate_limit" || error?.status === 429) {
+        return "Demasiados intentos. Espera unos minutos e intenta de nuevo.";
+    }
+
+    if (error?.name === "AuthRetryableFetchError" || texto.includes("failed to fetch")) {
+        return "No hay conexión a internet. Verifica tu red e intenta de nuevo.";
+    }
+
+    return "No fue posible completar la operación. Inténtalo nuevamente.";
 }
