@@ -37,6 +37,8 @@ import {
     diagnosticoSalida,
     agregarOperacionFaltante,
     actualizarAvance,
+    faltaTipologiaParaAvance,
+    MENSAJE_AVANCE_SIN_TIPOLOGIA,
     avanzarAFaseCargue,
     autorizarSalidaAnticipada,
     puedeAutorizarSalidaAnticipada,
@@ -48,6 +50,7 @@ import {
     actualizarTipologia,
     estaCancelado
 } from "../shared/services/vehiculos.js";
+import { mostrarRechazo } from "../shared/components/alertaIntegridad.js";
 
 import {
     canalDe,
@@ -207,7 +210,7 @@ function accionesDeMuelle(rec) {
    Al agregar una bodega nueva hay que sumarla a este mapa, porque
    es también la lista de las que existen. */
 const OPERACIONES = {
-    J3: { nombre: "Pepsico", muelles: 7 },
+    J3: { nombre: "Pepsico", muelles: 8 },
     J4: { nombre: "Alkosto", muelles: 3 },
     B9: { nombre: "EMMA",    muelles: 4 }
 };
@@ -1534,6 +1537,7 @@ async function confirmarCorreccion() {
         closeModal('modal-corregir');
         corregirVehiculoId = null;
     } catch (error) {
+        if (mostrarRechazo(error)) return;
         console.error('Error al corregir el registro:', error);
         setSyncStatus('error');
         var cajaErr = document.getElementById('corregir-errores');
@@ -1582,6 +1586,7 @@ async function confirmarAnulacionSalida() {
         closeModal('modal-anular-salida');
         anularSalidaId = null;
     } catch (error) {
+        if (mostrarRechazo(error)) return;
         console.error('Error al anular la salida:', error);
         setSyncStatus('error');
         errores.style.display = '';
@@ -2022,6 +2027,7 @@ async function registrarEntrada() {
         showView('dashboard');
     } catch (error) {
         setSyncStatus('error');
+        if (mostrarRechazo(error)) return;
         toast('Error al guardar. Intenta de nuevo.', 'red', 'ti-x');
         console.error('Error al registrar entrada:', error);
     } finally {
@@ -2194,6 +2200,7 @@ async function confirmarSalida() {
         toast('Salida registrada', 'green', 'ti-logout');
     } catch (error) {
         setSyncStatus('error');
+        if (mostrarRechazo(error)) return;
         toast('Error al registrar la salida', 'red', 'ti-x');
         console.error(error);
     }
@@ -2288,6 +2295,7 @@ async function confirmarEdicionUbicacion() {
         toast('Cambios guardados', 'green', 'ti-check');
     } catch (error) {
         setSyncStatus('error');
+        if (mostrarRechazo(error)) return;
         toast('Error al guardar los cambios', 'red', 'ti-x');
         console.error(error);
     }
@@ -2345,6 +2353,7 @@ async function confirmarCancelacion() {
         toast('Operación cancelada', 'amber', 'ti-ban');
     } catch (error) {
         setSyncStatus('error');
+        if (mostrarRechazo(error)) return;
         console.error('No se pudo cancelar:', error);
         errores.style.display = '';
         errores.textContent = 'No se pudo guardar la cancelación. Intenta de nuevo.';
@@ -2588,7 +2597,22 @@ function getAvanceTipoEfectivo(r) {
     return null;
 }
 
+/* Sin tipología el avance no se registra (ver faltaTipologiaParaAvance en
+   vehiculos.js): se muestra lo que haya y por qué está bloqueado. */
+function avanceBloqueadoPorTipologia(r) {
+    var pct = r.avancePorcentaje || 0;
+    var barra = pct > 0
+        ? '<div class="avance-info"><span class="avance-pct">' + pct + '%</span></div>' +
+          '<div class="avance-bar"><div class="avance-bar-fill" style="width:' + pct + '%"></div></div>'
+        : '';
+    return '<div class="avance-box">' + barra +
+        '<div class="cobros-aviso" style="margin-top:6px;"><i class="ti ti-lock"></i> <strong>Avance bloqueado:</strong> asigna primero la tipología del vehículo.</div>' +
+        '</div>';
+}
+
 function renderAvance(r) {
+
+    if (faltaTipologiaParaAvance(r, cfgGuardada)) return avanceBloqueadoPorTipologia(r);
 
     // Vehículos anteriores a la regla de avance: no tienen el campo
     // y por eso hoy pueden salir sin restricción de %. Se avisa y se
@@ -2651,6 +2675,9 @@ function bloqueAutorizacion(r) {
 }
 
 async function seleccionarAvanceTipo(id, tipo) {
+    var actual = registros.find(function (r) { return r.id === id; });
+    if (actual && faltaTipologiaParaAvance(actual, cfgGuardada)) { toast(MENSAJE_AVANCE_SIN_TIPOLOGIA, 'amber', 'ti-lock'); return; }
+
     setSyncStatus('syncing');
     try {
         await actualizarAvance(id, { avanceTipo: tipo, porcentaje: 0 }, perfilActual.nombre);
@@ -2658,14 +2685,20 @@ async function seleccionarAvanceTipo(id, tipo) {
         toast('Avance fijado en ' + tipo + ' 0%', 'green', 'ti-check');
     } catch (error) {
         setSyncStatus('error');
+        if (mostrarRechazo(error)) return;
         toast('No se pudo guardar el tipo de avance', 'red', 'ti-x');
         console.error(error);
     }
 }
 
+// Vehículos cuyo avance se está guardando ahora mismo.
+var avancesEnCurso = {};
+
 async function incrementarAvance(id, delta) {
     var rec = registros.find(function (r) { return r.id === id; });
     if (!rec) return;
+
+    if (faltaTipologiaParaAvance(rec, cfgGuardada)) { toast(MENSAJE_AVANCE_SIN_TIPOLOGIA, 'amber', 'ti-lock'); return; }
 
     var avanceTipo = getAvanceTipoEfectivo(rec);
     if (!avanceTipo) return;
@@ -2673,11 +2706,16 @@ async function incrementarAvance(id, delta) {
     var actual = rec.avancePorcentaje || 0;
     if (actual >= 100) return;
 
+    // Una solicitud a la vez por vehículo: dos clics seguidos no se atropellan.
+    if (avancesEnCurso[id]) return;
+    avancesEnCurso[id] = true;
+
     var nuevoPct = Math.min(100, actual + delta);
 
     setSyncStatus('syncing');
     try {
-        await actualizarAvance(id, { avanceTipo: avanceTipo, porcentaje: nuevoPct }, perfilActual.nombre);
+        // `esperado` es lo que esta pantalla vio: si otro usuario lo movió, se rechaza (no se pisa).
+        await actualizarAvance(id, { avanceTipo: avanceTipo, porcentaje: nuevoPct, esperado: actual }, perfilActual.nombre);
 
         // "Ambos": al completar el descargue pasa solo a cargue,
         // retomando el % que traía pendiente si lo había.
@@ -2687,8 +2725,11 @@ async function incrementarAvance(id, delta) {
         setSyncStatus('ok');
     } catch (error) {
         setSyncStatus('error');
+        if (mostrarRechazo(error)) return;
         toast('No se pudo guardar el avance', 'red', 'ti-x');
         console.error(error);
+    } finally {
+        delete avancesEnCurso[id];
     }
 }
 

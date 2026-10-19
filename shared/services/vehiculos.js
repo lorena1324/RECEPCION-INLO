@@ -28,15 +28,95 @@ import {
     where,
     onSnapshot,
     arrayUnion,
-    serverTimestamp
+    serverTimestamp,
+    runTransaction,
+    getDocs
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 import { db } from "../core/firebase.js";
 import { getDestino, getHistorial, ordenarPorPrioridad } from "../services/eventos.js";
 import { distingueModalidad, hayTipologias } from "./config.js";
 import { nowLocal } from "../utils/tiempos.js";
+import {
+    ErrorIntegridad,
+    claveDePlaca,
+    errorConflictoAvance,
+    errorDuplicado,
+    errorYaSalio,
+    idCandado,
+    validarAvance
+} from "./integridad.js";
 
 const COLECCION = "vehiculos";
+
+
+/* =========================================================
+   CANDADO DE PLACA ACTIVA
+
+   Un documento por placa activa y por operación
+   (placasActivas/{operacion}_{PLACA}). Se crea en la MISMA transacción
+   que el registro y se borra en la misma transacción que lo cierra
+   (salida, cancelación, eliminación), así que dos operarios que
+   registran la misma placa a la vez no pueden ganar los dos: el
+   segundo choca con el candado del primero y se rechaza.
+
+   Una revisión en pantalla ("ya está activo") no basta: los dos la
+   pasan en el mismo segundo, antes de que el otro haya guardado. Solo
+   una transacción convierte eso en "uno gana y el otro se entera".
+
+   Un candado que apunta a un vehículo que ya no está activo (borrado a
+   mano, cerrado por otra vía) se considera VENCIDO y se pisa: el
+   candado nunca debe dejar a una placa encerrada sin vehículo.
+   ========================================================= */
+
+const COLECCION_CANDADOS = "placasActivas";
+
+function refCandado(operacion, placa) {
+    return doc(db, COLECCION_CANDADOS, idCandado(operacion, placa));
+}
+
+/*
+    Dentro de una transacción: si la placa ya la tiene un vehículo
+    ACTIVO, lanza PLACA_DUPLICADA. Si no (o el candado está vencido),
+    sigue. `ignorarId` es el propio vehículo (al mover su candado).
+*/
+async function exigirPlacaLibre(tx, operacion, placa, ignorarId) {
+
+    const candado = await tx.get(refCandado(operacion, placa));
+    if (!candado.exists()) return;
+
+    const idDueno = candado.data().vehiculoId;
+    if (idDueno && idDueno === ignorarId) return;
+
+    const dueno = idDueno ? await tx.get(doc(db, COLECCION, idDueno)) : null;
+
+    if (dueno && dueno.exists() && !dueno.data().horaSalida && claveDePlaca(dueno.data().placa) === claveDePlaca(placa)) {
+        throw errorDuplicado({ id: dueno.id, ...dueno.data() });
+    }
+}
+
+/*
+    El candado de ESTE vehículo, o null si no tiene o si el de esa placa es de
+    otro (dos registros antiguos duplicados): cerrar uno no debe soltar la
+    placa del otro. Va dentro de una transacción, antes de cualquier escritura.
+*/
+async function candadoPropio(tx, r, id) {
+    const ref = refCandado(r.operacion, r.placa);
+    const s = await tx.get(ref);
+    return s.exists() && s.data().vehiculoId === id ? ref : null;
+}
+
+function datosCandado(operacion, placa, vehiculoId, rec, operador) {
+    return {
+        vehiculoId: vehiculoId,
+        placa: placa,
+        placaClave: claveDePlaca(placa),
+        operacion: operacion,
+        destino: (rec && rec.destino) || "",
+        creadoPor: operador || "",
+        creadoEn: serverTimestamp()
+    };
+}
 
 
 /* =========================================================
@@ -82,6 +162,10 @@ export async function crearRegistro(operacion, datos, operador) {
 
         conductor: datos.conductor || "",
         placa: datos.placa,
+
+        // La placa sin espacios ni signos y en mayúsculas: la llave del
+        // candado, y con ella se encuentran las dos formas de digitarla.
+        placaClave: claveDePlaca(datos.placa),
 
         horaEntrada: datos.horaEntrada,
         programado: datos.programado === "Programado",
@@ -154,7 +238,32 @@ export async function crearRegistro(operacion, datos, operador) {
         creadoEn: serverTimestamp()
     });
 
-    const ref = await addDoc(collection(db, COLECCION), rec);
+    /* ── UNA PLACA ACTIVA, UNA SOLA VEZ ──────────────────────
+       1. Los activos que ya existían ANTES del candado no lo tienen:
+          se buscan con una consulta. (Se filtran por la clave de la
+          placa en el cliente, porque los antiguos no traen
+          `placaClave` y "SVD 390" no es igual a "SVD390" para una
+          consulta de igualdad.)
+       2. Y la transacción cierra la carrera: crea el candado y el
+          registro juntos, o ninguno. */
+    const clave = claveDePlaca(datos.placa);
+
+    const activos = await getDocs(query(
+        collection(db, COLECCION),
+        where("operacion", "==", operacion),
+        where("horaSalida", "==", null)
+    ));
+
+    const repetido = activos.docs.find(function (d) { return claveDePlaca(d.data().placa) === clave; });
+    if (repetido) throw errorDuplicado({ id: repetido.id, ...repetido.data() });
+
+    const ref = doc(collection(db, COLECCION));
+
+    await runTransaction(db, async function (tx) {
+        await exigirPlacaLibre(tx, operacion, datos.placa, ref.id);
+        tx.set(refCandado(operacion, datos.placa), datosCandado(operacion, datos.placa, ref.id, rec, operador));
+        tx.set(ref, rec);
+    });
 
     return ref.id;
 }
@@ -224,7 +333,19 @@ export async function actualizarUbicacion(id, cambios, operador) {
         cambiosDoc.canal = cambios.canal;
     }
 
-    await updateDoc(doc(db, COLECCION, id), cambiosDoc);
+    const ref = doc(db, COLECCION, id);
+
+    // No se mueve un vehículo que otro usuario acaba de despachar: la ubicación
+    // quedaría escrita DESPUÉS de la salida, y el historial contaría una
+    // historia imposible (sale de un sitio al que acaba de llegar).
+    await runTransaction(db, async function (tx) {
+
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new ErrorIntegridad("NO_EXISTE", "Este vehículo ya no existe: alguien lo eliminó.");
+        if (snap.data().horaSalida) throw errorYaSalio(snap.data(), "ubicacion");
+
+        tx.update(ref, cambiosDoc);
+    });
 }
 
 
@@ -539,7 +660,41 @@ export async function corregirRegistro(id, actual, cambios, quien) {
         cambiosDoc.historial = arrayUnion(anotacion);
     }
 
-    await updateDoc(doc(db, COLECCION, id), cambiosDoc);
+    /* ── LA PLACA CUELGA DEL CANDADO ─────────────────────────
+       Corregir la placa de un vehículo ACTIVO mueve su candado: la
+       placa nueva tiene que estar libre (si no, se estaría creando el
+       duplicado que el candado evita) y la vieja se suelta. Dos
+       personas corrigiendo a la vez también quedan serializadas. */
+    const ref = doc(db, COLECCION, id);
+    const cambiaPlaca = Object.prototype.hasOwnProperty.call(cambiosDoc, "placa");
+
+    if (cambiaPlaca) cambiosDoc.placaClave = claveDePlaca(cambiosDoc.placa);
+
+    if (cambiaPlaca && actual && !actual.horaSalida) {
+
+        await runTransaction(db, async function (tx) {
+
+            const snap = await tx.get(ref);
+            if (!snap.exists()) throw new ErrorIntegridad("NO_EXISTE", "Este vehículo ya no existe: alguien lo eliminó.");
+
+            const r = snap.data();
+
+            // Si entre tanto salió, ya no hay placa activa que mover: solo se corrige el dato.
+            if (r.horaSalida) { tx.update(ref, cambiosDoc); return; }
+
+            await exigirPlacaLibre(tx, r.operacion, cambiosDoc.placa, id);
+
+            const viejo = await candadoPropio(tx, r, id);
+            if (viejo && claveDePlaca(r.placa) !== claveDePlaca(cambiosDoc.placa)) tx.delete(viejo);
+
+            tx.set(refCandado(r.operacion, cambiosDoc.placa), datosCandado(r.operacion, cambiosDoc.placa, id, r, quien));
+            tx.update(ref, cambiosDoc);
+        });
+
+    } else {
+        await updateDoc(ref, cambiosDoc);
+    }
+
     return true;
 }
 
@@ -633,6 +788,18 @@ export async function agregarOperacionFaltante(id, rec, operador) {
    REGISTRAR SALIDA (despacho)
    ========================================================= */
 
+/*
+    LA SALIDA SE REGISTRA UNA SOLA VEZ.
+
+    Va en una transacción que LEE el vehículo: si ya tiene salida, se
+    rechaza con quién y cuándo la registró, en vez de escribir una
+    segunda. Antes eran dos clics = dos eventos "salida" en el historial
+    y la hora y el operario de la primera pisados por la segunda.
+
+    También libera el candado de la placa, en la misma transacción.
+    Un contenedor sin cabezote tampoco sale (ver faltaCabezote); la
+    pantalla ya lo avisa con un mensaje claro, esto es la segunda línea.
+*/
 export async function registrarSalida(id, horaSalida, obsSalida, operador) {
 
     const entrada = {
@@ -642,11 +809,31 @@ export async function registrarSalida(id, horaSalida, obsSalida, operador) {
         texto: obsSalida || ""
     };
 
-    await updateDoc(doc(db, COLECCION, id), {
-        horaSalida: horaSalida,
-        obsSalida: obsSalida || "",
-        operadorSalida: operador,
-        historial: arrayUnion(entrada)
+    const ref = doc(db, COLECCION, id);
+
+    await runTransaction(db, async function (tx) {
+
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new ErrorIntegridad("NO_EXISTE", "Este vehículo ya no existe: alguien lo eliminó.");
+
+        const r = snap.data();
+        if (r.horaSalida) throw errorYaSalio(r, "salida");
+
+        if (r.sinCabezote) {
+            throw new ErrorIntegridad("SIN_CABEZOTE", "Este contenedor sigue sin cabezote: primero se acopla y luego sale.");
+        }
+
+        // Los candados se LEEN antes de escribir (regla de las transacciones).
+        const candado = await candadoPropio(tx, r, id);
+
+        tx.update(ref, {
+            horaSalida: horaSalida,
+            obsSalida: obsSalida || "",
+            operadorSalida: operador,
+            historial: arrayUnion(entrada)
+        });
+
+        if (candado) tx.delete(candado);
     });
 }
 
@@ -669,19 +856,40 @@ export async function anularSalida(id, rec, motivo, supervisor) {
         operadorSalidaAnterior: rec.operadorSalida || ""
     };
 
-    await updateDoc(doc(db, COLECCION, id), {
-        horaSalida: null,
-        obsSalida: "",
-        operadorSalida: null,
-        anulacionSalida: {
-            fecha: entrada.fecha,
-            anuladaPor: supervisor,
-            motivo: motivo,
-            horaSalidaAnterior: rec.horaSalida,
-            operadorSalidaAnterior: rec.operadorSalida || "",
-            obsSalidaAnterior: rec.obsSalida || ""
-        },
-        historial: arrayUnion(entrada)
+    const ref = doc(db, COLECCION, id);
+
+    /* Reabrir un vehículo lo vuelve a poner ACTIVO, así que vuelve a
+       necesitar su candado de placa: si mientras tanto otro vehículo
+       tomó esa placa, no se puede reabrir (habría dos activos). Y si
+       dos supervisores anulan la misma salida a la vez, solo una vale. */
+    await runTransaction(db, async function (tx) {
+
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new ErrorIntegridad("NO_EXISTE", "Este vehículo ya no existe: alguien lo eliminó.");
+
+        const r = snap.data();
+        if (!r.horaSalida) {
+            throw new ErrorIntegridad("YA_ABIERTO", "Este vehículo ya fue reabierto por otro usuario: no tiene salida registrada.");
+        }
+
+        await exigirPlacaLibre(tx, r.operacion, r.placa, id);
+
+        tx.set(refCandado(r.operacion, r.placa), datosCandado(r.operacion, r.placa, id, r, supervisor));
+
+        tx.update(ref, {
+            horaSalida: null,
+            obsSalida: "",
+            operadorSalida: null,
+            anulacionSalida: {
+                fecha: entrada.fecha,
+                anuladaPor: supervisor,
+                motivo: motivo,
+                horaSalidaAnterior: r.horaSalida,
+                operadorSalidaAnterior: r.operadorSalida || "",
+                obsSalidaAnterior: r.obsSalida || ""
+            },
+            historial: arrayUnion({ ...entrada, horaSalidaAnterior: r.horaSalida, operadorSalidaAnterior: r.operadorSalida || "" })
+        });
     });
 }
 
@@ -761,17 +969,33 @@ export async function cancelarVehiculo(id, datos, supervisor) {
         texto: "Operación cancelada — " + motivo
     };
 
-    await updateDoc(doc(db, COLECCION, id), {
-        cancelado: true,
-        cancelacion: {
-            motivo: motivo,
-            fecha: fecha,
-            canceladoPor: supervisor || "",
-            llego: true
-        },
-        horaSalida: fecha,
-        operadorSalida: supervisor || "",
-        historial: arrayUnion(entrada)
+    const ref = doc(db, COLECCION, id);
+
+    // Cancelar cierra el vehículo, igual que la salida: una sola vez, y libera su placa.
+    await runTransaction(db, async function (tx) {
+
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new ErrorIntegridad("NO_EXISTE", "Este vehículo ya no existe: alguien lo eliminó.");
+
+        const r = snap.data();
+        if (r.horaSalida) throw errorYaSalio(r, "cancelacion");
+
+        const candado = await candadoPropio(tx, r, id);
+
+        tx.update(ref, {
+            cancelado: true,
+            cancelacion: {
+                motivo: motivo,
+                fecha: fecha,
+                canceladoPor: supervisor || "",
+                llego: true
+            },
+            horaSalida: fecha,
+            operadorSalida: supervisor || "",
+            historial: arrayUnion(entrada)
+        });
+
+        if (candado) tx.delete(candado);
     });
 }
 
@@ -854,23 +1078,67 @@ export async function crearCitaCancelada(operacion, datos, supervisor) {
    supervisor (obligatorio elegirlo una vez cuando `tipo` es
    "Ambos"). El porcentaje siempre se guarda entre 0 y 100 —
    nunca puede pasarse de 100 aunque el llamador lo intente.
+
+   ── CUANDO DOS PERSONAS TOCAN EL MISMO AVANCE ──
+
+   Va en una transacción que LEE el avance real y lo compara con el
+   que la pantalla vio (`cambios.esperado`): si otro lo movió en el
+   medio, se rechaza y se le dice cuál es el valor actual, en vez de
+   pisar su trabajo. Procesa UNA solicitud a la vez por vehículo.
+
+   Además frena el atajo de cargar todo el avance de una sola tanda
+   (ver validarAvance en integridad.js): tope por solicitud y por
+   ventana de tiempo. Quien SÍ puede saltárselo es el administrador
+   corriendo el backfill (`opciones.excepcion`), porque ahí se
+   completan registros antiguos y no hay proceso que seguir.
    ========================================================= */
 
-export async function actualizarAvance(id, cambios, operador) {
+export async function actualizarAvance(id, cambios, operador, opciones) {
 
+    const excepcion = !!(opciones && opciones.excepcion);
     const porcentaje = Math.max(0, Math.min(100, Math.round(cambios.porcentaje)));
+    const ref = doc(db, COLECCION, id);
 
-    const entrada = {
-        fecha: nowLocal(),
-        tipo: "avance",
-        operador: operador,
-        texto: `Avance de ${cambios.avanceTipo} actualizado a ${porcentaje}%`
-    };
+    await runTransaction(db, async function (tx) {
 
-    await updateDoc(doc(db, COLECCION, id), {
-        avanceTipo: cambios.avanceTipo,
-        avancePorcentaje: porcentaje,
-        historial: arrayUnion(entrada)
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new ErrorIntegridad("NO_EXISTE", "Este vehículo ya no existe: alguien lo eliminó.");
+
+        const r = snap.data();
+        const actual = r.avancePorcentaje || 0;
+
+        if (!excepcion) {
+
+            if (r.horaSalida) throw errorYaSalio(r, "avance");
+
+            const esperado = cambios.esperado;
+            if (esperado !== undefined && esperado !== null && Number(esperado) !== actual) {
+                throw errorConflictoAvance(actual, Number(esperado));
+            }
+
+            const problema = validarAvance({
+                actual: actual, nuevo: porcentaje, historial: r.historial,
+                avanceTipo: cambios.avanceTipo, ahora: new Date()
+            });
+            if (problema) throw problema;
+        }
+
+        // `anterior` y `avanceTipo` quedan en el evento: de ahí sale la tanda.
+        const entrada = {
+            fecha: nowLocal(),
+            tipo: "avance",
+            operador: operador,
+            avanceTipo: cambios.avanceTipo,
+            anterior: actual,
+            porcentaje: porcentaje,
+            texto: `Avance de ${cambios.avanceTipo} actualizado a ${porcentaje}%`
+        };
+
+        tx.update(ref, {
+            avanceTipo: cambios.avanceTipo,
+            avancePorcentaje: porcentaje,
+            historial: arrayUnion(entrada)
+        });
     });
 }
 
@@ -1053,7 +1321,21 @@ export async function autorizarSalidaAnticipada(id, cambios, supervisor) {
    ========================================================= */
 
 export async function eliminarRegistro(id) {
-    await deleteDoc(doc(db, COLECCION, id));
+
+    const ref = doc(db, COLECCION, id);
+
+    // Un vehículo eliminado no puede dejar su placa encerrada: el candado se va con él.
+    await runTransaction(db, async function (tx) {
+
+        const snap = await tx.get(ref);
+        if (!snap.exists()) return;                       // ya lo eliminó otro: el resultado es el mismo
+
+        const r = snap.data();
+        const candado = await candadoPropio(tx, r, id);
+
+        tx.delete(ref);
+        if (candado) tx.delete(candado);
+    });
 }
 
 
@@ -1344,7 +1626,61 @@ export function faltaPago(r, config) {
     return !r.pagoRegistrado;
 }
 
+/* =========================================================
+   SIN TIPOLOGÍA NO SE CARGA AVANCE
+
+   El avance (el %) y las cantidades solo se registran cuando el
+   vehículo ya tiene tipología. La metían en desorden —avance primero,
+   clasificación después— y eso descuadraba las vistas: la tipología es
+   lo que dice contra qué meta y con qué carrocería se mide ese avance.
+   Sin ella el número no significa nada todavía.
+
+   Solo se exige donde la bodega TIENE tipologías configuradas (igual que
+   la salida, ver faltaClasificacion): si el administrador aún no las ha
+   llenado no hay nada que asignar, y exigirla dejaría la bodega
+   encerrada. Un vehículo que ya salió no se bloquea: es historia.
+
+   La misma regla vive en firestore.rules (avanceSinTipologia): esta es
+   la versión amable, con mensaje; aquella no se puede saltar desde la
+   consola.
+   ========================================================= */
+
+export const MENSAJE_AVANCE_SIN_TIPOLOGIA =
+    "Primero asigna la tipología del vehículo. Sin ella no se puede registrar el avance ni las cantidades: " +
+    "ordenar el proceso (tipología → avance) es lo que mantiene bien las vistas.";
+
+export function faltaTipologiaParaAvance(r, config) {
+    if (!r || r.horaSalida || !config) return false;
+    return hayTipologias(config) && !r.tipologia;
+}
+
+/* =========================================================
+   EL CABEZOTE QUE EXIGE LA SALIDA
+
+   Un contenedor que quedó solo en el muelle no se va solo: el
+   vehículo no puede registrar su salida mientras el cabezote siga
+   retirado. Primero se acopla (el supervisor marca "Cabezote
+   acoplado", lo que cierra el tiempo sin cabezote en el historial)
+   y recién ahí sale.
+
+   Va PRIMERO en las dos funciones de salida: es lo más básico —no
+   hay vehículo que despachar— y si no se corta aquí, el tiempo sin
+   cabezote quedaría "cerrado" por la salida y no por el
+   acoplamiento, que es justo la mala trazabilidad que esta regla
+   evita.
+
+   La misma regla vive en firestore.rules (cierraConCabezoteRetirado):
+   esta es la versión amable, con mensaje; aquella es la que no se
+   puede saltar desde la consola.
+   ========================================================= */
+
+export function faltaCabezote(r) {
+    return !!(r && r.sinCabezote && !r.horaSalida);
+}
+
 export function puedeRegistrarSalida(r, config) {
+
+    if (faltaCabezote(r)) return false;
 
     // Antes que el avance: sin clasificar no sale, aunque esté al
     // 100%. Un vehículo completo pero sin tipología es exactamente
@@ -1401,6 +1737,18 @@ export function puedeRegistrarSalida(r, config) {
    ========================================================= */
 
 export function diagnosticoSalida(r, config) {
+
+    // Un contenedor sin cabezote no sale: primero se acopla.
+    if (faltaCabezote(r)) {
+        return {
+            puedeSalir: false, nivel: 'bloqueo',
+            titulo: 'Contenedor sin cabezote',
+            detalle: 'Este vehículo dejó el contenedor en el muelle y el cabezote se fue. '  +
+                     'Un contenedor solo no puede salir: el cabezote tiene que volver y acoplarse primero.',
+            accion: 'Pídele al supervisor que marque "Cabezote acoplado" en la tarjeta del muelle.',
+            porcentaje: r.avancePorcentaje || 0, minimo: null, faltante: null
+        };
+    }
 
     const d = diagnosticoOperacion(r, config);
 

@@ -536,24 +536,11 @@
 
             <!-- ESTADÍSTICAS -->
             <div id="view-estadisticas" class="view">
-                <div class="toolbar">
-                    <div class="filter-pills">
-                        <button class="pill" data-periodo="hoy">Hoy</button>
-                        <button class="pill" data-periodo="3dias">Últimos 3 días</button>
-                        <button class="pill" data-periodo="semana">Última semana</button>
-                        <button class="pill" data-periodo="mes">Último mes</button>
-                        <button class="pill active" data-periodo="todo">Todo</button>
-                        <button class="pill" data-periodo="personalizado">Personalizado</button>
-                    </div>
-                </div>
-                <!-- Enter en cualquiera de las dos fechas aplica el
-                     rango, que es lo que se espera tras teclear una
-                     fecha. Ver shared/utils/teclado.js. -->
-                <div id="estad-rango-custom" class="estad-rango-custom" data-enter="estad-aplicar-rango">
-                    <label>Desde <input type="date" id="estad-desde"></label>
-                    <label>Hasta <input type="date" id="estad-hasta"></label>
-                    <button class="btn btn-primary" id="estad-aplicar-rango"><i class="ti ti-filter"></i> Aplicar</button>
-                </div>
+                <!-- UNA sola barra de fechas: la arma shared/components/filtroFechas.js dentro
+                     de este contenedor (Desde / Hasta + atajos). Antes había además los
+                     botones viejos (Hoy, Últimos 3 días, Última semana…) y un "Personalizado"
+                     que ya no hacían nada: el rango lo lleva solo el filtro compartido. -->
+                <div class="toolbar-estad"></div>
                 <p class="texto-ayuda">Los días de este panel van de 6am a 6am (turno operativo), no de medianoche a medianoche.</p>
                 <p class="texto-ayuda" id="estad-aviso-rango" style="display:none;"></p>
 

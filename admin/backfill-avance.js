@@ -163,7 +163,9 @@ async function aplicarBackfill() {
             await actualizarAvance(
                 r.id,
                 { avanceTipo: avanceTipo, porcentaje: 0 },
-                (perfilActual.nombre || perfilActual.uid) + " (backfill)"
+                (perfilActual.nombre || perfilActual.uid) + " (backfill)",
+                // El backfill completa registros antiguos (incluso ya cerrados): no hay proceso que seguir.
+                { excepcion: true }
             );
             exitosos++;
             log.innerHTML += '<div style="color:var(--green-600);font-size:12.5px;"><i class="ti ti-circle-check"></i> ' + escapar(r.placa) + ' — OK (' + escapar(avanceTipo) + ' 0%)</div>';

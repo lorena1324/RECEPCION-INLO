@@ -225,6 +225,58 @@ service cloud.firestore {
                operacionDoc in bodegasConSupervisorEditor();
       }
 
+      /* ── UN CONTENEDOR SIN CABEZOTE NO SALE ──
+         Si el vehículo está marcado `sinCabezote` y esta escritura le
+         pone `horaSalida` (pasa de no tener salida a tenerla), se
+         rechaza — a TODOS, administrador incluido. Primero se acopla
+         (otra escritura, que deja su evento en el historial) y luego
+         sale.
+
+         Se mira el estado ACTUAL (`resource`) y no el que traería la
+         escritura: si bastara con que la misma escritura apague
+         `sinCabezote`, desde la consola se podría cerrar el tiempo y
+         despachar de un solo golpe, justo la trazabilidad que esta
+         regla protege. La interfaz ya avisa con un mensaje claro
+         (faltaCabezote en vehiculos.js); esta es la versión que no se
+         puede saltar. */
+      function cierraConCabezoteRetirado() {
+        return resource.data.get('sinCabezote', false) == true &&
+               resource.data.get('horaSalida', null) == null &&
+               request.resource.data.get('horaSalida', null) != null;
+      }
+
+      /* ── SIN TIPOLOGÍA NO SE CARGA AVANCE ──
+         Un vehículo sin tipología no puede recibir avance ni
+         cantidades: metían la información en desorden (avance primero,
+         clasificación después) y eso descuadraba las vistas. Se rechaza
+         la escritura que SUBE el avance (`avancePorcentaje` > 0) o toca
+         picking/auditoría mientras `tipologia` esté vacía.
+
+         Solo donde la bodega tiene tipologías configuradas: si el
+         administrador aún no las llenó no hay nada que asignar y
+         exigirla dejaría la bodega encerrada. Poner el avance en 0 sí
+         se deja pasar (agregarOperacionFaltante lo reinicia desde la
+         portería, antes de que el supervisor clasifique).
+
+         El administrador queda fuera a propósito: corrige datos y corre
+         el backfill de avance sobre registros antiguos. La interfaz ya
+         avisa con un mensaje claro (faltaTipologiaParaAvance en
+         vehiculos.js); esta es la versión que no se salta desde la
+         consola. */
+      function avanceSinTipologia() {
+        return resource.data.get('tipologia', '') == '' &&
+               request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['avanceTipo', 'avancePorcentaje', 'avanceCarguePendiente',
+                          'pickingCargue', 'pickingDescargue',
+                          'auditoriaCargue', 'auditoriaDescargue']) &&
+               (request.resource.data.get('avancePorcentaje', 0) > 0 ||
+                request.resource.data.diff(resource.data).affectedKeys()
+                  .hasAny(['pickingCargue', 'pickingDescargue',
+                           'auditoriaCargue', 'auditoriaDescargue'])) &&
+               get(/databases/$(database)/documents/config/$(resource.data.operacion))
+                 .data.get('tipologias', []).size() > 0;
+      }
+
       // LECTURA — el administrador ve todo; los demás, su bodega.
       // En `list`, Firestore evalúa la regla contra cada documento
       // que devolvería la consulta y la rechaza entera si alguno
@@ -254,16 +306,67 @@ service cloud.firestore {
       // autorización de su bodega, SALVO donde su bodega le da la
       // edición completa (ver bodegasConSupervisorEditor).
       // El cliente, nunca.
-      allow update: if esAdmin() ||
-                       (rol() == 'operario' && enSuOperacion(resource.data.operacion)
-                        && !camposSoloDeSupervisor()) ||
-                       (rol() == 'supervisor' && enSuOperacion(resource.data.operacion)
-                        && (camposDeSupervisor() ||
-                            supervisorEditaTodo(resource.data.operacion)));
+      allow update: if !cierraConCabezoteRetirado() &&
+                       (esAdmin() ||
+                        (!avanceSinTipologia() &&
+                         ((rol() == 'operario' && enSuOperacion(resource.data.operacion)
+                           && !camposSoloDeSupervisor()) ||
+                          (rol() == 'supervisor' && enSuOperacion(resource.data.operacion)
+                           && (camposDeSupervisor() ||
+                               supervisorEditaTodo(resource.data.operacion))))));
 
       // BORRAR — administrador y operario de esa bodega.
       allow delete: if esAdmin() ||
                        (rol() == 'operario' && enSuOperacion(resource.data.operacion));
+    }
+
+    /* ── placasActivas ────────────────────────────────────────
+       El candado de placa: un documento por placa ACTIVA y por
+       operación, con id "{operacion}_{PLACA}" (la placa sin espacios
+       y en mayúsculas). Se crea en la misma transacción que el
+       registro del vehículo y se borra cuando este sale, se cancela o
+       se elimina; así dos operarios que registran la misma placa a la
+       vez no pueden ganar los dos (ver shared/services/vehiculos.js).
+
+       LECTURA POR EL ID, no por `resource.data`: la transacción lee el
+       candado justamente para saber si EXISTE, y cuando no existe no
+       hay `resource` que mirar — una regla que lo use rechazaría la
+       lectura y nadie podría registrar su primer vehículo.
+
+       Lo escribe la portería y el supervisor de esa operación (el
+       supervisor al reabrir una salida o al corregir una placa) y el
+       administrador. El cliente no entra. El candado tiene que
+       llamarse como su propia operación y su propia placa: nadie
+       puede apartar la placa de otra bodega. */
+
+    match /placasActivas/{candadoId} {
+
+      function esDeSuOperacion() {
+        return activo() && (rol() == 'operario' || rol() == 'supervisor');
+      }
+
+      function idCoherente() {
+        return candadoId == request.resource.data.operacion + '_' + request.resource.data.placaClave;
+      }
+
+      allow get: if esAdmin() ||
+                    (activo() && candadoId.matches(perfil().operacion + '_.*'));
+      allow list: if false;
+
+      allow create: if esAdmin() ||
+                       (esDeSuOperacion() &&
+                        request.resource.data.operacion == perfil().operacion &&
+                        idCoherente());
+
+      // Un `set` sobre un candado vencido o propio llega como actualización.
+      allow update: if esAdmin() ||
+                       (esDeSuOperacion() &&
+                        resource.data.operacion == perfil().operacion &&
+                        request.resource.data.operacion == perfil().operacion &&
+                        idCoherente());
+
+      allow delete: if esAdmin() ||
+                       (esDeSuOperacion() && resource.data.operacion == perfil().operacion);
     }
 
     /* ── config ───────────────────────────────────────────────

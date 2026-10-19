@@ -36,6 +36,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 import { obtenerConfig, numerosDeMuelle } from "../shared/services/config.js";
+import { claveDePlaca } from "../shared/services/integridad.js";
 import { getLocationDurations } from "../shared/services/eventos.js";
 
 const TIPOS_VALIDOS = ["Cargue", "Descargue", "Ambos"];
@@ -138,7 +139,32 @@ function revisiones(operacion) {
 
     const muellesValidos = numerosDeMuelle(config).map(String);
 
+    // Cuántos vehículos ACTIVOS hay por placa (sin espacios ni mayúsculas).
+    const activosPorPlaca = {};
+    registros.forEach(function (r) {
+        const k = claveDePlaca(r.placa);
+        if (!r.horaSalida && k) activosPorPlaca[k] = (activosPorPlaca[k] || 0) + 1;
+    });
+
     return [
+        {
+            grave: true,
+            titulo: "Placa activa repetida",
+            rompe: "La trazabilidad: el mismo vehículo figura dos veces adentro, con sus tiempos, avance y cajas " +
+                   "partidos entre los dos registros, y se cuenta dos veces en entradas, ocupación y muelles. " +
+                   "Pasaba cuando dos personas registraban la misma placa a la vez.",
+            arreglo: "Quédate con el registro verdadero y cierra o elimina el otro. Desde ahora el sistema lo evita: " +
+                     "una placa activa por bodega (candado de placa), así que no se puede volver a crear.",
+            falla: (r) => !r.horaSalida && !!claveDePlaca(r.placa) && activosPorPlaca[claveDePlaca(r.placa)] > 1
+        },
+        {
+            grave: true,
+            titulo: "Salida registrada más de una vez",
+            rompe: "El historial del vehículo cuenta dos salidas y la hora y el operario de la primera quedaron " +
+                   "pisados por la segunda (pasaba con dos clics en Salida, o con dos personas a la vez).",
+            arreglo: "Revisa el historial y deja la salida que corresponde. Desde ahora la salida se registra una sola vez.",
+            falla: (r) => (Array.isArray(r.historial) ? r.historial : []).filter((h) => h && h.tipo === "salida").length > 1
+        },
         {
             grave: true,
             titulo: "Sin hora de entrada válida",

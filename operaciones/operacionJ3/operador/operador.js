@@ -38,6 +38,7 @@ import {
     agregarOperacionFaltante,
     estaCancelado
 } from "../../../shared/services/vehiculos.js";
+import { mostrarRechazo } from "../../../shared/components/alertaIntegridad.js";
 
 import {
     canalDe,
@@ -1012,6 +1013,7 @@ async function registrarEntrada() {
         showView('dashboard');
     } catch (error) {
         setSyncStatus('error');
+        if (mostrarRechazo(error)) return;
         toast('Error al guardar. Intenta de nuevo.', 'red', 'ti-x');
         console.error('Error al registrar entrada:', error);
     } finally {
@@ -1095,6 +1097,7 @@ async function confirmarSalida() {
         toast('Salida registrada', 'green', 'ti-logout');
     } catch (error) {
         setSyncStatus('error');
+        if (mostrarRechazo(error)) return;
         toast('Error al registrar la salida', 'red', 'ti-x');
         console.error(error);
     }
@@ -1238,6 +1241,7 @@ async function confirmarEdicionUbicacion() {
         toast('Cambios guardados', 'green', 'ti-check');
     } catch (error) {
         setSyncStatus('error');
+        if (mostrarRechazo(error)) return;
         toast('Error al guardar los cambios', 'red', 'ti-x');
         console.error(error);
     }

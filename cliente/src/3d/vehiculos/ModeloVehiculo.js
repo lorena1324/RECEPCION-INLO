@@ -534,6 +534,20 @@ export class ModeloVehiculo extends THREE.Group {
        COMPORTAMIENTO
        --------------------------------------------------------- */
 
+    // Cuántas estibas caben dibujadas (la rejilla de la carga).
+    get capacidadEstibas() {
+        return this.estibas.length;
+    }
+
+    /*
+        Dibuja exactamente `cantidad` estibas (las que el WMS dice que
+        van dentro). Si no caben todas en la rejilla se dibujan las que
+        caben: nunca se inventa espacio.
+    */
+    mostrarEstibas(cantidad) {
+        this.mostrarOcupacion((Number(cantidad) || 0) / Math.max(1, this.estibas.length));
+    }
+
     // 0 = vacío, 1 = lleno. Motion lo lleva con resorte.
     mostrarOcupacion(fraccion) {
         this.animar(this.estado, { ocupacion: Math.min(1, Math.max(0, fraccion)) }, RESORTE);

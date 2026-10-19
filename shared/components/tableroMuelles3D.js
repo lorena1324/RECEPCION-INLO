@@ -35,8 +35,12 @@
 import { crearTableroMuelles } from "./tableroMuelles.js";
 
 import { minutosEnMuelle, nivelContraMeta, faseActual, prioridadDe } from "../services/eventos.js";
-import { tiemposDe, modalidadDe, distingueModalidad, etiquetaCampo, buscarTipologia, carroceriaDe } from "../services/config.js";
+import { tiemposDe, modalidadDe, distingueModalidad, etiquetaCampo, buscarTipologia, carroceriaDe, hayTipologias } from "../services/config.js";
 import { datosSinCabezote } from "./sinCabezote.js";
+import { bloqueCajas, datosCajas } from "./cajasVehiculo.js";
+// API DE IZTECH DESACTIVADA (incidente de producción): para reactivar, descomentar esta línea
+// y el bloque "suscribirseACajas" más abajo.
+// import { suscribirseACajas } from "../services/cajas.js";
 import { requiereAvanceCompleto, estaCancelado } from "../services/vehiculos.js";
 import { formatDuration } from "../utils/tiempos.js";
 
@@ -140,6 +144,14 @@ function montar3D(contenedor, opciones, alFallar) {
     let salientes = [];
     let operacionAnterior;
 
+    /* Cajas y estibas por vehículo (de Iztech, vía nuestro servidor). Se
+       suscribe a la operación de la configuración y repinta cuando llegan
+       cambios: así todos los paneles que usan este tablero las tienen
+       sin tocar nada. Sin servidor o sin sesión simplemente no hay cajas. */
+    let cajasInstantanea = null;
+    let cajasOperacion = null;
+    let dejarDeEscucharCajas = null;
+
     /* La tabla "Vehículos en patio" de la página. Con el 3D andando
        la fila del patio ya está en el tablero, y se oculta para no
        mostrar lo mismo dos veces. Vuelve si el 3D falla o se va. */
@@ -191,6 +203,7 @@ function montar3D(contenedor, opciones, alFallar) {
             // Contenedor sin cabezote: el 3D dibuja solo el contenedor y
             // rotula el reloj (ver sinCabezote.js).
             ...datosSinCabezote(registro, config),
+            ...datosCajas(registro, cajasInstantanea, hayTipologias(config)),
 
             // Lo que lee la ficha
             conductor: registro.conductor || "",
@@ -202,7 +215,8 @@ function montar3D(contenedor, opciones, alFallar) {
             nivel: nivel,
             minutos: min,
             acciones: typeof opciones.acciones === "function" ? (opciones.acciones(registro) || "") : "",
-            extras: typeof opciones.extras === "function" ? (opciones.extras(registro) || "") : ""
+            extras: bloqueCajas(registro, cajasInstantanea, hayTipologias(config)) +
+                    (typeof opciones.extras === "function" ? (opciones.extras(registro) || "") : "")
         };
     }
 
@@ -236,7 +250,8 @@ function montar3D(contenedor, opciones, alFallar) {
                 cancelado: estaCancelado(registro),
                 tipologia: { nombre: registro.tipologiaNombre || "Sin tipología" },
                 nivelTiempo: function () { return null; },
-                ...datosSinCabezote(registro, config)
+                ...datosSinCabezote(registro, config),
+                ...datosCajas(registro, cajasInstantanea, hayTipologias(config))
             },
             puesto: puesto,
             minutos: p.minutos,
@@ -263,6 +278,21 @@ function montar3D(contenedor, opciones, alFallar) {
 
         const numeros = datos.numeros || [];
         const config = datos.config || null;
+
+        // La suscripción a las cajas sigue a la operación de la bodega.
+        // API DE IZTECH DESACTIVADA: sin suscripción no se hace ninguna solicitud (ni socket ni /api/cajas).
+        // Para reactivar, descomentar este bloque y el import de arriba.
+        // const operacionCajas = config && config.operacion;
+        // if (operacionCajas && operacionCajas !== cajasOperacion) {
+        //     if (dejarDeEscucharCajas) dejarDeEscucharCajas();
+        //     cajasOperacion = operacionCajas;
+        //     cajasInstantanea = null;
+        //     dejarDeEscucharCajas = suscribirseACajas(operacionCajas, function (instantanea) {
+        //         if (!instantanea || destruido) return;
+        //         cajasInstantanea = instantanea;
+        //         pintar();
+        //     });
+        // }
 
         /* El administrador cambia de bodega con el mismo tablero.
            Los camiones de la bodega anterior no "salen": se borra la
@@ -440,6 +470,7 @@ function montar3D(contenedor, opciones, alFallar) {
         },
         destruir: function () {
             destruido = true;
+            if (dejarDeEscucharCajas) dejarDeEscucharCajas();
             if (expandido) alternarExpandido(false);
             document.removeEventListener("fullscreenchange", alSalirDePantallaCompleta);
             document.removeEventListener("keydown", alPulsarTecla);

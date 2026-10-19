@@ -155,6 +155,36 @@ function asignarCupos(cupos, patio, disponibles) {
     return patio.map((p) => ({ ...p, cupo: cupos.get(p.vehiculo.id) ?? null }));
 }
 
+/*
+    Cuántas estibas van DENTRO del vehículo según el WMS (Iztech), o null
+    si no se sabe (entonces el dibujo se queda con la estimación por avance).
+
+      Cargue  → las estibas que ya se cargaron (salidas): es exactamente
+                lo que hay dentro.
+      Descargue → lo que ya se bajó (entradas) es lo que YA NO está; lo que
+                queda dentro se estima con el avance: si va en 40 % y se
+                bajaron 12 estibas, el total era ~30 y quedan ~18. Es una
+                estimación, y solo con avance entre 1 y 99 %.
+
+    Un movimiento que no concuerda con la fase (un "Cargue" cuyo envío en
+    el WMS es de entrada) no se usa: sería dibujar otra cosa.
+*/
+function estibasDentro(v) {
+
+    const c = v.cajasIztech;
+    if (!c || c.soloPlan) return null;
+
+    if (v.fase === "Cargue" && c.tipo === "Salida") return c.estibas;
+
+    if (v.fase === "Descargue" && c.tipo === "Entrada") {
+        const p = v.porcentaje;
+        if (p >= 100) return 0;
+        if (p > 0) return Math.round((c.estibas * (100 - p)) / p);
+    }
+
+    return null;
+}
+
 function semillaDe(id) {
     let h = 0;
     for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) | 0;
@@ -263,7 +293,12 @@ function VehiculoEnEscena({ vehiculo, destino, saliendo, animarLlegada, total, v
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [modelo, destino?.x, destino?.z, saliendo]);
 
-    useEffect(() => { modelo.mostrarOcupacion(vehiculo.ocupacion); }, [modelo, vehiculo.ocupacion]);
+    // Lo que va DENTRO: las estibas reales del WMS si las hay; si no, la estimación por avance.
+    const estibasReales = estibasDentro(vehiculo);
+    useEffect(() => {
+        if (estibasReales !== null) modelo.mostrarEstibas(estibasReales);
+        else modelo.mostrarOcupacion(vehiculo.ocupacion);
+    }, [modelo, vehiculo.ocupacion, estibasReales]);
     useEffect(() => { modelo.mostrarAvance(vehiculo.porcentaje, colorFase(vehiculo.fase)); }, [modelo, vehiculo.porcentaje, vehiculo.fase]);
     useEffect(() => { modelo.verInterior(verInterior); }, [modelo, verInterior]);
 
@@ -417,6 +452,13 @@ function FichaFrente({ muelle, x, compacta, escala, semaforo, onSeleccionar }) {
 
                 {!compacta && v.meta && (
                     <Chip color={v.sinMeta ? AMBAR : color} className="mt-1.5 text-[12px]">{v.meta}</Chip>
+                )}
+
+                {/* Cajas y estibas según Iztech (llegan del servidor) */}
+                {v.cajasIztech && (
+                    compacta
+                        ? <div className="mt-1 text-[10px] font-bold" style={{ color: TEXTO }}>{v.textoCajas}</div>
+                        : <Chip color="#7aa7ff" className="mt-1.5 text-[12px]">{v.textoCajas}{v.cajasIztech.tipoCargue ? ` · ${v.cajasIztech.tipoCargue}` : ""}</Chip>
                 )}
 
                 {v.sinCabezote && (

@@ -20,6 +20,8 @@ import {
   getRegistrosEnMuelle,
   getMuellesOcupacion,
   actualizarAvance,
+  faltaTipologiaParaAvance,
+  MENSAJE_AVANCE_SIN_TIPOLOGIA,
   avanzarAFaseCargue,
   autorizarSalidaAnticipada,
   puedeAutorizarSalidaAnticipada,
@@ -34,6 +36,7 @@ import {
   actualizarTipologia,
   estaCancelado
 } from "../../../shared/services/vehiculos.js";
+import { mostrarRechazo } from "../../../shared/components/alertaIntegridad.js";
 
 import {
   canalDe,
@@ -818,6 +821,7 @@ async function confirmarCancelacion() {
     closeModal("modal-cancelar");
     cancelarVehiculoId = null;
   } catch (error) {
+    if (mostrarRechazo(error)) return;
     console.error("[supervisor] No se pudo cancelar:", error);
     errores.style.display = "";
     errores.textContent = "No se pudo guardar la cancelación. Revisa la conexión e inténtalo de nuevo.";
@@ -926,6 +930,7 @@ async function confirmarAnulacionSalida() {
     closeModal("modal-anular-salida");
     anularSalidaId = null;
   } catch (error) {
+    if (mostrarRechazo(error)) return;
     console.error("[supervisor] No se pudo anular la salida:", error);
     errores.style.display = "";
     errores.textContent = "No se pudo anular la salida. Revisa la conexión e inténtalo de nuevo.";
@@ -1436,7 +1441,23 @@ function getAvanceTipoEfectivo(r) {
   return null;
 }
 
+/* Sin tipología el avance no se registra: se muestra lo que haya (solo lectura)
+   y por qué está bloqueado. Ver faltaTipologiaParaAvance() en vehiculos.js. */
+function avanceBloqueadoPorTipologia(r) {
+  const pct = r.avancePorcentaje || 0;
+  const barra = pct > 0
+    ? `<div class="avance-info"><span class="avance-pct">${pct}%</span></div><div class="avance-bar"><div class="avance-bar-fill" style="width:${pct}%"></div></div>`
+    : "";
+  return `
+    <div class="avance-box">
+      ${barra}
+      <div class="cobros-aviso" style="margin-top:6px;"><i class="ti ti-lock"></i> <strong>Avance bloqueado:</strong> asigna primero la tipología del vehículo.</div>
+    </div>`;
+}
+
 function renderAvance(r) {
+  if (faltaTipologiaParaAvance(r, configBodega)) return avanceBloqueadoPorTipologia(r);
+
   if (!requiereAvanceCompleto(r)) {
     const aviso = `<div style="font-size:11.5px;color:#854F0B;"><i class="ti ti-alert-triangle"></i> Sin avance registrado (vehículo anterior a esta función) — puede salir sin restricción de %. Fija su avance para que la regla de avance empiece a aplicar.</div>`;
 
@@ -1696,17 +1717,26 @@ async function autorizarSalida(id) {
 }
 
 async function seleccionarAvanceTipo(id, tipo) {
+  const actual = registros.find((r) => r.id === id);
+  if (actual && faltaTipologiaParaAvance(actual, configBodega)) { alert(MENSAJE_AVANCE_SIN_TIPOLOGIA); return; }
+
   try {
     await actualizarAvance(id, { avanceTipo: tipo, porcentaje: 0 }, perfilActual.nombre);
   } catch (error) {
+    if (mostrarRechazo(error)) return;
     console.error("Error al fijar el tipo de avance:", error);
     alert("No se pudo guardar el tipo de avance (" + tipo + "). " + (error && error.message ? error.message : "Intenta de nuevo."));
   }
 }
 
+// Vehículos cuyo avance se está guardando ahora mismo.
+const avancesEnCurso = new Set();
+
 async function incrementarAvance(id, delta) {
   const rec = registros.find((r) => r.id === id);
   if (!rec) return;
+
+  if (faltaTipologiaParaAvance(rec, configBodega)) { alert(MENSAJE_AVANCE_SIN_TIPOLOGIA); return; }
 
   const avanceTipo = getAvanceTipoEfectivo(rec);
   if (!avanceTipo) return;
@@ -1714,10 +1744,15 @@ async function incrementarAvance(id, delta) {
   const actual = rec.avancePorcentaje || 0;
   if (actual >= 100) return;
 
+  // Una solicitud a la vez por vehículo: dos clics seguidos no se atropellan.
+  if (avancesEnCurso.has(id)) return;
+  avancesEnCurso.add(id);
+
   const nuevoPct = Math.min(100, actual + delta);
 
   try {
-    await actualizarAvance(id, { avanceTipo, porcentaje: nuevoPct }, perfilActual.nombre);
+    // `esperado` es lo que esta pantalla vio: si otro usuario lo movió, se rechaza (no se pisa).
+    await actualizarAvance(id, { avanceTipo, porcentaje: nuevoPct, esperado: actual }, perfilActual.nombre);
 
     // "Ambos": el descargue siempre va primero. Al llegar al 100%
     // se pasa solo a Cargue — el supervisor no tiene que elegir
@@ -1729,8 +1764,11 @@ async function incrementarAvance(id, delta) {
       await avanzarAFaseCargue(id, { porcentajeInicial: rec.avanceCarguePendiente || 0 }, perfilActual.nombre);
     }
   } catch (error) {
+    if (mostrarRechazo(error)) return;
     console.error("Error al actualizar el avance:", error);
     alert("No se pudo guardar el avance. " + (error && error.message ? error.message : "Intenta de nuevo."));
+  } finally {
+    avancesEnCurso.delete(id);
   }
 }
 
