@@ -451,7 +451,11 @@ begin
             into ver using l ->> 'id';
 
         if ver is distinct from (l ->> 'version')::bigint then
-            raise exception 'CONFLICTO' using errcode = '40001';
+            -- OJO: NO usar 40001 (serialization_failure). PostgREST reintenta solo
+            -- esa transacción, el choque se repite igual y la conexión queda
+            -- atrapada: con varios choques se agota el pool y cae toda la API.
+            -- El navegador reconoce el choque por el texto CONFLICTO y reintenta él.
+            raise exception 'CONFLICTO' using errcode = 'P0001';
         end if;
     end loop;
 
