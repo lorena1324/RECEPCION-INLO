@@ -1091,11 +1091,16 @@ export async function crearCitaCancelada(operacion, datos, supervisor) {
    ventana de tiempo. Quien SÍ puede saltárselo es el administrador
    corriendo el backfill (`opciones.excepcion`), porque ahí se
    completan registros antiguos y no hay proceso que seguir.
+
+   `opciones.sinTopes` quita SOLO esos dos topes de velocidad, sin
+   saltarse lo demás (vehículo que ya salió, choque con otro usuario).
+   Lo usa facturación en J3, que llena el avance de una vez.
    ========================================================= */
 
 export async function actualizarAvance(id, cambios, operador, opciones) {
 
     const excepcion = !!(opciones && opciones.excepcion);
+    const sinTopes = excepcion || !!(opciones && opciones.sinTopes);
     const porcentaje = Math.max(0, Math.min(100, Math.round(cambios.porcentaje)));
     const ref = doc(db, COLECCION, id);
 
@@ -1116,11 +1121,13 @@ export async function actualizarAvance(id, cambios, operador, opciones) {
                 throw errorConflictoAvance(actual, Number(esperado));
             }
 
-            const problema = validarAvance({
-                actual: actual, nuevo: porcentaje, historial: r.historial,
-                avanceTipo: cambios.avanceTipo, ahora: new Date()
-            });
-            if (problema) throw problema;
+            if (!sinTopes) {
+                const problema = validarAvance({
+                    actual: actual, nuevo: porcentaje, historial: r.historial,
+                    avanceTipo: cambios.avanceTipo, ahora: new Date()
+                });
+                if (problema) throw problema;
+            }
         }
 
         // `anterior` y `avanceTipo` quedan en el evento: de ahí sale la tanda.

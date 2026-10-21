@@ -1625,6 +1625,7 @@ function renderAvance(r) {
         <button class="btn btn-sm" data-avance-add="${r.id}:1" ${deshabilitado}>+1%</button>
         <button class="btn btn-sm" data-avance-add="${r.id}:5" ${deshabilitado}>+5%</button>
         <button class="btn btn-sm" data-avance-add="${r.id}:10" ${deshabilitado}>+10%</button>
+        <button class="btn btn-sm btn-primary" data-avance-add="${r.id}:100" ${deshabilitado} title="Completar el avance">100%</button>
       </div>
       ${aviso}
     </div>`;
@@ -1870,7 +1871,9 @@ async function incrementarAvance(id, delta) {
 
   try {
     // `esperado` es lo que esta pantalla vio: si otro usuario lo movió, se rechaza (no se pisa).
-    await actualizarAvance(id, { avanceTipo, porcentaje: nuevoPct, esperado: actual }, perfilActual.nombre);
+    // En J3 el avance lo llena facturación de una vez: sin los topes de velocidad
+    // (máx. por clic y por ventana de tiempo) que frenan la carga por tandas.
+    await actualizarAvance(id, { avanceTipo, porcentaje: nuevoPct, esperado: actual }, perfilActual.nombre, { sinTopes: true });
 
     // "Ambos": el descargue siempre va primero. Al llegar al 100%
     // se pasa solo a Cargue — el supervisor no tiene que elegir
