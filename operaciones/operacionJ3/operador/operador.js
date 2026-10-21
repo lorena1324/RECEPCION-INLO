@@ -39,6 +39,7 @@ import {
     estaCancelado
 } from "../../../shared/services/vehiculos.js";
 import { mostrarRechazo } from "../../../shared/components/alertaIntegridad.js";
+import { crearAlarmaSalida } from "../../../shared/components/alarmaSalida.js";
 
 import {
     canalDe,
@@ -1452,9 +1453,18 @@ function iniciarPagina(perfil) {
     document.getElementById('f-fecha-ingreso').min = ayer.toISOString().slice(0, 10);
     document.getElementById('f-fecha-ingreso').max = today();
 
+    // Vehículo lleno (100 %) y sin salida a los 3 minutos: alarma que suena
+    // hasta que le den la salida. Solo a quien puede darla (ver daSalida).
+    var alarmaSalida = crearAlarmaSalida({
+        alDarSalida: openModalSalida,
+        obtenerConfig: function () { return configBodega; },
+        puedeDarSalida: daSalida
+    });
+
     unsubscribeRegistros = suscribirseARegistros(OPERACION, function (data, error) {
         if (error) { setSyncStatus('error'); return; }
         registros = data;
+        alarmaSalida.actualizar(registros);
         renderTodo();
         refrescarModalSalida();
         refrescarModalDetalle();
