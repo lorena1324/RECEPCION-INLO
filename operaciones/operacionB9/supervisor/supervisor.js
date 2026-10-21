@@ -178,7 +178,7 @@ function salir() {
    eso el .catch() de abajo no necesita hacer nada más.
    ========================================================= */
 
-protegerPagina({ rolesPermitidos: ["supervisor"], operacion: OPERACION }).then((perfil) => {
+protegerPagina({ rolesPermitidos: ["supervisor", "facturacion"], operacion: OPERACION }).then((perfil) => {
 
   perfilActual = perfil;
 

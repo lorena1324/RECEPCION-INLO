@@ -19,7 +19,7 @@ import { supabase } from "./supabase.js";
    usuario de Supabase Auth:
    {
        nombre: "...",
-       rol: "operario" | "supervisor" | "cliente" | "administrador",
+       rol: "operario" | "supervisor" | "facturacion" | "cliente" | "administrador",
        operacion: "J3" | "J4" | "B9" | null,
        cliente: "..." | null,
        activo: true

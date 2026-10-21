@@ -183,9 +183,12 @@ function salir() {
    eso el .catch() de abajo no necesita hacer nada más.
    ========================================================= */
 
-protegerPagina({ rolesPermitidos: ["supervisor"], operacion: OPERACION }).then((perfil) => {
+protegerPagina({ rolesPermitidos: ["supervisor", "facturacion"], operacion: OPERACION }).then((perfil) => {
 
   perfilActual = perfil;
+
+  // La cita cancelada es de quien firma (facturación), no del supervisor.
+  if (!firma()) document.getElementById("btn-cita-cancelada").style.display = "none";
 
   document.getElementById("nombre-usuario").textContent = perfil.nombre || perfil.uid;
   document.getElementById("btn-cerrar-sesion").addEventListener("click", salir);
@@ -396,6 +399,18 @@ function bodegaCobra() {
 }
 
 /*
+    ¿Quien está conectado firma salidas, dinero y cancelaciones? En J3
+    eso es de FACTURACIÓN (y del administrador). El supervisor de J3
+    llena el avance, la tipología, la modalidad y las novedades; los
+    botones de lo demás no se le muestran. La base de datos aplica la
+    misma regla (ver `firma` en puede_escribir, supabase/esquema.sql).
+*/
+function firma() {
+  const rol = perfilActual && perfilActual.rol;
+  return rol === "facturacion" || rol === "administrador";
+}
+
+/*
     El desglose de la tarifa que le corresponde a un vehículo por su
     tipología: base, IVA, valor con IVA, tasa de INLOTRANS y lo que
     le queda a la cuadrilla. Cuál de esas cifras se cobra lo decide
@@ -427,7 +442,7 @@ function renderNavCobros() {
   const badge = document.getElementById("nav-cobros-badge");
   if (!nav) return;
 
-  if (!bodegaCobra()) {
+  if (!bodegaCobra() || !firma()) {
     nav.style.display = "none";
     return;
   }
@@ -919,7 +934,7 @@ async function confirmarCitaCancelada() {
 let salidaVehiculoId = null;
 
 function botonSalida(r) {
-  if (r.horaSalida || estaCancelado(r)) return "";
+  if (!firma() || r.horaSalida || estaCancelado(r)) return "";
   const d = diagnosticoSalida(r, configBodega);
   const motivo = d.puedeSalir ? "Registrar la salida" : d.titulo;
   return `<button class="btn btn-sm btn-success" data-salida="${escapar(r.id)}" title="${escapar(motivo)}">
@@ -1625,7 +1640,7 @@ function renderAvance(r) {
         <button class="btn btn-sm" data-avance-add="${r.id}:1" ${deshabilitado}>+1%</button>
         <button class="btn btn-sm" data-avance-add="${r.id}:5" ${deshabilitado}>+5%</button>
         <button class="btn btn-sm" data-avance-add="${r.id}:10" ${deshabilitado}>+10%</button>
-        <button class="btn btn-sm btn-primary" data-avance-add="${r.id}:100" ${deshabilitado} title="Completar el avance">100%</button>
+        ${firma() ? `<button class="btn btn-sm btn-primary" data-avance-add="${r.id}:100" ${deshabilitado} title="Completar el avance">100%</button>` : ""}
       </div>
       ${aviso}
     </div>`;
@@ -1785,7 +1800,7 @@ function openModalNovedades(id) {
    ========================================================= */
 
 function seccionAutorizacion(r) {
-  if (r.horaSalida) return "";
+  if (!firma() || r.horaSalida) return "";
   if (!requiereAvanceCompleto(r) || avanceCompleto(r)) return "";
 
   const pct = r.avancePorcentaje || 0;
@@ -1871,9 +1886,9 @@ async function incrementarAvance(id, delta) {
 
   try {
     // `esperado` es lo que esta pantalla vio: si otro usuario lo movió, se rechaza (no se pisa).
-    // En J3 el avance lo llena facturación de una vez: sin los topes de velocidad
+    // En J3 facturación llena el avance de una vez: sin los topes de velocidad
     // (máx. por clic y por ventana de tiempo) que frenan la carga por tandas.
-    await actualizarAvance(id, { avanceTipo, porcentaje: nuevoPct, esperado: actual }, perfilActual.nombre, { sinTopes: true });
+    await actualizarAvance(id, { avanceTipo, porcentaje: nuevoPct, esperado: actual }, perfilActual.nombre, { sinTopes: firma() });
 
     // "Ambos": el descargue siempre va primero. Al llegar al 100%
     // se pasa solo a Cargue — el supervisor no tiene que elegir
@@ -2002,7 +2017,7 @@ function filaRegistro(r, rank) {
 }
 
 function botonAnularSalida(r) {
-  if (!r.horaSalida || estaCancelado(r)) return "";
+  if (!firma() || !r.horaSalida || estaCancelado(r)) return "";
   return `<button class="btn btn-sm" data-anular-salida="${escapar(r.id)}" title="Anular la salida y reabrir el vehículo">
             <i class="ti ti-arrow-back-up"></i> Anular salida
           </button>`;
@@ -2013,7 +2028,7 @@ function botonAnularSalida(r) {
    atrás — su operación se hizo, y borrarla sería reescribir el
    turno. */
 function botonCancelar(r) {
-  if (r.horaSalida) return "";
+  if (!firma() || r.horaSalida) return "";
   return `<button class="btn btn-sm btn-cancelar" data-cancelar="${escapar(r.id)}" title="Marcar la operación como cancelada">
             <i class="ti ti-ban"></i> Cancelar
           </button>`;

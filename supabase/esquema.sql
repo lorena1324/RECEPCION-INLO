@@ -41,7 +41,7 @@
 create table if not exists public.usuarios (
     id          uuid primary key references auth.users (id) on delete cascade,
     nombre      text not null default '',
-    rol         text not null check (rol in ('operario', 'supervisor', 'cliente', 'administrador')),
+    rol         text not null check (rol in ('operario', 'supervisor', 'facturacion', 'cliente', 'administrador')),
     operacion   text check (operacion in ('J3', 'J4', 'B9')),
     cliente     text,
     activo      boolean not null default true,
@@ -89,6 +89,11 @@ create table if not exists public.config_privado (
     actualizado_en  timestamptz not null default now(),
     operacion       text generated always as (split_part(id, '/', 1)) stored
 );
+
+-- Proyectos creados antes del rol 'facturacion': se amplía la lista.
+alter table public.usuarios drop constraint if exists usuarios_rol_check;
+alter table public.usuarios add constraint usuarios_rol_check
+    check (rol in ('operario', 'supervisor', 'facturacion', 'cliente', 'administrador'));
 
 create index if not exists vehiculos_operacion_idx on public.vehiculos (operacion);
 create index if not exists vehiculos_activos_idx on public.vehiculos (operacion) where (datos ->> 'horaSalida') is null;
@@ -170,7 +175,7 @@ create policy placas_leer on public.placas_activas for select to authenticated
 -- El dinero: ni el operario ni el cliente.
 drop policy if exists cobros_leer on public.cobros;
 create policy cobros_leer on public.cobros for select to authenticated
-    using (public.es_admin() or (public.mi_rol() = 'supervisor' and public.en_su_operacion(operacion)));
+    using (public.es_admin() or (public.mi_rol() in ('supervisor', 'facturacion') and public.en_su_operacion(operacion)));
 
 drop policy if exists config_leer on public.config;
 create policy config_leer on public.config for select to authenticated
@@ -178,7 +183,7 @@ create policy config_leer on public.config for select to authenticated
 
 drop policy if exists config_privado_leer on public.config_privado;
 create policy config_privado_leer on public.config_privado for select to authenticated
-    using (public.es_admin() or (public.mi_rol() = 'supervisor' and public.en_su_operacion(operacion)));
+    using (public.es_admin() or (public.mi_rol() in ('supervisor', 'facturacion') and public.en_su_operacion(operacion)));
 
 -- Ninguna tabla tiene políticas de insert/update/delete: escribir
 -- directo queda prohibido. Solo se escribe con aplicar_escrituras().
@@ -193,7 +198,7 @@ create or replace function public.puede_leer_privado(op text)
 returns boolean
 language sql stable security definer set search_path = public
 as $$
-    select public.es_admin() or (public.mi_rol() = 'supervisor' and public.en_su_operacion(op))
+    select public.es_admin() or (public.mi_rol() in ('supervisor', 'facturacion') and public.en_su_operacion(op))
 $$;
 
 
@@ -244,10 +249,19 @@ declare
     op_doc     text;
     crear      boolean := antes is null;
     borrar     boolean := despues is null;
+    -- ¿Firma salidas, dinero y cancelaciones? En las bodegas con rol de
+    -- facturación (hoy J3) eso es SOLO de facturación; el supervisor de
+    -- esas bodegas llena avance, tipología, modalidad y novedades. En
+    -- las demás lo sigue firmando el supervisor.
+    bodegas_facturacion constant text[] := array['J3'];
+    firma      boolean;
 begin
     if rol is null then
         return false;                       -- sin perfil o inactivo: nada
     end if;
+
+    firma := rol = 'facturacion'
+          or (rol = 'supervisor' and not (coalesce(op, '') = any (bodegas_facturacion)));
 
     /* ── config y config/privado: solo el administrador ── */
     if tabla in ('config', 'config_privado') then
@@ -259,15 +273,15 @@ begin
         if admin then return true; end if;
         if borrar then return false; end if;           -- un cobro no se borra: se corrige
         if crear then
-            return rol = 'supervisor' and despues ->> 'operacion' = op;
+            return firma and despues ->> 'operacion' = op;
         end if;
-        return rol = 'supervisor' and antes ->> 'operacion' = op;
+        return firma and antes ->> 'operacion' = op;
     end if;
 
     /* ── placas_activas (el candado de placa) ── */
     if tabla = 'placas_activas' then
         if admin then return true; end if;
-        if rol not in ('operario', 'supervisor') then return false; end if;
+        if rol not in ('operario', 'supervisor', 'facturacion') then return false; end if;
         if borrar then
             return antes ->> 'operacion' = op;
         end if;
@@ -288,8 +302,8 @@ begin
         if crear then
             return admin
                 or (rol = 'operario'   and despues ->> 'operacion' = op)
-                or (rol = 'supervisor' and despues ->> 'operacion' = op
-                                       and despues -> 'cancelado' = 'true'::jsonb);
+                or (firma and despues ->> 'operacion' = op
+                          and despues -> 'cancelado' = 'true'::jsonb);
         end if;
 
         op_doc := antes ->> 'operacion';
@@ -343,8 +357,15 @@ begin
                                            'cancelado', 'cancelacion', 'anulacionSalida']);
         end if;
 
-        -- Supervisor: sus campos; en J4 puede corregir todo el registro.
-        if rol = 'supervisor' then
+        -- Supervisor / facturación: sus campos; en J4 puede corregir todo
+        -- el registro. Lo que es de firmar (salida, dinero, cancelación)
+        -- solo si `firma`.
+        if rol in ('supervisor', 'facturacion') then
+            if not firma and cambiadas && array['horaSalida', 'operadorSalida', 'obsSalida',
+                                                'cancelado', 'cancelacion', 'anulacionSalida',
+                                                'pagoRegistrado', 'autorizacionSalida'] then
+                return false;
+            end if;
             return op_doc = any (array['J4'])
                 or cambiadas <@ array[
                     'avanceTipo', 'avancePorcentaje', 'avanceCarguePendiente',

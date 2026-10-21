@@ -26,7 +26,9 @@ export function resolverRuta(perfil) {
         return `${carpetaOperacion}/operador/index.html`;
     }
 
-    if (rol === "supervisor") {
+    // Facturación usa la pantalla del supervisor, con salida, cobros y
+    // cancelaciones (ver firma() en operaciones/operacionJ3/supervisor).
+    if (rol === "supervisor" || rol === "facturacion") {
         return `${carpetaOperacion}/supervisor/index.html`;
     }
 
