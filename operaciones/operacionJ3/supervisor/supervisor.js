@@ -7,7 +7,10 @@
    (actualizarAvance), y autorizar la salida anticipada de un
    vehículo en Cargue que no llegó al 100% pero sí al mínimo
    (autorizarSalidaAnticipada). No importa nada de crearRegistro,
-   actualizarUbicacion, registrarSalida ni eliminarRegistro.
+   actualizarUbicacion ni eliminarRegistro.
+
+   En J3 la SALIDA la registra este rol (facturación), no la
+   portería: ver registrarSalida más abajo.
    ============================================================ */
 
 import { protegerPagina } from "../../../shared/core/guard.js";
@@ -34,7 +37,9 @@ import {
   crearCitaCancelada,
   actualizarModalidad,
   actualizarTipologia,
-  estaCancelado
+  estaCancelado,
+  registrarSalida,
+  diagnosticoSalida
 } from "../../../shared/services/vehiculos.js";
 import { mostrarRechazo } from "../../../shared/components/alertaIntegridad.js";
 
@@ -88,7 +93,7 @@ import {
 
 import { fichaVehiculo } from "../../../shared/services/detalleVehiculo.js";
 
-import { todayOperativo, sumarDias, formatDuration } from "../../../shared/utils/tiempos.js";
+import { todayOperativo, sumarDias, formatDuration, nowLocal } from "../../../shared/utils/tiempos.js";
 
 import {
   renderPanelEstadisticas,
@@ -209,6 +214,7 @@ protegerPagina({ rolesPermitidos: ["supervisor"], operacion: OPERACION }).then((
     registros = data || [];
     renderTodo();
     refrescarModalDetalle();
+    refrescarModalSalida();
   });
 
   // La configuración dice si esta bodega cobra y trae las tipologías.
@@ -898,6 +904,111 @@ async function confirmarCitaCancelada() {
   }
 }
 
+/* =========================================================
+   REGISTRAR SALIDA (facturación)
+
+   En J3 el vehículo no se despacha desde la portería: lo despacha
+   facturación, que es este rol. Es la MISMA acción que tenía el
+   operario (registrarSalida en vehiculos.js, con su transacción y
+   su candado de placa) y las mismas reglas para dejarlo salir
+   (diagnosticoSalida): avance mínimo, tipología, cobro, cabezote.
+   La base de datos le niega la salida al operario de J3 (ver
+   puede_escribir en supabase/esquema.sql).
+   ========================================================= */
+
+let salidaVehiculoId = null;
+
+function botonSalida(r) {
+  if (r.horaSalida || estaCancelado(r)) return "";
+  const d = diagnosticoSalida(r, configBodega);
+  const motivo = d.puedeSalir ? "Registrar la salida" : d.titulo;
+  return `<button class="btn btn-sm btn-success" data-salida="${escapar(r.id)}" title="${escapar(motivo)}">
+            <i class="ti ti-logout"></i> Salida
+          </button>`;
+}
+
+/* El botón de confirmar se bloquea desde que se abre el modal si el
+   vehículo todavía no puede salir, y se repinta con cada cambio que
+   llega en vivo: si alguien sube el avance o registra el cobro con
+   el modal abierto, se destraba solo. */
+function pintarEstadoSalida(rec) {
+  const d = diagnosticoSalida(rec, configBodega);
+
+  document.getElementById("salida-info").innerHTML =
+    `<strong>${escapar(rec.placa)}</strong> — ${escapar(rec.conductor || "sin registrar")}` +
+    ` · ${escapar(getDestino(rec))}`;
+
+  const bloqueo = document.getElementById("salida-bloqueo");
+  if (d.puedeSalir) {
+    bloqueo.style.display = "none";
+  } else {
+    bloqueo.style.display = "";
+    bloqueo.innerHTML = `<strong>${escapar(d.titulo)}</strong>` +
+      (d.detalle ? `<br>${escapar(d.detalle)}` : "") +
+      (d.faltante ? `<br>Avance: ${d.porcentaje}% · mínimo ${d.minimo}% · faltan ${d.faltante}%` : "") +
+      (d.accion ? `<br>→ ${escapar(d.accion)}` : "");
+  }
+
+  const btn = document.getElementById("btn-confirmar-salida");
+  btn.disabled = !d.puedeSalir;
+  btn.innerHTML = d.puedeSalir
+    ? '<i class="ti ti-check"></i> Confirmar salida'
+    : '<i class="ti ti-lock"></i> Salida bloqueada';
+}
+
+function refrescarModalSalida() {
+  if (!document.getElementById("modal-salida").classList.contains("open")) return;
+  const rec = registros.find((r) => r.id === salidaVehiculoId);
+  if (rec && !rec.horaSalida) pintarEstadoSalida(rec);
+}
+
+function abrirModalSalida(id) {
+  const rec = registros.find((r) => r.id === id);
+  if (!rec || rec.horaSalida) return;
+
+  salidaVehiculoId = id;
+  pintarEstadoSalida(rec);
+  document.getElementById("salida-hora").value = nowLocal();
+  document.getElementById("salida-obs").value = "";
+  document.getElementById("salida-errores").style.display = "none";
+  document.getElementById("modal-salida").classList.add("open");
+}
+
+async function confirmarSalida() {
+  const rec = registros.find((r) => r.id === salidaVehiculoId);
+  if (!rec) return;
+
+  const errores = document.getElementById("salida-errores");
+  const d = diagnosticoSalida(rec, configBodega);
+  if (!d.puedeSalir) {
+    pintarEstadoSalida(rec);
+    return;
+  }
+
+  const horaSalida = document.getElementById("salida-hora").value;
+  if (!horaSalida) {
+    errores.style.display = "";
+    errores.textContent = "Escribe la fecha y la hora de salida.";
+    return;
+  }
+
+  const btn = document.getElementById("btn-confirmar-salida");
+  btn.disabled = true;
+
+  try {
+    await registrarSalida(rec.id, horaSalida, document.getElementById("salida-obs").value.trim(), perfilActual.nombre);
+    closeModal("modal-salida");
+    salidaVehiculoId = null;
+  } catch (error) {
+    if (mostrarRechazo(error)) return;
+    console.error("[supervisor] No se pudo registrar la salida:", error);
+    errores.style.display = "";
+    errores.textContent = "No se pudo registrar la salida. Revisa la conexión e inténtalo de nuevo.";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 let anularSalidaId = null;
 
 function abrirModalAnularSalida(id) {
@@ -1023,6 +1134,7 @@ function iniciarCancelaciones() {
   document.getElementById("btn-confirmar-cancelar").addEventListener("click", confirmarCancelacion);
   document.getElementById("btn-confirmar-observacion").addEventListener("click", confirmarObservacion);
   document.getElementById("btn-confirmar-anular-salida").addEventListener("click", confirmarAnulacionSalida);
+  document.getElementById("btn-confirmar-salida").addEventListener("click", confirmarSalida);
   document.getElementById("btn-confirmar-cita").addEventListener("click", confirmarCitaCancelada);
   document.getElementById("btn-cita-cancelada").addEventListener("click", abrirModalCitaCancelada);
 
@@ -1031,6 +1143,8 @@ function iniciarCancelaciones() {
   document.body.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-cancelar]");
     if (btn) abrirModalCancelar(btn.getAttribute("data-cancelar"));
+    const btnSalida = e.target.closest("[data-salida]");
+    if (btnSalida) abrirModalSalida(btnSalida.getAttribute("data-salida"));
     const btnAnular = e.target.closest("[data-anular-salida]");
     if (btnAnular) abrirModalAnularSalida(btnAnular.getAttribute("data-anular-salida"));
     const btnObs = e.target.closest("[data-observacion]");
@@ -1182,7 +1296,8 @@ function extrasDeMuelle(r) {
 }
 
 function accionesDeMuelle(r) {
-    return `<button class="btn btn-sm" data-novedades="${r.id}"><i class="ti ti-info-circle"></i> Novedades</button>`;
+    return `<button class="btn btn-sm" data-novedades="${r.id}"><i class="ti ti-info-circle"></i> Novedades</button>` +
+           botonSalida(r);
 }
 
 function renderUbicacion() {
@@ -1876,6 +1991,7 @@ function filaRegistro(r, rank) {
       <td>${escapar(r.operadorEntrada || "—")}</td>
       <td>
         <button class="btn btn-sm" data-novedades="${r.id}"><i class="ti ti-info-circle"></i></button>
+        ${botonSalida(r)}
         ${botonAnularSalida(r)}
         ${botonCancelar(r)}
       </td>

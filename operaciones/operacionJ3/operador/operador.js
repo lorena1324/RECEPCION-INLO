@@ -508,10 +508,12 @@ function accionesDePatio(r) {
            '<button class="btn btn-sm" data-detalle="' + r.id + '"><i class="ti ti-info-circle"></i> Detalle</button>';
 }
 
+/* En J3 la portería ya no registra salidas: las da facturación
+   (pantalla de supervisor). La base de datos también se lo niega
+   al operario de J3 — ver puede_escribir en supabase/esquema.sql. */
 function accionesDeMuelle(rec) {
     return '<button class="btn btn-sm btn-primary" data-editar="' + rec.id + '">Mover</button>' +
-           '<button class="btn btn-sm" data-observacion="' + rec.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
-           '<button class="btn btn-sm btn-danger" data-salida="' + rec.id + '"' + attrsBotonSalida(rec) + '>Salida</button>';
+           '<button class="btn btn-sm" data-observacion="' + rec.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>';
 }
 
 /* =========================================================
@@ -792,7 +794,6 @@ function renderRegistros() {
             '<td>' + celdaMotivoPatio(r) + '</td>' +
             '<td>' + (r.operadorEntrada || '—') + '</td>' +
             '<td><div class="td-actions">' +
-                (!r.horaSalida ? '<button class="btn btn-sm btn-success" data-salida="' + r.id + '"' + attrsBotonSalida(r) + '><i class="ti ti-logout"></i></button>' : '') +
                 '<button class="btn btn-sm" data-editar="' + r.id + '"><i class="ti ti-edit"></i></button>' +
                 '<button class="btn btn-sm" data-observacion="' + r.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
                 '<button class="btn btn-sm" data-detalle="' + r.id + '"><i class="ti ti-info-circle"></i></button>' +

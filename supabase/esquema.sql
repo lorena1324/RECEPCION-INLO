@@ -333,6 +333,12 @@ begin
 
         -- Operario: todo menos lo que firma el supervisor.
         if rol = 'operario' then
+            -- Bodegas donde la SALIDA la da facturación (el supervisor) y no
+            -- la portería: ahí el operario no toca la hora de salida.
+            if op_doc = any (array['J3'])
+               and cambiadas && array['horaSalida', 'operadorSalida', 'obsSalida'] then
+                return false;
+            end if;
             return not (cambiadas && array['autorizacionSalida', 'pagoRegistrado',
                                            'cancelado', 'cancelacion', 'anulacionSalida']);
         end if;

@@ -585,6 +585,35 @@
   </div>
 </div>
 
+<!-- REGISTRAR LA SALIDA
+     En J3 la salida la da facturación (el supervisor), no la portería:
+     así ningún vehículo se despacha sin pasar por quien factura. Las
+     mismas reglas que tenía portería: ver diagnosticoSalida() en
+     shared/services/vehiculos.js. -->
+<div class="modal-backdrop" id="modal-salida">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="ti ti-logout"></i> Registrar salida</div>
+      <button class="modal-close" data-close="modal-salida"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-info-box" id="salida-info"></div>
+    <div class="cobro-errores" id="salida-bloqueo" style="display:none;"></div>
+    <div class="form-group full">
+      <label for="salida-hora">Fecha y hora de salida *</label>
+      <input type="datetime-local" id="salida-hora">
+    </div>
+    <div class="form-group full" style="margin-top:12px">
+      <label for="salida-obs">Observaciones</label>
+      <textarea id="salida-obs" rows="3"></textarea>
+    </div>
+    <div class="cobro-errores" id="salida-errores" style="display:none;"></div>
+    <div class="modal-footer">
+      <button class="btn" data-close="modal-salida">Cancelar</button>
+      <button class="btn btn-primario" id="btn-confirmar-salida"><i class="ti ti-check"></i> Confirmar salida</button>
+    </div>
+  </div>
+</div>
+
 <!-- ANULAR UNA SALIDA YA REGISTRADA -->
 <div class="modal-backdrop" id="modal-anular-salida">
   <div class="modal">
