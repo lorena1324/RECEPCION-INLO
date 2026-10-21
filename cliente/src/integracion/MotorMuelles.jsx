@@ -20,12 +20,48 @@ import TableroMuelles3D from "../3d/TableroMuelles3D.jsx";
 import { usarEscalaPantalla } from "../3d/usarEscalaPantalla.js";
 import { AvancePorMuelle, ListaPatio, ResumenMuelles } from "../tablero/Indicadores.jsx";
 
+/* ── CALIDAD DEL 3D ─────────────────────────────────────────
+   Los televisores (y los equipos con poco procesador o memoria)
+   arrancan en modo ligero sin que nadie tenga que tocar nada: en
+   alta se traban. Si alguien elige a mano, se recuerda en ese
+   equipo. Y si en alta el 3D va lento, baja solo a ligero. */
+
+const CLAVE_CALIDAD = "inlotrans:calidad3d";
+
+function equipoDebil() {
+    const ua = navigator.userAgent || "";
+    const esTv = /SmartTV|SMART-TV|Tizen|Web0S|webOS|NetCast|BRAVIA|HbbTV|AFT[A-Z]|CrKey|Android TV|GoogleTV|Roku|Vidaa|Hisense|VIDAA|Philips|Viera|TV Safari/i.test(ua);
+    const pocaMemoria = typeof navigator.deviceMemory === "number" && navigator.deviceMemory <= 4;
+    const pocosNucleos = typeof navigator.hardwareConcurrency === "number" && navigator.hardwareConcurrency <= 4;
+    return esTv || pocaMemoria || pocosNucleos;
+}
+
+function calidadGuardada() {
+    try { return localStorage.getItem(CLAVE_CALIDAD); } catch { return null; }
+}
+
+function calidadInicial() {
+    const guardada = calidadGuardada();
+    if (guardada === "alta" || guardada === "ligera") return guardada;
+    return equipoDebil() ? "ligera" : "alta";
+}
+
 export default function MotorMuelles({ almacen, acciones }) {
 
     const e = useSyncExternalStore(almacen.suscribir, almacen.leer);
     const [giro, setGiro] = useState(false);
     const [verCarga, setVerCarga] = useState(false);
-    const [calidad, setCalidad] = useState("alta");
+    const [calidad, setCalidad] = useState(calidadInicial);
+
+    // Elegida a mano: se recuerda en este equipo.
+    const elegirCalidad = () => setCalidad((c) => {
+        const nueva = c === "alta" ? "ligera" : "alta";
+        try { localStorage.setItem(CLAVE_CALIDAD, nueva); } catch { /* sin almacenamiento: solo por esta vez */ }
+        return nueva;
+    });
+
+    // Va lento en alta y nadie eligió a mano: baja solo a ligero.
+    const degradar = () => { if (!calidadGuardada()) setCalidad("ligera"); };
     // Pantalla completa = televisor visto de lejos: todo se agranda
     // según la altura de la pantalla.
     const escala = usarEscalaPantalla(e.expandido);
@@ -54,7 +90,7 @@ export default function MotorMuelles({ almacen, acciones }) {
                 <div className="ml-auto flex items-center gap-1">
                     <Interruptor icono={IconBox} activo={verCarga} onClick={() => setVerCarga((v) => !v)} etiqueta="Ver carga" />
                     <Interruptor icono={IconRotate360} activo={giro} onClick={() => setGiro((g) => !g)} etiqueta="Giro" />
-                    <Interruptor icono={IconBolt} activo={calidad === "ligera"} onClick={() => setCalidad((c) => (c === "alta" ? "ligera" : "alta"))} etiqueta="Modo ligero" />
+                    <Interruptor icono={IconBolt} activo={calidad === "ligera"} onClick={elegirCalidad} etiqueta="Modo ligero" />
                     <button
                         onClick={() => acciones.onExpandir(!e.expandido)}
                         className="rounded-lg p-1.5 text-texto-suave hover:bg-fondo hover:text-texto"
@@ -81,6 +117,7 @@ export default function MotorMuelles({ almacen, acciones }) {
                     giroAutomatico={giro}
                     verCargaTodos={verCarga}
                     calidad={calidad}
+                    onLento={degradar}
                     compacta={!e.expandido}
                     escala={escala}
                     semaforo={e.semaforo}

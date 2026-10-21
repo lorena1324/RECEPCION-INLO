@@ -17,7 +17,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Environment, Html, Lightformer, OrbitControls } from "@react-three/drei";
+import { Environment, Html, Lightformer, OrbitControls, PerformanceMonitor } from "@react-three/drei";
 import { Bloom, EffectComposer, N8AO, SMAA, ToneMapping } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
 import { animate } from "motion";
@@ -558,6 +558,32 @@ function Camara({ vista, giroAutomatico }) {
 
 
 /* ---------------------------------------------------------
+   MODO LIGERO: 30 CUADROS POR SEGUNDO
+
+   En ligero el lienzo dibuja "a pedido" (frameloop demand) y
+   esto pide un cuadro cada 1/30 s: la mitad de trabajo que a 60,
+   y las animaciones siguen igual porque usan el tiempo real
+   transcurrido. Mover la cámara también pide cuadros solo.
+   --------------------------------------------------------- */
+
+function Ritmo({ fps }) {
+    const invalidate = useThree((s) => s.invalidate);
+    useEffect(() => {
+        const t = setInterval(() => invalidate(), 1000 / fps);
+        return () => clearInterval(t);
+    }, [fps, invalidate]);
+    return null;
+}
+
+// Píxeles a dibujar en ligero: como máximo los de una pantalla Full HD.
+// En un TV 4K eso es la cuarta parte; el TV lo escala y se ve bien de lejos.
+function dprLigero() {
+    if (typeof window === "undefined") return 1;
+    return Math.min(1, window.devicePixelRatio || 1, 1920 / Math.max(1, window.innerWidth));
+}
+
+
+/* ---------------------------------------------------------
    ESCENA
    --------------------------------------------------------- */
 
@@ -577,6 +603,7 @@ export default function TableroMuelles3D({
     semaforo = null,
     pausado = false,
     calidad = "alta",
+    onLento = () => {},     // en alta va lento: el motor baja a ligero
     compacta = false,
     escala = 1              // agrandado en pantalla completa (televisor visto de lejos)
 }) {
@@ -626,9 +653,12 @@ export default function TableroMuelles3D({
     return (
         <Canvas
             // Sin cuadros mientras el tablero no está a la vista.
-            frameloop={pausado ? "never" : "always"}
-            shadows={alta ? "soft" : true}
-            dpr={alta ? [1, 2] : 1}
+            // En ligero, a pedido y a 30 cuadros (ver Ritmo).
+            frameloop={pausado ? "never" : alta ? "always" : "demand"}
+            // En ligero sin sombras: el mapa de sombras es otra pasada
+            // completa de la escena en cada cuadro.
+            shadows={alta ? "soft" : false}
+            dpr={alta ? [1, 2] : dprLigero()}
             camera={{ position: vista.camara, fov: 34, near: 0.5, far: 400 }}
             // Solo un clic en el lienzo vacío deselecciona. Las
             // tarjetas de los muelles (Html) están dentro del mismo
@@ -639,6 +669,11 @@ export default function TableroMuelles3D({
             resize={{ scroll: false, debounce: 0 }}
             gl={{ antialias: !alta, powerPreference: "high-performance" }}
         >
+            {!alta && !pausado && <Ritmo fps={30} />}
+            {/* En alta, si el equipo no da (cuadros por segundo bajos y
+                sostenidos), se avisa para bajar a ligero. */}
+            {alta && !pausado && <PerformanceMonitor bounds={() => [28, 60]} flipflops={1} onDecline={onLento} />}
+
             <color attach="background" args={["#a9b6c5"]} />
             <fog attach="fog" args={["#a9b6c5", 90, 190]} />
 
@@ -647,7 +682,7 @@ export default function TableroMuelles3D({
                 position={[-30, 42, 34]}
                 intensity={2.6}
                 color="#fff4e2"
-                castShadow
+                castShadow={alta}
                 shadow-mapSize={alta ? [4096, 4096] : [1024, 1024]}
                 shadow-bias={-0.0004}
                 shadow-normalBias={0.03}

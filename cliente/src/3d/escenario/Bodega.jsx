@@ -20,6 +20,7 @@ import {
     anchoBodega, cuposPatio, xDeCupo, xDeMuelle
 } from "./medidas.js";
 import Edificio from "./Nave.jsx";
+import Fusionar from "../fusionar.jsx";
 
 const { anchoPuerta, altoPuerta, alturaAnden } = MUELLE;
 
@@ -230,8 +231,12 @@ export default function Bodega({ muelles, nombre, colorDe, seleccionado }) {
 
     return (
         <group>
-            <Patio total={total} nombresMuelle={muelles.map((m) => `M${m.numero}`)} />
-            <Edificio total={total} nombre={nombre} />
+            {/* Patio y edificio no se mueven: se fusionan en pocas mallas (ver fusionar.jsx).
+                Las puertas de los muelles sí se animan y quedan aparte. */}
+            <Fusionar clave={`${total}|${nombre}|${muelles.map((m) => m.numero).join(",")}`}>
+                <Patio total={total} nombresMuelle={muelles.map((m) => `M${m.numero}`)} />
+                <Edificio total={total} nombre={nombre} />
+            </Fusionar>
             {muelles.map((m, i) => (
                 <Muelle
                     key={m.numero}
