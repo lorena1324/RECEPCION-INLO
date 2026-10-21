@@ -53,7 +53,7 @@ export function montarMuelles3D(host, acciones) {
 
     const almacen = crearAlmacen({
         titulo: "Muelles",
-        nombreBodega: "OPERACION PEPSICO INLOTRANS",
+        nombreBodega: "CEDI INLOTRANS",
         muelles: [],
         patio: [],
         salientes: [],

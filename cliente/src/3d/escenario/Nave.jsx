@@ -25,7 +25,9 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
-import { relieveCorrugado, repetir, texturaPisoInterior, texturaTexto, texturaVidrio } from "../texturas.js";
+import { relieveCorrugado, repetir, texturaImagen, texturaPisoInterior, texturaTexto, texturaVidrio } from "../texturas.js";
+import logoPepsico from "./logos/pepsico.jpg";
+import logoInlotrans from "./logos/inlotrans.jpg";
 import { ALTO_MURO, FONDO_BODEGA, MUELLE, anchoBodega, xDeMuelle } from "./medidas.js";
 
 const { alturaAnden } = MUELLE;
@@ -158,6 +160,54 @@ function Ventanal({ largo, posicion, rotacionY = 0, alto = 2.2 }) {
             <planeGeometry args={[largo, alto]} />
             <meshStandardMaterial map={mapa} emissive="#cfdcf2" emissiveIntensity={0.25} roughness={0.2} side={THREE.DoubleSide} />
         </mesh>
+    );
+}
+
+
+/* ---------------------------------------------------------
+   VALLAS CON LOS LOGOS
+
+   En el tramo de fachada que queda libre a la derecha de M1
+   (entre su abrigo y la esquina): arriba PepsiCo, el cliente de
+   la operación, y abajo INLOTRANS. Cada logo va en un tablero
+   blanco con marco azul de la marca.
+   --------------------------------------------------------- */
+
+function Valla({ mapa, x, y, ancho, alto }) {
+    return (
+        <group position={[x, y, 0]}>
+            <Caja tamano={[ancho + 0.5, alto + 0.5, 0.08]} posicion={[0, 0, 0.05]} color={MARCA} roughness={0.5} />
+            <Caja tamano={[ancho + 0.2, alto + 0.2, 0.1]} posicion={[0, 0, 0.07]} color="#ffffff" roughness={0.6} />
+            <mesh position={[0, 0, 0.13]}>
+                <planeGeometry args={[ancho, alto]} />
+                <meshStandardMaterial map={mapa} roughness={0.55} />
+            </mesh>
+        </group>
+    );
+}
+
+function VallasLogos({ total }) {
+
+    const pepsico = useMemo(() => texturaImagen(logoPepsico), []);
+    const inlotrans = useMemo(() => texturaImagen(logoInlotrans), []);
+
+    // Tramo libre: del abrigo de M1 (+1,9 m) hasta la esquina, con margen.
+    const desde = xDeMuelle(0, total) + 2.6;
+    const hasta = anchoBodega(total) / 2 - 0.6;
+    const libre = hasta - desde;
+    const x = (desde + hasta) / 2;
+
+    // Proporciones de las imágenes: PepsiCo 881×265 y INLOTRANS 403×349.
+    const anchoPepsico = Math.min(libre - 0.8, 6.6);
+    const altoPepsico = anchoPepsico * 265 / 881;
+    const altoInlotrans = Math.min(4.6, (libre - 0.8) * 349 / 403);
+    const anchoInlotrans = altoInlotrans * 403 / 349;
+
+    return (
+        <group>
+            <Valla mapa={pepsico} x={x} y={ALTO_MURO - 4.6} ancho={anchoPepsico} alto={altoPepsico} />
+            <Valla mapa={inlotrans} x={x} y={alturaAnden + 1.2 + altoInlotrans / 2} ancho={anchoInlotrans} alto={altoInlotrans} />
+        </group>
     );
 }
 
@@ -964,6 +1014,7 @@ export default function Edificio({ total, nombre }) {
     return (
         <group>
             <Muros total={total} nombre={nombre} />
+            <VallasLogos total={total} />
             <Piso total={total} />
             <Estanterias total={total} />
             <ZonaAutomaticas total={total} />

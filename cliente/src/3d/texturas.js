@@ -177,6 +177,19 @@ export function texturaVidrio() {
     }, { color: true });
 }
 
+// Una imagen (los logos de las vallas). Va empaquetada dentro del
+// motor, así que tampoco hay nada que descargar aparte.
+export function texturaImagen(url) {
+    if (typeof document === "undefined") return null;
+    if (!cache.has(url)) {
+        const t = new THREE.TextureLoader().load(url);
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.anisotropy = 8;
+        cache.set(url, t);
+    }
+    return cache.get(url);
+}
+
 // Texto pintado en un letrero o en el piso.
 export function texturaTexto(texto, { ancho = 1024, alto = 192, fondo = null, color = "#ffffff", peso = 800, tamano = 110 } = {}) {
     return lienzo(`texto:${texto}:${ancho}:${alto}:${fondo}:${color}:${tamano}`, ancho, alto, (ctx, w, h) => {

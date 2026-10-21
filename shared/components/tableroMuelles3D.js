@@ -359,7 +359,7 @@ function montar3D(contenedor, opciones, alFallar) {
             const titulo = document.getElementById("muelles-titulo");
             motor.actualizar({
                 titulo: (titulo && titulo.textContent.trim()) || "Muelles",
-                nombreBodega: "OPERACION PEPSICO INLOTRANS " + (config && config.operacion ? " · BODEGA " + config.operacion : ""),
+                nombreBodega: "CEDI INLOTRANS" + (config && config.operacion ? " " + config.operacion : ""),
                 muelles: muelles,
                 patio: patio,
                 salientes: salientes,
