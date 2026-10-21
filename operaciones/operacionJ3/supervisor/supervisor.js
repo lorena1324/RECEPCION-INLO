@@ -9,8 +9,8 @@
    (autorizarSalidaAnticipada). No importa nada de crearRegistro,
    actualizarUbicacion ni eliminarRegistro.
 
-   En J3 la SALIDA la registra este rol (facturación), no la
-   portería: ver registrarSalida más abajo.
+   En J3 la SALIDA la da recepción (pantalla del operario), no este
+   rol; aquí el botón solo lo ve el administrador.
    ============================================================ */
 
 import { protegerPagina } from "../../../shared/core/guard.js";
@@ -399,8 +399,9 @@ function bodegaCobra() {
 }
 
 /*
-    ¿Quien está conectado firma salidas, dinero y cancelaciones? En J3
-    eso es de FACTURACIÓN (y del administrador). El supervisor de J3
+    ¿Quien está conectado firma dinero, cancelaciones y autorizaciones?
+    En J3 eso es de FACTURACIÓN (y del administrador); la salida, de
+    recepción. El supervisor de J3
     llena el avance, la tipología, la modalidad y las novedades; los
     botones de lo demás no se le muestran. La base de datos aplica la
     misma regla (ver `firma` en puede_escribir, supabase/esquema.sql).
@@ -920,21 +921,22 @@ async function confirmarCitaCancelada() {
 }
 
 /* =========================================================
-   REGISTRAR SALIDA (facturación)
+   REGISTRAR SALIDA (solo administrador en esta pantalla)
 
-   En J3 el vehículo no se despacha desde la portería: lo despacha
-   facturación, que es este rol. Es la MISMA acción que tenía el
-   operario (registrarSalida en vehiculos.js, con su transacción y
-   su candado de placa) y las mismas reglas para dejarlo salir
-   (diagnosticoSalida): avance mínimo, tipología, cobro, cabezote.
-   La base de datos le niega la salida al operario de J3 (ver
-   puede_escribir en supabase/esquema.sql).
+   En J3 la salida la da RECEPCIÓN desde la pantalla del operario;
+   ni facturación ni el supervisor despachan vehículos (la base de
+   datos tampoco se lo permite: ver puede_escribir en
+   supabase/esquema.sql). El botón se deja aquí para el
+   administrador, que entra a cualquier pantalla. Es la MISMA acción
+   que la de portería (registrarSalida en vehiculos.js) con las
+   mismas reglas (diagnosticoSalida).
    ========================================================= */
 
 let salidaVehiculoId = null;
 
 function botonSalida(r) {
-  if (!firma() || r.horaSalida || estaCancelado(r)) return "";
+  const esAdmin = perfilActual && perfilActual.rol === "administrador";
+  if (!esAdmin || r.horaSalida || estaCancelado(r)) return "";
   const d = diagnosticoSalida(r, configBodega);
   const motivo = d.puedeSalir ? "Registrar la salida" : d.titulo;
   return `<button class="btn btn-sm btn-success" data-salida="${escapar(r.id)}" title="${escapar(motivo)}">

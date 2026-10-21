@@ -22,7 +22,9 @@ export function resolverRuta(perfil) {
 
     const carpetaOperacion = `operaciones/operacion${operacion}`;
 
-    if (rol === "operario") {
+    // Recepción usa la pantalla del operario y además da la salida
+    // (ver daSalida() en operaciones/operacionJ3/operador).
+    if (rol === "operario" || rol === "recepcion") {
         return `${carpetaOperacion}/operador/index.html`;
     }
 

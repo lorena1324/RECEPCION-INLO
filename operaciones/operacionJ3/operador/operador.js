@@ -508,12 +508,19 @@ function accionesDePatio(r) {
            '<button class="btn btn-sm" data-detalle="' + r.id + '"><i class="ti ti-info-circle"></i> Detalle</button>';
 }
 
-/* En J3 la portería ya no registra salidas: las da facturación
-   (pantalla de supervisor). La base de datos también se lo niega
-   al operario de J3 — ver puede_escribir en supabase/esquema.sql. */
+/* En J3 la salida la da RECEPCIÓN (rol 'recepcion') y el
+   administrador; el resto de operarios de la bodega no ve el botón.
+   La base de datos aplica la misma regla — ver `da_salida` en
+   puede_escribir, supabase/esquema.sql. */
+function daSalida() {
+    var rol = perfilActual && perfilActual.rol;
+    return rol === 'recepcion' || rol === 'administrador';
+}
+
 function accionesDeMuelle(rec) {
     return '<button class="btn btn-sm btn-primary" data-editar="' + rec.id + '">Mover</button>' +
-           '<button class="btn btn-sm" data-observacion="' + rec.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>';
+           '<button class="btn btn-sm" data-observacion="' + rec.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
+           (daSalida() ? '<button class="btn btn-sm btn-danger" data-salida="' + rec.id + '"' + attrsBotonSalida(rec) + '>Salida</button>' : '');
 }
 
 /* =========================================================
@@ -794,6 +801,7 @@ function renderRegistros() {
             '<td>' + celdaMotivoPatio(r) + '</td>' +
             '<td>' + (r.operadorEntrada || '—') + '</td>' +
             '<td><div class="td-actions">' +
+                (!r.horaSalida && daSalida() ? '<button class="btn btn-sm btn-success" data-salida="' + r.id + '"' + attrsBotonSalida(r) + '><i class="ti ti-logout"></i></button>' : '') +
                 '<button class="btn btn-sm" data-editar="' + r.id + '"><i class="ti ti-edit"></i></button>' +
                 '<button class="btn btn-sm" data-observacion="' + r.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
                 '<button class="btn btn-sm" data-detalle="' + r.id + '"><i class="ti ti-info-circle"></i></button>' +
@@ -1530,7 +1538,7 @@ function iniciarPagina(perfil) {
 
 
 protegerPagina({
-    rolesPermitidos: ["operario"],
+    rolesPermitidos: ["operario", "recepcion"],
     operacion: OPERACION
 }).then(iniciarPagina).catch(function (error) {
     console.warn('Acceso bloqueado:', error.message);

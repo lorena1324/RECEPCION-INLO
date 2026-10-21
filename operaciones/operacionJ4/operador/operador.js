@@ -1570,7 +1570,7 @@ function iniciarPagina(perfil) {
 
 
 protegerPagina({
-    rolesPermitidos: ["operario"],
+    rolesPermitidos: ["operario", "recepcion"],
     operacion: OPERACION
 }).then(iniciarPagina).catch(function (error) {
     console.warn('Acceso bloqueado:', error.message);

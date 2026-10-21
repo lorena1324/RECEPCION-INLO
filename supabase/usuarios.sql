@@ -7,7 +7,7 @@
    2. Copiar aquí su correo y el rol/operación, y correr esto
       en el SQL Editor.
 
-   Roles:      'administrador' | 'facturacion' | 'supervisor' | 'operario' | 'cliente'
+   Roles:      'administrador' | 'facturacion' | 'supervisor' | 'recepcion' | 'operario' | 'cliente'
    Operación:  'J3' | 'J4' | 'B9'   (null para el administrador)
    ========================================================= */
 

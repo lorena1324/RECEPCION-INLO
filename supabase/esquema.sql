@@ -41,7 +41,7 @@
 create table if not exists public.usuarios (
     id          uuid primary key references auth.users (id) on delete cascade,
     nombre      text not null default '',
-    rol         text not null check (rol in ('operario', 'supervisor', 'facturacion', 'cliente', 'administrador')),
+    rol         text not null check (rol in ('operario', 'recepcion', 'supervisor', 'facturacion', 'cliente', 'administrador')),
     operacion   text check (operacion in ('J3', 'J4', 'B9')),
     cliente     text,
     activo      boolean not null default true,
@@ -90,10 +90,10 @@ create table if not exists public.config_privado (
     operacion       text generated always as (split_part(id, '/', 1)) stored
 );
 
--- Proyectos creados antes del rol 'facturacion': se amplía la lista.
+-- Proyectos creados antes de los roles 'recepcion' y 'facturacion': se amplía la lista.
 alter table public.usuarios drop constraint if exists usuarios_rol_check;
 alter table public.usuarios add constraint usuarios_rol_check
-    check (rol in ('operario', 'supervisor', 'facturacion', 'cliente', 'administrador'));
+    check (rol in ('operario', 'recepcion', 'supervisor', 'facturacion', 'cliente', 'administrador'));
 
 create index if not exists vehiculos_operacion_idx on public.vehiculos (operacion);
 create index if not exists vehiculos_activos_idx on public.vehiculos (operacion) where (datos ->> 'horaSalida') is null;
@@ -249,12 +249,16 @@ declare
     op_doc     text;
     crear      boolean := antes is null;
     borrar     boolean := despues is null;
-    -- ¿Firma salidas, dinero y cancelaciones? En las bodegas con rol de
-    -- facturación (hoy J3) eso es SOLO de facturación; el supervisor de
-    -- esas bodegas llena avance, tipología, modalidad y novedades. En
-    -- las demás lo sigue firmando el supervisor.
+    -- Bodegas con recepción y facturación (hoy J3):
+    --   recepción   = operario que además DA LA SALIDA;
+    --   operario    = sin salida;
+    --   facturación = firma dinero, cancelaciones y autorizaciones, sin salida;
+    --   supervisor  = avance, tipología, modalidad y novedades.
+    -- En las demás bodegas el operario da la salida y el supervisor firma.
     bodegas_facturacion constant text[] := array['J3'];
     firma      boolean;
+    porteria   boolean := rol in ('operario', 'recepcion');
+    da_salida  boolean;
 begin
     if rol is null then
         return false;                       -- sin perfil o inactivo: nada
@@ -262,6 +266,8 @@ begin
 
     firma := rol = 'facturacion'
           or (rol = 'supervisor' and not (coalesce(op, '') = any (bodegas_facturacion)));
+    da_salida := rol = 'recepcion'
+              or (rol = 'operario' and not (coalesce(op, '') = any (bodegas_facturacion)));
 
     /* ── config y config/privado: solo el administrador ── */
     if tabla in ('config', 'config_privado') then
@@ -281,7 +287,7 @@ begin
     /* ── placas_activas (el candado de placa) ── */
     if tabla = 'placas_activas' then
         if admin then return true; end if;
-        if rol not in ('operario', 'supervisor', 'facturacion') then return false; end if;
+        if rol not in ('operario', 'recepcion', 'supervisor', 'facturacion') then return false; end if;
         if borrar then
             return antes ->> 'operacion' = op;
         end if;
@@ -301,16 +307,16 @@ begin
         -- CREAR: operario de la bodega, o supervisor solo para citas canceladas.
         if crear then
             return admin
-                or (rol = 'operario'   and despues ->> 'operacion' = op)
+                or (porteria and despues ->> 'operacion' = op)
                 or (firma and despues ->> 'operacion' = op
                           and despues -> 'cancelado' = 'true'::jsonb);
         end if;
 
         op_doc := antes ->> 'operacion';
 
-        -- BORRAR: administrador y operario de esa bodega.
+        -- BORRAR: administrador y portería de esa bodega.
         if borrar then
-            return admin or (rol = 'operario' and op_doc = op);
+            return admin or (porteria and op_doc = op);
         end if;
 
         -- UN CONTENEDOR SIN CABEZOTE NO SALE (ni el administrador).
@@ -345,11 +351,10 @@ begin
             return false;
         end if;
 
-        -- Operario: todo menos lo que firma el supervisor.
-        if rol = 'operario' then
-            -- Bodegas donde la SALIDA la da facturación (el supervisor) y no
-            -- la portería: ahí el operario no toca la hora de salida.
-            if op_doc = any (array['J3'])
+        -- Portería (operario / recepción): todo menos lo que firma el
+        -- supervisor. La salida solo si `da_salida`.
+        if porteria then
+            if not da_salida
                and cambiadas && array['horaSalida', 'operadorSalida', 'obsSalida'] then
                 return false;
             end if;
@@ -364,6 +369,13 @@ begin
             if not firma and cambiadas && array['horaSalida', 'operadorSalida', 'obsSalida',
                                                 'cancelado', 'cancelacion', 'anulacionSalida',
                                                 'pagoRegistrado', 'autorizacionSalida'] then
+                return false;
+            end if;
+            -- En las bodegas con recepción, la salida normal es de recepción:
+            -- facturación toca la hora de salida solo al cancelar o al anular.
+            if op_doc = any (bodegas_facturacion)
+               and cambiadas && array['horaSalida', 'operadorSalida', 'obsSalida']
+               and not (cambiadas && array['cancelado', 'anulacionSalida']) then
                 return false;
             end if;
             return op_doc = any (array['J4'])
