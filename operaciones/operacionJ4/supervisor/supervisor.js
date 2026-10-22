@@ -192,6 +192,9 @@ protegerPagina({ rolesPermitidos: ["supervisor", "facturacion"], operacion: OPER
 
   perfilActual = perfil;
 
+  // Facturación de J4 tiene acceso total: también a la pantalla de portería.
+  if (daSalidaAqui()) document.getElementById("nav-porteria").style.display = "";
+
   document.getElementById("nombre-usuario").textContent = perfil.nombre || perfil.uid;
   document.getElementById("btn-cerrar-sesion").addEventListener("click", salir);
 

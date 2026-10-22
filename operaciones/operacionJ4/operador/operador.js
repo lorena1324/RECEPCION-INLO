@@ -1471,6 +1471,10 @@ function iniciarPagina(perfil) {
 
     perfilActual = perfil;
 
+    if (perfil.rol === 'facturacion' || perfil.rol === 'administrador') {
+        document.getElementById('nav-facturacion').style.display = '';
+    }
+
     document.getElementById('op-nombre').textContent = perfil.nombre || perfil.uid;
     document.getElementById('op-nombre-top').textContent = perfil.nombre || perfil.uid;
     document.getElementById('op-avatar').textContent = initials(perfil.nombre || '?');
@@ -1570,7 +1574,8 @@ function iniciarPagina(perfil) {
 
 
 protegerPagina({
-    rolesPermitidos: ["operario", "recepcion"],
+    // Facturación de J4 tiene acceso total a la bodega: también entra aquí.
+    rolesPermitidos: ["operario", "recepcion", "facturacion"],
     operacion: OPERACION
 }).then(iniciarPagina).catch(function (error) {
     console.warn('Acceso bloqueado:', error.message);

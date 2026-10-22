@@ -258,6 +258,9 @@ declare
     bodegas_facturacion constant text[] := array['J3'];
     firma      boolean;
     porteria   boolean := rol in ('operario', 'recepcion');
+    -- Facturación de las demás bodegas (hoy J4) tiene acceso total:
+    -- también registra y elimina vehículos, como la portería.
+    entra_porteria boolean;
     da_salida  boolean;
 begin
     if rol is null then
@@ -268,6 +271,8 @@ begin
           or (rol = 'supervisor' and not (coalesce(op, '') = any (bodegas_facturacion)));
     da_salida := rol = 'recepcion'
               or (rol = 'operario' and not (coalesce(op, '') = any (bodegas_facturacion)));
+    entra_porteria := porteria
+              or (rol = 'facturacion' and not (coalesce(op, '') = any (bodegas_facturacion)));
 
     /* ── config y config/privado: solo el administrador ── */
     if tabla in ('config', 'config_privado') then
@@ -307,7 +312,7 @@ begin
         -- CREAR: operario de la bodega, o supervisor solo para citas canceladas.
         if crear then
             return admin
-                or (porteria and despues ->> 'operacion' = op)
+                or (entra_porteria and despues ->> 'operacion' = op)
                 or (firma and despues ->> 'operacion' = op
                           and despues -> 'cancelado' = 'true'::jsonb);
         end if;
@@ -316,7 +321,7 @@ begin
 
         -- BORRAR: administrador y portería de esa bodega.
         if borrar then
-            return admin or (porteria and op_doc = op);
+            return admin or (entra_porteria and op_doc = op);
         end if;
 
         -- UN CONTENEDOR SIN CABEZOTE NO SALE (ni el administrador).
