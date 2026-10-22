@@ -1101,8 +1101,13 @@ export async function actualizarAvance(id, cambios, operador, opciones) {
 
     const excepcion = !!(opciones && opciones.excepcion);
     const sinTopes = excepcion || !!(opciones && opciones.sinTopes);
-    const porcentaje = Math.max(0, Math.min(100, Math.round(cambios.porcentaje)));
+    // `cambios.sumar`: en vez de un valor fijo, suma esos puntos al avance
+    // REAL guardado (lo lee la transacción). Así los clics seguidos nunca
+    // chocan con la pantalla atrasada: lo usa facturación.
+    const sumar = cambios.sumar !== undefined && cambios.sumar !== null ? Number(cambios.sumar) : null;
+    const fijo = Math.max(0, Math.min(100, Math.round(cambios.porcentaje)));
     const ref = doc(db, COLECCION, id);
+    let resultado = null;
 
     await runTransaction(db, async function (tx) {
 
@@ -1111,13 +1116,15 @@ export async function actualizarAvance(id, cambios, operador, opciones) {
 
         const r = snap.data();
         const actual = r.avancePorcentaje || 0;
+        const porcentaje = sumar !== null ? Math.max(0, Math.min(100, Math.round(actual + sumar))) : fijo;
+        resultado = porcentaje;
 
         if (!excepcion) {
 
             if (r.horaSalida) throw errorYaSalio(r, "avance");
 
             const esperado = cambios.esperado;
-            if (esperado !== undefined && esperado !== null && Number(esperado) !== actual) {
+            if (sumar === null && esperado !== undefined && esperado !== null && Number(esperado) !== actual) {
                 throw errorConflictoAvance(actual, Number(esperado));
             }
 
@@ -1147,6 +1154,9 @@ export async function actualizarAvance(id, cambios, operador, opciones) {
             historial: arrayUnion(entrada)
         });
     });
+
+    // El porcentaje que quedó guardado.
+    return resultado;
 }
 
 

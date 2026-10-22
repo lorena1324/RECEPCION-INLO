@@ -1889,8 +1889,12 @@ async function incrementarAvance(id, delta) {
   try {
     // `esperado` es lo que esta pantalla vio: si otro usuario lo movió, se rechaza (no se pisa).
     // En J3 facturación llena el avance de una vez: sin los topes de velocidad
-    // (máx. por clic y por ventana de tiempo) que frenan la carga por tandas.
-    await actualizarAvance(id, { avanceTipo, porcentaje: nuevoPct, esperado: actual }, perfilActual.nombre, { sinTopes: firma() });
+    // (máx. por clic y por ventana de tiempo) y sumando sobre el valor REAL
+    // guardado, así los clics seguidos no chocan con la pantalla atrasada
+    // ("Otro usuario ya cambió este avance"). Los demás, como siempre.
+    const guardado = firma()
+      ? await actualizarAvance(id, { avanceTipo, sumar: delta }, perfilActual.nombre, { sinTopes: true })
+      : await actualizarAvance(id, { avanceTipo, porcentaje: nuevoPct, esperado: actual }, perfilActual.nombre);
 
     // "Ambos": el descargue siempre va primero. Al llegar al 100%
     // se pasa solo a Cargue — el supervisor no tiene que elegir
@@ -1898,7 +1902,7 @@ async function incrementarAvance(id, delta) {
     // pendiente (porque el operario le agregó el descargue después
     // de que ya había empezado a cargar), retoma justo ahí en vez
     // de reiniciar en 0%.
-    if (rec.tipo === "Ambos" && avanceTipo === "Descargue" && nuevoPct >= 100) {
+    if (rec.tipo === "Ambos" && avanceTipo === "Descargue" && (guardado ?? nuevoPct) >= 100) {
       await avanzarAFaseCargue(id, { porcentajeInicial: rec.avanceCarguePendiente || 0 }, perfilActual.nombre);
     }
   } catch (error) {
