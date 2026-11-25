@@ -516,7 +516,7 @@ function extrasDeMuelle(r) {
 
 function accionesDePatio(r) {
     return extrasDeMuelle(r) +
-           '<button class="btn btn-sm btn-primary" data-editar=""' + r.id + '">Mover</button>' +
+           '<button class="btn btn-sm btn-primary" data-editar="' + r.id + '">Mover</button>' +
            '<button class="btn btn-sm" data-observacion="' + r.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
            '<button class="btn btn-sm" data-detalle="' + r.id + '"><i class="ti ti-info-circle"></i> Detalle</button>';
 }
