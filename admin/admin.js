@@ -136,6 +136,7 @@ import { iniciarAnimaciones } from "../shared/components/animaciones.js";
 import { crearTableroMuelles3D as crearTableroMuelles } from "../shared/components/tableroMuelles3D.js";
 import { bloqueSinCabezote, alClicSinCabezote } from "../shared/components/sinCabezote.js";
 import { crearRegistroActividad } from "../shared/components/registroActividad.js";
+import { conXLSX } from "../shared/utils/xlsx.js";
 
 
 /* =========================================================
@@ -4197,9 +4198,9 @@ function iniciarPagina(perfil) {
     cargarConfiguracion();
 
     // Exportar
-    document.getElementById('btn-export-todos').addEventListener('click', exportarTodos);
-    document.getElementById('btn-export-hoy').addEventListener('click', exportarHoy);
-    document.getElementById('btn-export-rango').addEventListener('click', exportarRango);
+    document.getElementById('btn-export-todos').addEventListener('click', function () { conXLSX(exportarTodos); });
+    document.getElementById('btn-export-hoy').addEventListener('click', function () { conXLSX(exportarHoy); });
+    document.getElementById('btn-export-rango').addEventListener('click', function () { conXLSX(exportarRango); });
 
     // Filtro global de canal, el mismo que tienen supervisor y cliente.
     document.getElementById('filtro-canal').addEventListener('change', function (e) {

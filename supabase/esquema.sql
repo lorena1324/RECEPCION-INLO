@@ -160,30 +160,38 @@ alter table public.config         enable row level security;
 alter table public.config_privado enable row level security;
 
 -- Cada quien lee su propio perfil (lo necesita el login); el administrador, todos.
+--
+-- RENDIMIENTO: las funciones van dentro de (select …). Así Postgres
+-- las calcula UNA vez por consulta y no una vez por fila: con el
+-- historial de una bodega (miles de vehículos) eran miles de lecturas
+-- de `usuarios` cada vez que alguien abría un panel. Comparar contra
+-- la columna `operacion` además deja usar su índice.
 drop policy if exists usuarios_leer on public.usuarios;
 create policy usuarios_leer on public.usuarios for select to authenticated
-    using (id = auth.uid() or public.es_admin());
+    using (id = (select auth.uid()) or (select public.es_admin()));
 
 drop policy if exists vehiculos_leer on public.vehiculos;
 create policy vehiculos_leer on public.vehiculos for select to authenticated
-    using (public.es_admin() or public.en_su_operacion(operacion));
+    using ((select public.es_admin()) or operacion = (select public.mi_operacion()));
 
 drop policy if exists placas_leer on public.placas_activas;
 create policy placas_leer on public.placas_activas for select to authenticated
-    using (public.es_admin() or public.en_su_operacion(split_part(id, '_', 1)));
+    using ((select public.es_admin()) or split_part(id, '_', 1) = (select public.mi_operacion()));
 
 -- El dinero: ni el operario ni el cliente.
 drop policy if exists cobros_leer on public.cobros;
 create policy cobros_leer on public.cobros for select to authenticated
-    using (public.es_admin() or (public.mi_rol() in ('supervisor', 'facturacion') and public.en_su_operacion(operacion)));
+    using ((select public.es_admin())
+           or ((select public.mi_rol()) in ('supervisor', 'facturacion') and operacion = (select public.mi_operacion())));
 
 drop policy if exists config_leer on public.config;
 create policy config_leer on public.config for select to authenticated
-    using (public.es_admin() or public.en_su_operacion(id));
+    using ((select public.es_admin()) or id = (select public.mi_operacion()));
 
 drop policy if exists config_privado_leer on public.config_privado;
 create policy config_privado_leer on public.config_privado for select to authenticated
-    using (public.es_admin() or (public.mi_rol() in ('supervisor', 'facturacion') and public.en_su_operacion(operacion)));
+    using ((select public.es_admin())
+           or ((select public.mi_rol()) in ('supervisor', 'facturacion') and operacion = (select public.mi_operacion())));
 
 -- Ninguna tabla tiene políticas de insert/update/delete: escribir
 -- directo queda prohibido. Solo se escribe con aplicar_escrituras().
@@ -253,8 +261,11 @@ declare
     --   recepción   = operario que además DA LA SALIDA;
     --   operario    = sin salida;
     --   facturación = firma dinero, cancelaciones y autorizaciones, sin salida;
-    --   supervisor  = avance, tipología, modalidad y novedades.
+    --   supervisor  = avance, modalidad y novedades.
     -- En las demás bodegas el operario da la salida y el supervisor firma.
+    --
+    -- LA TIPOLOGÍA la asigna SOLO RECEPCIÓN (en todas las bodegas) y el
+    -- administrador. Ni el operario, ni el supervisor, ni facturación.
     bodegas_facturacion constant text[] := array['J3'];
     firma      boolean;
     porteria   boolean := rol in ('operario', 'recepcion');
@@ -310,7 +321,12 @@ begin
     if tabla = 'vehiculos' then
 
         -- CREAR: operario de la bodega, o supervisor solo para citas canceladas.
+        -- Con tipología solo si la pone recepción.
         if crear then
+            if not admin and rol <> 'recepcion'
+               and (coalesce(despues ->> 'tipologia', '') <> '' or coalesce(despues ->> 'tipologiaNombre', '') <> '') then
+                return false;
+            end if;
             return admin
                 or (entra_porteria and despues ->> 'operacion' = op)
                 or (firma and despues ->> 'operacion' = op
@@ -356,6 +372,11 @@ begin
             return false;
         end if;
 
+        -- La tipología: solo recepción.
+        if rol <> 'recepcion' and cambiadas && array['tipologia', 'tipologiaNombre'] then
+            return false;
+        end if;
+
         -- Portería (operario / recepción): todo menos lo que firma el
         -- supervisor. La salida solo si `da_salida`.
         if porteria then
@@ -391,7 +412,7 @@ begin
                     'pickingDescargue', 'auditoriaDescargue',
                     'cancelado', 'cancelacion', 'horaSalida', 'operadorSalida',
                     'obsSalida', 'anulacionSalida', 'obsUbicacion',
-                    'modalidad', 'tipologia', 'tipologiaNombre',
+                    'modalidad',
                     'sinCabezote'
                 ];
         end if;

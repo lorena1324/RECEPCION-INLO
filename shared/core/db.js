@@ -134,9 +134,16 @@ export function query(col, ...filtros) {
     return { ...col, tipo: "consulta", filtros: col.filtros.concat(filtros) };
 }
 
-function aplicarFiltros(consulta, filtros) {
+// Tablas con la columna `operacion` (generada de datos->>'operacion' e
+// indexada): filtrar por ella usa el índice; por datos->>operacion,
+// Postgres recorría la tabla entera.
+const CON_COLUMNA_OPERACION = new Set(["vehiculos", "cobros", "placas_activas"]);
+
+function aplicarFiltros(consulta, filtros, tabla) {
     for (const f of filtros) {
-        const columna = "datos->>" + f.campo;
+        const columna = f.campo === "operacion" && CON_COLUMNA_OPERACION.has(tabla)
+            ? "operacion"
+            : "datos->>" + f.campo;
         consulta = f.valor === null || f.valor === undefined
             ? consulta.is(columna, null)
             : consulta.eq(columna, String(f.valor));
@@ -208,24 +215,54 @@ export async function getDoc(ref) {
     return instantanea(ref, fila);
 }
 
-// Supabase entrega máximo 1000 filas por petición: se pide por páginas.
-async function leerFilas(col) {
+/*
+    Supabase entrega máximo 1000 filas por petición: se pide por páginas.
+    La primera trae también cuántas hay en total, y las demás se piden
+    TODAS A LA VEZ: con el historial de una bodega (varios miles de
+    vehículos) esperarlas una tras otra era lo que más tardaba al abrir.
 
-    const PAGINA = 1000;
-    const filas = [];
+    `desdeFecha` (opcional) trae solo lo que cambió desde esa hora del
+    servidor (columna actualizado_en).
+*/
+const PAGINA = 1000;
 
-    for (let desde = 0; ; desde += PAGINA) {
+async function leerFilas(col, desdeFecha) {
 
-        let consulta = supabase.from(col.tabla).select("id, datos, version");
+    const pedir = (desde, contar) => {
+        let consulta = supabase.from(col.tabla).select("id, datos, version, actualizado_en", contar ? { count: "exact" } : undefined);
         if (col.prefijo) consulta = consulta.like("id", col.prefijo + "%");
-        consulta = aplicarFiltros(consulta, col.filtros).order("id").range(desde, desde + PAGINA - 1);
+        if (desdeFecha) consulta = consulta.gte("actualizado_en", desdeFecha);
+        return aplicarFiltros(consulta, col.filtros, col.tabla).order("id").range(desde, desde + PAGINA - 1);
+    };
 
-        const { data, error } = await consulta;
-        if (error) throw traducirError(error);
+    const primera = await pedir(0, true);
+    if (primera.error) throw traducirError(primera.error);
 
-        filas.push(...data);
-        if (data.length < PAGINA) return filas;
+    const filas = primera.data.slice();
+    const total = primera.count;
+
+    if (primera.data.length === PAGINA && total == null) {
+        // Sin el total no se sabe cuántas páginas hay: una tras otra, como antes.
+        for (let desde = PAGINA; ; desde += PAGINA) {
+            const { data, error } = await pedir(desde, false);
+            if (error) throw traducirError(error);
+            filas.push(...data);
+            if (data.length < PAGINA) break;
+        }
+    } else if (primera.data.length === PAGINA) {
+        const resto = [];
+        for (let desde = PAGINA; desde < total; desde += PAGINA) resto.push(pedir(desde, false));
+        for (const { data, error } of await Promise.all(resto)) {
+            if (error) throw traducirError(error);
+            filas.push(...data);
+        }
     }
+
+    // Lo que entre o cambie mientras se lee lo trae el tiempo real (ver
+    // onSnapshot). Una fila que se corrió de página podría venir dos veces.
+    const unicas = new Map();
+    for (const f of filas) unicas.set(f.id, f);
+    return Array.from(unicas.values());
 }
 
 export async function getDocs(col) {
@@ -325,8 +362,9 @@ export async function runTransaction(_db, fn) {
    TIEMPO REAL (onSnapshot)
 
    1. Se abre el canal de Realtime de la tabla.
-   2. Se lee todo lo que pide la consulta, y otra vez cada vez que
-      el canal (re)conecta, por si se perdió algo mientras tanto.
+   2. Se lee todo lo que pide la consulta. Cuando el canal conecta se
+      piden solo los cambios de ese rato; si se RECONECTA, todo otra
+      vez, por si se perdió algo durante el corte.
    3. Cada cambio que llega se aplica a la copia local y se avisa.
    ========================================================= */
 
@@ -366,20 +404,60 @@ export function onSnapshot(objetivo, alCambiar, alFallar) {
         emitir();
     }
 
+    // La hora (del SERVIDOR, no la del equipo) del último cambio que trajo
+    // la carga completa. Con ella el canal, al conectarse, pide solo lo
+    // que cambió después en vez de volver a bajar toda la tabla.
+    let marca = null;
+    let cargaInicial = null;
+    let conexiones = 0;
+
+    function mezclar(nuevas) {
+        for (const f of nuevas) {
+            const actual = filas.get(f.id);
+            if (!actual || actual.version <= f.version) filas.set(f.id, f);
+            const t = f.actualizado_en ? Date.parse(f.actualizado_en) : NaN;
+            if (!Number.isNaN(t) && (marca === null || t > marca)) marca = t;
+        }
+    }
+
     async function cargarTodo() {
         try {
             const nuevas = esDoc ? [await leerFila(objetivo)].filter(Boolean) : await leerFilas(col);
-            const vistas = new Set();
-            for (const f of nuevas) {
-                vistas.add(f.id);
-                const actual = filas.get(f.id);
-                if (!actual || actual.version <= f.version) filas.set(f.id, f);
-            }
+            const vistas = new Set(nuevas.map((f) => f.id));
+            mezclar(nuevas);
             for (const id of Array.from(filas.keys())) if (!vistas.has(id)) filas.delete(id);
+            emitir();
+            return true;
+        } catch (error) {
+            if (activo && alFallar) alFallar(error);
+            return false;
+        }
+    }
+
+    // Lo que cambió desde la carga completa, con 2 minutos de margen por
+    // las escrituras que se confirmaron mientras se leía.
+    async function cargarCambios() {
+        try {
+            const desde = new Date(marca - 2 * 60 * 1000).toISOString();
+            mezclar(await leerFilas(col, desde));
             emitir();
         } catch (error) {
             if (activo && alFallar) alFallar(error);
         }
+    }
+
+    // Al conectarse el canal: la primera vez, si la carga completa salió
+    // bien, basta con los cambios. Al RECONECTARSE se lee todo otra vez,
+    // porque durante el corte pudieron borrar vehículos y eso no se ve
+    // en los cambios.
+    async function alConectar() {
+        conexiones++;
+        if (esDoc || conexiones > 1) return cargarTodo();
+        const bien = await cargaInicial;
+        if (!activo) return;
+        // Sin marca (tabla vacía o sin fechas) se lee todo: es poco.
+        if (bien && marca !== null) return cargarCambios();
+        return cargarTodo();
     }
 
     // Realtime filtra por UNA columna: la operación si la consulta la trae, o el id del documento.
@@ -390,7 +468,7 @@ export function onSnapshot(objetivo, alCambiar, alFallar) {
 
     // Se lee de una vez, sin esperar al canal: si Realtime tarda o falla,
     // la pantalla igual muestra los datos (solo que sin actualizarse sola).
-    cargarTodo();
+    cargaInicial = cargarTodo();
 
     const canal = supabase.channel("inlo-" + objetivo.tabla + "-" + (++canales));
 
@@ -404,7 +482,7 @@ export function onSnapshot(objetivo, alCambiar, alFallar) {
             (p) => { if (p.old && filas.delete(p.old.id)) emitir(); })
         .subscribe(function (estado, error) {
             if (!activo) return;
-            if (estado === "SUBSCRIBED") cargarTodo();
+            if (estado === "SUBSCRIBED") alConectar();
             if (estado === "CHANNEL_ERROR" || estado === "TIMED_OUT") {
                 console.warn("Tiempo real de " + objetivo.tabla + ": " + estado + " (se reintenta solo)", error || "");
             }

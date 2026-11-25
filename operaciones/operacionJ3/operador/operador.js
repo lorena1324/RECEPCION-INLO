@@ -77,6 +77,8 @@ import { iniciarAnimaciones } from "../../../shared/components/animaciones.js";
 // vuelve solo si el equipo no tiene WebGL o el motor no carga.
 import { crearTableroMuelles3D as crearTableroMuelles } from "../../../shared/components/tableroMuelles3D.js";
 import { crearRegistroActividad } from "../../../shared/components/registroActividad.js";
+import { conXLSX } from "../../../shared/utils/xlsx.js";
+import { puedeAsignarTipologia, selectorTipologia, alCambiarTipologia, pintarFormularioTipologia, tipologiaDelFormulario, limpiarFormularioTipologia } from "../../../shared/components/tipologiaRecepcion.js";
 
 const OPERACION = "J3";
 const RUTA_LOGIN = "../../../index.html";
@@ -130,6 +132,8 @@ function componentes() {
            botón, que es un blanco más fácil de acertar con prisa. */
         tableroMuelles = crearTableroMuelles(document.getElementById('muelles-grid'), {
             acciones: accionesDeMuelle,
+            // Recepción asigna la tipología desde la tarjeta del muelle.
+            extras: extrasDeMuelle,
             onSeleccion: openModalDetalle,
             // La fila del patio también va en el tablero 3D, con los
             // mismos botones de la tabla de patio.
@@ -503,8 +507,16 @@ function renderDashboard() {
    portería se mueve y se despacha, y en otros roles no. */
 /* Los botones de un vehículo en patio: los mismos de su fila en la
    tabla de patio. Los usa la ficha del patio en el tablero 3D. */
+/* La tipología la asigna RECEPCIÓN (ver tipologiaRecepcion.js): el
+   desplegable va en la tarjeta del muelle y en la ficha del patio,
+   y solo lo ve quien la puede asignar. */
+function extrasDeMuelle(r) {
+    return puedeAsignarTipologia(perfilActual) ? selectorTipologia(r, configBodega) : '';
+}
+
 function accionesDePatio(r) {
-    return '<button class="btn btn-sm btn-primary" data-editar="' + r.id + '">Mover</button>' +
+    return extrasDeMuelle(r) +
+           '<button class="btn btn-sm btn-primary" data-editar=""' + r.id + '">Mover</button>' +
            '<button class="btn btn-sm" data-observacion="' + r.id + '" title="Agregar observación"><i class="ti ti-message-plus"></i></button>' +
            '<button class="btn btn-sm" data-detalle="' + r.id + '"><i class="ti ti-info-circle"></i> Detalle</button>';
 }
@@ -900,24 +912,21 @@ function escapar(s) {
 
 
 /* =========================================================
-   LA TIPOLOGÍA YA NO SE CAPTURA AQUÍ
+   LA TIPOLOGÍA LA ASIGNA RECEPCIÓN
 
-   Aquí vivían el desplegable de tipología del formulario de
-   entrada y el modal que bloqueaba el registro cuando faltaba.
-   Los dos se quitaron: la tipología la asigna el SUPERVISOR, que
-   es quien ve el vehículo abierto en el muelle. En la fila de
-   entrada, con el camión cerrado y la portería de afán, la
-   elección se hacía a ojo — y de ella cuelgan la tarifa y las
-   metas de tiempo contra las que después se mide la bodega.
+   Solo el rol recepción (y el administrador) la elige: en el
+   formulario de entrada o después, desde la tarjeta del muelle o
+   la ficha del patio. Al resto de roles (operario, supervisor,
+   facturación) les sale el aviso. Ver tipologiaRecepcion.js; la
+   base de datos aplica la misma regla (puede_escribir).
 
-   El dato no se volvió opcional: cambió de momento y de
-   responsable. Sin tipología el vehículo NO PUEDE SALIR, y la
-   regla vive en diagnosticoSalida() (vehiculos.js), que es la
-   misma puerta por la que ya pasaban el avance y la autorización
-   del supervisor.
+   Sin tipología el vehículo NO PUEDE SALIR: la regla vive en
+   diagnosticoSalida() (vehiculos.js).
    ========================================================= */
 
 function limpiarForm() {
+
+    limpiarFormularioTipologia();
 
     ['f-conductor', 'f-placa', 'f-ubicacion', 'f-numeroMuelle', 'f-cedula', 'f-obs', 'f-programado', 'f-servicio-tipo']
         .forEach(function (id) { document.getElementById(id).value = ''; });
@@ -987,6 +996,9 @@ async function registrarEntrada() {
     var activo = registros.find(function (r) { return r.placa === placa && !r.horaSalida; });
     if (activo) { toast('El vehículo ' + placa + ' ya está activo en ' + getDestino(activo), 'amber', 'ti-alert-triangle'); return; }
 
+    // Recepción puede dejarla asignada desde la entrada; los demás la dejan vacía.
+    var tipologiaElegida = tipologiaDelFormulario(configBodega, perfilActual);
+
     var datos = {
         conductor: conductor, placa: placa, horaEntrada: hora,
         programado: programado, horaProgramacion: horaProgramacion,
@@ -994,13 +1006,13 @@ async function registrarEntrada() {
         destino: computeDestino(ubicacion, numeroMuelle, 'A'),
         tipo: tipo, cedula: cedula, obs: obs,
         servicioTipo: servicioTipo || 'Normal', servicioEmpresa: servicioEmpresa,
-        // Nace sin tipología: la asigna el supervisor. Los dos campos
+        // La tipología la asigna recepción (aquí o después). Los dos campos
         // van igual, vacíos, porque el resto de la aplicación los lee
         // —tablas, ficha, exportación— y un registro sin la clave
         // definida obligaría a cada lector a distinguir entre "falta
         // el dato" y "falta el campo".
-        tipologia: '',
-        tipologiaNombre: ''
+        tipologia: tipologiaElegida.tipologia,
+        tipologiaNombre: tipologiaElegida.tipologiaNombre
     };
 
     /* El botón se apaga mientras Firestore guarda.
@@ -1483,6 +1495,7 @@ function iniciarPagina(perfil) {
             return;
         }
         configBodega = config;
+        pintarFormularioTipologia(configBodega, perfilActual);
 
         // El tablero de muelles y el corte del turno salen de aquí.
         // Un cambio del administrador reorganiza la portería sin que
@@ -1525,13 +1538,19 @@ function iniciarPagina(perfil) {
 
     // Modales
     document.getElementById('e-ubicacion').addEventListener('change', cambiarUbicacionEdit);
+    // El desplegable de tipología de las tarjetas (solo recepción).
+    document.addEventListener('change', function (e) {
+        alCambiarTipologia(e, configBodega, perfilActual, function (texto, tipo) {
+            toast(texto, tipo, tipo === 'red' ? 'ti-alert-circle' : 'ti-check');
+        });
+    });
     document.getElementById('btn-confirmar-salida').addEventListener('click', confirmarSalida);
     document.getElementById('btn-confirmar-edicion').addEventListener('click', confirmarEdicionUbicacion);
     document.getElementById('btn-confirmar-observacion').addEventListener('click', confirmarObservacion);
 
     // Exportar
-    document.getElementById('btn-export-todos').addEventListener('click', exportarTodos);
-    document.getElementById('btn-export-hoy').addEventListener('click', exportarHoy);
+    document.getElementById('btn-export-todos').addEventListener('click', function () { conXLSX(exportarTodos); });
+    document.getElementById('btn-export-hoy').addEventListener('click', function () { conXLSX(exportarHoy); });
 
     // Sidebar móvil
     document.getElementById('btn-menu-toggle').addEventListener('click', toggleSidebar);

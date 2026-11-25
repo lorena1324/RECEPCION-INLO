@@ -72,6 +72,7 @@ import { iniciarAnimaciones } from "../../../shared/components/animaciones.js";
 import { crearTableroMuelles3D as crearTableroMuelles } from "../../../shared/components/tableroMuelles3D.js";
 import { crearRegistroActividad } from "../../../shared/components/registroActividad.js";
 import { bloqueSinCabezote } from "../../../shared/components/sinCabezote.js";
+import { conXLSX } from "../../../shared/utils/xlsx.js";
 const OPERACION = "B9";
 const RUTA_LOGIN = "../../../index.html";
 
@@ -847,7 +848,7 @@ function renderEstadisticas() {
    ========================================================= */
 
 function iniciarExportar() {
-  document.getElementById("btn-exportar").addEventListener("click", exportar);
+  document.getElementById("btn-exportar").addEventListener("click", function () { conXLSX(exportar); });
 }
 
 function exportar() {

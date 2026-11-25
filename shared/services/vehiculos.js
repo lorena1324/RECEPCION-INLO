@@ -1817,7 +1817,7 @@ function diagnosticoOperacion(r, config) {
             puedeSalir: false, nivel: 'bloqueo',
             titulo: 'Falta la tipología del vehículo',
             detalle: 'Este vehículo no tiene tipología asignada. Sin ella no hay meta de tiempo contra la cual medir su operación ni tarifa que cobrarle, y una vez que salga ya no se le puede asignar.',
-            accion: 'Pídele al supervisor que le asigne la tipología desde su panel.',
+            accion: 'Pídele a recepción que le asigne la tipología.',
             porcentaje: pct, minimo: null, faltante: null
         };
     }

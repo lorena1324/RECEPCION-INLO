@@ -4,14 +4,9 @@
 
    Extraído de bodega-J4.html, sin cambios de lógica.
 
-   Requiere que la página que lo use incluya la librería SheetJS
-   por <script>, igual que ya hacías:
-
-       <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
-   Este módulo asume que `window.XLSX` ya existe cuando se
-   llama a exportarExcel() — por eso el <script> de arriba debe
-   ir ANTES del <script type="module"> de la página.
+   Usa la librería SheetJS (`window.XLSX`). Ya no va como <script>
+   en las páginas: la descarga shared/utils/xlsx.js la primera vez
+   que alguien exporta, y los botones llaman con conXLSX(...).
    ========================================================= */
 
 import { fmtDt, formatDuration, duracion, today } from "./tiempos.js";

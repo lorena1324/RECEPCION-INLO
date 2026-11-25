@@ -110,6 +110,7 @@ import { iniciarAnimaciones } from "../../../shared/components/animaciones.js";
 import { crearTableroMuelles3D as crearTableroMuelles } from "../../../shared/components/tableroMuelles3D.js";
 import { crearRegistroActividad } from "../../../shared/components/registroActividad.js";
 import { bloqueSinCabezote, alClicSinCabezote } from "../../../shared/components/sinCabezote.js";
+import { conXLSX } from "../../../shared/utils/xlsx.js";
 const OPERACION = "J4";
 const RUTA_LOGIN = "../../../index.html";
 
@@ -477,7 +478,9 @@ function bloqueNovedadAccion(r) {
 
 /* ── LA TIPOLOGÍA DEL VEHÍCULO ──────────────────────────────
 
-   La asigna el supervisor, que es quien ve el camión abierto en
+   HOY LA ASIGNA RECEPCIÓN (ver tipologiaRecepcion.js): aquí solo se
+   muestra. Lo de abajo es la historia: la asignaba el supervisor,
+   que es quien ve el camión abierto en
    el muelle. Y no es un dato de papeleo: de ella cuelgan la
    tarifa que se cobra y la meta de tiempo contra la que se mide
    el muelle, y mientras falte el vehículo NO PUEDE SALIR.
@@ -512,11 +515,12 @@ function selectorTipologiaMuelle(r) {
   if (r.horaSalida) return "";
   if (!tipologiasDeLaBodega().length) return "";
 
-  const falta = !r.tipologia;
+  // La tipología la asigna RECEPCIÓN (ver tipologiaRecepcion.js): aquí
+  // solo se avisa cuando falta. Si ya la tiene, la tarjeta la enseña arriba.
+  if (r.tipologia) return "";
 
-  return `<div class="tm-clasificar${falta ? " falta" : ""}">
-            <label>${falta ? "Falta la tipología — no puede salir" : "Tipología"}</label>
-            <select data-set-tipologia="${escapar(r.id)}">${opcionesTipologia(r)}</select>
+  return `<div class="tm-clasificar falta">
+            <label>Falta la tipología — la asigna recepción</label>
           </div>`;
 }
 
@@ -528,8 +532,11 @@ function bloqueClasificacion(r) {
 
   // Sin tipologías configuradas no hay nada que elegir. Se dice en
   // vez de mostrar un desplegable vacío que parecería roto.
+  // Solo lectura: la tipología la asigna recepción.
+  const actual = buscarTipologia(configBodega, r.tipologia);
+  const nombre = (actual && actual.nombre) || r.tipologiaNombre || "";
   const selector = lista.length
-    ? `<select data-set-tipologia="${escapar(r.id)}">${opcionesTipologia(r)}</select>`
+    ? `<strong>${escapar(nombre || "Sin asignar")}</strong> <span class="texto-ayuda">— la asigna recepción</span>`
     : '<span class="texto-ayuda">El administrador todavía no ha configurado las tipologías de esta bodega.</span>';
 
   const falta = !r.tipologia && lista.length
@@ -1550,6 +1557,9 @@ function abrirModalEditar(id) {
 function pintarSelectTipologia(seleccionada) {
 
   const sel = document.getElementById("ed-tipologia");
+  // Solo lectura: la tipología la asigna recepción.
+  sel.disabled = true;
+  sel.title = "La tipología la asigna recepción";
   const lista = (configBodega && configBodega.tipologias) || [];
 
   let html = '<option value="">Sin tipología</option>';
@@ -1609,8 +1619,7 @@ async function confirmarCorreccion() {
   // La cita se guarda con la fecha de la ENTRADA, no la de hoy: es
   // contra la llegada que se mide el cumplimiento, y estamparle la
   // fecha del día en que se corrige daría un desfase de días.
-  const tipologiaId = document.getElementById("ed-tipologia").value;
-  const tipologia = buscarTipologia(configBodega, tipologiaId);
+  // La tipología no va en los cambios: la asigna recepción.
 
   const cambios = {
     placa: placa,
@@ -1618,8 +1627,6 @@ async function confirmarCorreccion() {
     cedula: document.getElementById("ed-cedula").value.trim(),
     tipo: document.getElementById("ed-tipo").value,
     canal: document.getElementById("ed-canal").value,
-    tipologia: tipologiaId,
-    tipologiaNombre: tipologia ? tipologia.nombre : "",
     horaEntrada: horaEntrada,
     programado: programado,
     horaProgramacion: programado && hayCita ? horaEntrada.slice(0, 10) + "T" + citaHora + ":" + citaMin : "",
@@ -2401,7 +2408,7 @@ function renderEstadisticas() {
    ========================================================= */
 
 function iniciarExportar() {
-  document.getElementById("btn-exportar").addEventListener("click", exportar);
+  document.getElementById("btn-exportar").addEventListener("click", function () { conXLSX(exportar); });
 }
 
 function exportar() {

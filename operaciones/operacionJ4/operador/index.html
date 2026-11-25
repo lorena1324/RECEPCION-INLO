@@ -313,25 +313,24 @@
                              configuración de la bodega (config/J4), en
                              vivo: si el administrador agrega una
                              tipología, aparece aquí sin recargar. -->
-                        <!-- LA TIPOLOGÍA YA NO SE PIDE AQUÍ
+                        <!-- LA TIPOLOGÍA LA ASIGNA RECEPCIÓN
 
-                             La asigna el SUPERVISOR, que es quien ve el
-                             vehículo abierto en el muelle. En la fila de
-                             entrada, con el camión cerrado y la portería
-                             de afán, la elección se hacía a ojo — y de
-                             ella cuelgan la tarifa y las metas de tiempo.
-
-                             El dato sigue siendo obligatorio, solo que se
-                             exige más tarde: sin tipología el vehículo NO
-                             puede salir (ver diagnosticoSalida() en
-                             shared/services/vehiculos.js). No se pierde;
-                             se le pide a quien puede acertar. -->
-                        <div class="form-group full">
+                             Solo el rol recepción (y el administrador) la
+                             elige; a los demás les sale el aviso. Las
+                             opciones las llena tipologiaRecepcion.js desde
+                             la configuración de la bodega, en vivo. Sin
+                             tipología el vehículo NO puede salir (ver
+                             diagnosticoSalida() en shared/services/vehiculos.js). -->
+                        <div class="form-group full" id="grupo-tipologia" style="display:none;">
+                            <label for="f-tipologia">Tipología</label>
+                            <select id="f-tipologia"></select>
+                        </div>
+                        <div class="form-group full" id="aviso-tipologia">
                             <div class="local-banner" style="margin:0;">
                                 <i class="ti ti-user-shield"></i>
                                 <div>
-                                    <strong>La tipología la asigna el supervisor</strong>
-                                    <span>El vehículo no podrá salir hasta que se la asigne desde su panel.</span>
+                                    <strong>La tipología la asigna recepción</strong>
+                                    <span>El vehículo no podrá salir hasta que recepción se la asigne.</span>
                                 </div>
                             </div>
                         </div>
@@ -445,7 +444,7 @@
 
 <!-- Aquí vivía el modal que bloqueaba la ENTRADA por falta de
      tipología. Se quitó junto con el campo del formulario: la
-     tipología pasó a ser del supervisor, así que la portería ya no
+     tipología pasó a ser de recepción (ver tipologiaRecepcion.js), así que la portería ya no
      tiene nada que llenar ni nada que se le pueda exigir.
 
      La exigencia no desapareció, se movió al otro extremo de la
@@ -509,7 +508,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script type="module" src="operador.js"></script>
 
 </body>

@@ -25,6 +25,7 @@
 
 import { getDestino, getLocationDurations, canalDe } from "../services/eventos.js";
 import { formatDuration } from "../utils/tiempos.js";
+import { conXLSX } from "../utils/xlsx.js";
 
 
 /* =========================================================
@@ -297,7 +298,7 @@ export function abrirDetalle(datos) {
             "</tbody></table></div>" +
             '<div class="modal-footer">' +
                 '<span class="kpi-modal-cuenta"></span>' +
-                (window.XLSX ? '<button type="button" class="btn btn-sm kpi-exportar"><i class="ti ti-file-spreadsheet"></i> Exportar</button>' : "") +
+                '<button type="button" class="btn btn-sm kpi-exportar"><i class="ti ti-file-spreadsheet"></i> Exportar</button>' +
                 '<button type="button" class="btn btn-sm kpi-cerrar">Cerrar</button>' +
             "</div>" +
         "</div>";
@@ -541,7 +542,7 @@ function hacerInteractiva(tabla, { barras, herramientas, nombre }) {
         }
     }
 
-    if (herramientas && window.XLSX) {
+    if (herramientas) {
         const barra = document.createElement("div");
         barra.className = "t-herramientas";
         barra.innerHTML = '<button type="button"><i class="ti ti-file-spreadsheet"></i> Exportar</button>';
@@ -551,8 +552,12 @@ function hacerInteractiva(tabla, { barras, herramientas, nombre }) {
     }
 }
 
+// La librería de Excel se baja la primera vez que alguien exporta (ver xlsx.js).
 function exportarTabla(tabla, nombre) {
-    if (!window.XLSX) return;
+    conXLSX(function () { exportarTablaYa(tabla, nombre); });
+}
+
+function exportarTablaYa(tabla, nombre) {
     const copia = tabla.cloneNode(true);
     copia.querySelectorAll(".t-flecha").forEach((f) => f.remove());
     copia.querySelectorAll("tr[hidden]").forEach((tr) => tr.remove());
