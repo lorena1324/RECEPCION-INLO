@@ -50,6 +50,36 @@ export function colorFase(fase) {
 }
 
 /*
+    Canal del vehículo (MQ, 3PD, Otro). Colores aparte de los de la
+    fase (naranja / azul) y del semáforo (verde / ámbar / rojo) para
+    que el canal no se confunda con ninguno de los dos.
+*/
+export const COLOR_CANAL = {
+    MQ: "#9b6bff",
+    "3PD": "#e052b8",
+    Otro: "#8a94a6"
+};
+
+export function colorCanal(canal) {
+    return COLOR_CANAL[canal] ?? COLOR_CANAL.Otro;
+}
+
+// Insignia con el nombre del canal. Nada si el registro no lo trae.
+export function InsigniaCanal({ canal, className = "" }) {
+    if (!canal) return null;
+    const color = colorCanal(canal);
+    return (
+        <span
+            className={`inline-flex shrink-0 items-center rounded px-1.5 font-extrabold leading-tight tracking-wide ${className}`}
+            style={{ background: color, color: "#ffffff" }}
+            title={`Canal ${canal}`}
+        >
+            {canal}
+        </span>
+    );
+}
+
+/*
     Color y aviso de la tarjeta de un muelle.
 
     Sin `semaforo` (laboratorio) la tarjeta va del color de la fase.
@@ -319,10 +349,11 @@ function VehiculoEnEscena({ vehiculo, destino, saliendo, animarLlegada, total, v
                     <Html position={[0, alturaPiso + carga.alto + 0.9, carga.largo / 2]} center distanceFactor={(compacta ? 30 : 22) * escala} zIndexRange={[8, 0]}>
                         <button
                             onClick={onSeleccionar}
-                            className="select-none whitespace-nowrap rounded-lg border-2 bg-[#0d131c]/95 px-2.5 py-1 text-[14px] font-extrabold shadow-lg"
+                            className="flex select-none items-center gap-1.5 whitespace-nowrap rounded-lg border-2 bg-[#0d131c]/95 px-2.5 py-1 text-[14px] font-extrabold shadow-lg"
                             style={{ borderColor: etiqueta.color, color: TEXTO }}
                         >
-                            #{etiqueta.puesto} · {etiqueta.texto}
+                            <InsigniaCanal canal={vehiculo.canal} className="text-[12px]" />
+                            <span>#{etiqueta.puesto} · {etiqueta.texto}</span>
                         </button>
                     </Html>
                 </CuandoConectado>
@@ -352,8 +383,9 @@ function TarjetaMuelle({ muelle, x, seleccionado, compacta, escala, semaforo, on
                     className="w-24 select-none rounded-lg border-2 bg-[#0d131c]/90 px-2 py-1 text-left text-white shadow-lg transition-transform hover:scale-110"
                     style={{ borderColor: borde, opacity: opacidad, transform: seleccionado ? "scale(1.15)" : undefined }}
                 >
-                    <div className="flex items-baseline justify-between text-xs">
+                    <div className="flex items-center justify-between gap-1 text-xs">
                         <span className="text-sm font-extrabold">M{muelle.numero}</span>
+                        {v && <InsigniaCanal canal={v.canal} className="text-[10px]" />}
                         <span className="font-bold">{v ? `${v.porcentaje}%` : "Libre"}</span>
                     </div>
                     {v && (
@@ -387,8 +419,11 @@ function TarjetaMuelle({ muelle, x, seleccionado, compacta, escala, semaforo, on
 
                 {v && (
                     <>
-                        <div className="mt-1.5 flex items-baseline justify-between text-[14px] font-semibold">
-                            <span>{v.fase}</span>
+                        <div className="mt-1.5 flex items-center justify-between gap-2 text-[14px] font-semibold">
+                            <span className="flex items-center gap-1.5">
+                                <InsigniaCanal canal={v.canal} className="text-[12px]" />
+                                {v.fase}
+                            </span>
                             <span className="text-base font-extrabold">{v.porcentaje}%</span>
                         </div>
                         <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#2b394f]">
@@ -432,7 +467,10 @@ function FichaFrente({ muelle, x, compacta, escala, semaforo, onSeleccionar }) {
             >
                 <div className="flex items-baseline justify-between gap-2">
                     <span className={`font-extrabold tracking-wide ${compacta ? "text-[14px]" : "text-[19px]"}`}>{v.placa}</span>
-                    <span className={`rounded px-1.5 font-extrabold ${compacta ? "text-[10px]" : "text-[12px]"}`} style={{ background: "#2b394f", color: TEXTO }}>M{muelle.numero}</span>
+                    <span className="flex items-center gap-1">
+                        <InsigniaCanal canal={v.canal} className={compacta ? "text-[10px]" : "text-[12px]"} />
+                        <span className={`rounded px-1.5 font-extrabold ${compacta ? "text-[10px]" : "text-[12px]"}`} style={{ background: "#2b394f", color: TEXTO }}>M{muelle.numero}</span>
+                    </span>
                 </div>
 
                 {!compacta && v.conductor && <div className="mt-1 truncate text-[12px] font-semibold uppercase" style={{ color: TEXTO_SUAVE }}>{v.conductor}</div>}

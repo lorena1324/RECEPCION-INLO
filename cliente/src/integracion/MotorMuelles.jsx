@@ -124,11 +124,18 @@ export default function MotorMuelles({ almacen, acciones }) {
                     pausado={e.pausado}
                 />
 
-                {/* Columna izquierda: el resumen (expandido) y la fila
-                    del patio, que reemplaza a la tabla de patio de la
-                    página para que todo quede en un solo sitio. */}
-                <div style={zoom} className="pointer-events-none absolute bottom-3 left-3 top-3 z-20 flex flex-col items-start gap-2 [&>*]:pointer-events-auto">
-                    {e.expandido && <ResumenMuelles muelles={e.muelles} enPatio={e.patio.length} />}
+                {/* Arriba a la izquierda solo el resumen (expandido). */}
+                {e.expandido && (
+                    <div style={zoom} className="absolute left-3 top-3 z-20">
+                        <ResumenMuelles muelles={e.muelles} enPatio={e.patio.length} />
+                    </div>
+                )}
+
+                {/* Los cuadros de vehículos (patio y avance por muelle) van
+                    ABAJO: arriba dejarían tapada la fachada, con el letrero
+                    y las vallas de los logos. La fila del patio reemplaza a
+                    la tabla de patio de la página. */}
+                <div style={zoom} className={`pointer-events-none absolute bottom-3 left-3 z-20 flex flex-col justify-end ${e.expandido ? "top-24" : "top-3"} [&>*]:pointer-events-auto`}>
                     <ListaPatio
                         patio={e.patio}
                         seleccionado={e.seleccionadoPatio}
@@ -138,7 +145,7 @@ export default function MotorMuelles({ almacen, acciones }) {
                 </div>
 
                 {e.expandido && (
-                    <div style={zoom} className={`absolute top-3 z-20 ${e.hayFicha ? "right-[360px]" : "right-3"}`}>
+                    <div style={zoom} className={`absolute bottom-3 z-20 ${e.hayFicha ? "right-[360px]" : "right-3"}`}>
                         <AvancePorMuelle muelles={e.muelles} onSeleccionar={acciones.onSeleccionar} />
                     </div>
                 )}

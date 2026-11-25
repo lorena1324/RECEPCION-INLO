@@ -15,7 +15,7 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import { IconAlertTriangle, IconChevronDown, IconParking } from "@tabler/icons-react";
 
-import { COLOR_FASE, COLOR_NIVEL } from "../3d/TableroMuelles3D.jsx";
+import { COLOR_CANAL, COLOR_FASE, COLOR_NIVEL, InsigniaCanal } from "../3d/TableroMuelles3D.jsx";
 
 const vidrio = "rounded-2xl border border-borde bg-panel/88 shadow-xl backdrop-blur";
 
@@ -71,18 +71,29 @@ export function AvancePorMuelle({ muelles, onSeleccionar }) {
                 </div>
             </div>
 
+            {/* Leyenda de canales: el color de la insignia de cada vehículo */}
+            <div className="-mt-1.5 mb-3 flex justify-end gap-3 text-[11px] text-texto-suave">
+                <span>Canal:</span>
+                {Object.entries(COLOR_CANAL).map(([canal, color]) => (
+                    <span key={canal} className="flex items-center gap-1">
+                        <span className="h-2 w-3 rounded-sm" style={{ background: color }} /> {canal}
+                    </span>
+                ))}
+            </div>
+
             <ul className="space-y-2.5">
                 {muelles.map((m) => {
                     const v = m.vehiculo;
                     return (
                         <li key={m.numero}>
                             <button
-                                className="relative grid w-full grid-cols-[2.2rem_1fr_2.6rem] items-center gap-2 text-left text-xs"
+                                className="relative grid w-full grid-cols-[2.2rem_2.4rem_1fr_2.6rem] items-center gap-2 text-left text-xs"
                                 onClick={() => onSeleccionar(m.numero)}
                                 onMouseEnter={() => setEncima(m.numero)}
                                 onMouseLeave={() => setEncima(null)}
                             >
                                 <span className="font-semibold text-texto-suave">M{m.numero}</span>
+                                <span>{v && <InsigniaCanal canal={v.canal} className="text-[10px]" />}</span>
                                 <span className="h-2.5 overflow-hidden rounded-full bg-borde/60">
                                     {v && (
                                         <motion.span
@@ -98,7 +109,7 @@ export function AvancePorMuelle({ muelles, onSeleccionar }) {
 
                                 {encima === m.numero && v && (
                                     <span className="pointer-events-none absolute -top-9 left-10 z-10 whitespace-nowrap rounded-md border border-borde bg-fondo px-2 py-1 text-[11px] shadow-lg">
-                                        {v.placa} · {v.fase} {v.porcentaje}% · {v.tipologia?.nombre ?? "sin tipología"}
+                                        {v.placa} · {v.canal ? `${v.canal} · ` : ""}{v.fase} {v.porcentaje}% · {v.tipologia?.nombre ?? "sin tipología"}
                                     </span>
                                 )}
                             </button>
@@ -154,7 +165,10 @@ export function ListaPatio({ patio, seleccionado, onSeleccionar, colorNivel }) {
                                         {p.puesto}
                                     </span>
                                     <span className="min-w-0 flex-1">
-                                        <span className="block truncate text-sm font-semibold">{p.vehiculo.placa}</span>
+                                        <span className="flex items-center gap-1.5">
+                                            <span className="truncate text-sm font-semibold">{p.vehiculo.placa}</span>
+                                            <InsigniaCanal canal={p.vehiculo.canal} className="text-[10px]" />
+                                        </span>
                                         <span className="block truncate text-[11px] text-texto-suave">{p.vehiculo.tipoOperacion}</span>
                                     </span>
                                     <span className="shrink-0 text-xs font-semibold tabular-nums" style={{ color }}>{p.textoEspera}</span>

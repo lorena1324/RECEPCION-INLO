@@ -192,6 +192,7 @@ function montar3D(contenedor, opciones, alFallar) {
             // Lo que lee el motor
             id: registro.id,
             placa: registro.placa || "—",
+            canal: registro.canal || "",
             fase: fase,
             porcentaje: p,
             ocupacion: fase === "Cargue" ? p / 100 : (pct === null ? 0 : 1 - p / 100),
@@ -240,6 +241,7 @@ function montar3D(contenedor, opciones, alFallar) {
             vehiculo: {
                 id: registro.id,
                 placa: registro.placa || "—",
+                canal: registro.canal || "",
                 tipoOperacion: registro.tipo || "—",
                 fase: fase,
                 porcentaje: 0,

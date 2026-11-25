@@ -197,11 +197,11 @@ function VallasLogos({ total }) {
     const libre = hasta - desde;
     const x = (desde + hasta) / 2;
 
-    // Proporciones de las imágenes: PepsiCo 881×265 y INLOTRANS 403×349.
+    // Proporciones de las imágenes: PepsiCo 881×265 e INLOTRANS cuadrado (1:1).
     const anchoPepsico = Math.min(libre - 0.8, 6.6);
     const altoPepsico = anchoPepsico * 265 / 881;
-    const altoInlotrans = Math.min(4.6, (libre - 0.8) * 349 / 403);
-    const anchoInlotrans = altoInlotrans * 403 / 349;
+    const altoInlotrans = Math.min(4.6, libre - 0.8);
+    const anchoInlotrans = altoInlotrans;
 
     return (
         <group>
