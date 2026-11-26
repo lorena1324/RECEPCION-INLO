@@ -31,3 +31,16 @@ Nadie puede escribir directo en las tablas (ni desde la consola del navegador): 
 
 - `firestore.rules` y `migracion/` quedan solo como referencia; ya no se usan.
 - La integración con Iztech (`servidor/`, apagada) todavía verifica sesiones de Firebase; si se reactiva hay que cambiar `servidor/src/auth.js` para validar el token de Supabase.
+
+## Picking (función `picking`, datos de Iztech)
+
+El apartado **Picking** del administrador lee las tareas del WMS de Iztech a través de la función [`functions/picking`](functions/picking/index.ts). El token de Iztech vive **solo** como secreto de Supabase: nunca en el código ni en git.
+
+Una sola vez, en *Edge Functions* del panel de Supabase:
+
+1. *Edge Functions* → *Secrets* → agregar `IZTECH_TOKEN` con el token de Iztech.
+2. *Edge Functions* → *Deploy a new function* → *Via Editor*, nombre **`picking`**, pegar el contenido de `functions/picking/index.ts` → *Deploy*. Dejar activado *Verify JWT*.
+
+(O con la CLI: `supabase secrets set IZTECH_TOKEN=...` y `supabase functions deploy picking`.)
+
+Solo responde a usuarios con rol `administrador`. Cada consulta recorre la vista de la más nueva hacia atrás (unos 7 s por cada 2.500 tareas), con un máximo de 62 días; la respuesta queda en copia 1 minuto.

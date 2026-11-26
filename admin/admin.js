@@ -137,6 +137,7 @@ import { crearTableroMuelles3D as crearTableroMuelles } from "../shared/componen
 import { bloqueSinCabezote, alClicSinCabezote } from "../shared/components/sinCabezote.js";
 import { crearRegistroActividad } from "../shared/components/registroActividad.js";
 import { conXLSX } from "../shared/utils/xlsx.js";
+import { abrirPicking } from "./picking.js";
 
 
 /* =========================================================
@@ -530,13 +531,16 @@ function showView(v) {
     var navBtn = document.querySelector('.nav-item[data-view="' + v + '"]');
     if (navBtn) navBtn.classList.add('active');
 
-    var titulos = { dashboard: 'Dashboard', entrada: 'Registrar entrada', registros: 'Registros', estadisticas: 'Estadísticas', cobros: 'Cobros', configuracion: 'Configuración', exportar: 'Exportar datos' };
+    var titulos = { dashboard: 'Dashboard', entrada: 'Registrar entrada', registros: 'Registros', estadisticas: 'Estadísticas', cobros: 'Cobros', configuracion: 'Configuración', exportar: 'Exportar datos', picking: 'Picking' };
     document.getElementById('topbar-title').textContent = titulos[v] || v;
 
     // La configuración se relee al abrir la vista: puede haberla
     // cambiado otro administrador desde que se cargó la página.
     // Si hay un borrador con cambios sin guardar, se respeta.
     if (v === 'configuracion' && !cfgHayCambios()) cargarConfiguracion();
+
+    // Picking (Iztech) consulta la primera vez que se abre.
+    if (v === 'picking') abrirPicking();
 
     renderTodo();
     closeSidebar();

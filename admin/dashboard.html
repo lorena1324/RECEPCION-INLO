@@ -105,6 +105,10 @@
                 <span class="nav-pendientes" id="nav-cobros-badge" style="display:none;">0</span>
             </button>
 
+            <button class="nav-item" data-view="picking">
+                <i class="ti ti-forklift"></i> Picking
+            </button>
+
             <div class="nav-label">Herramientas</div>
             <button class="nav-item" data-view="configuracion">
                 <i class="ti ti-settings"></i> Configuración
@@ -1240,6 +1244,49 @@
                         <tbody id="tabla-cobros-body"></tbody>
                     </table>
                 </div>
+            </div>
+
+            <div id="view-picking" class="view">
+
+                <p class="form-hint">Tareas del WMS (Iztech): picking, auditoría y reposición. Tiempo y productividad por operario. La vista no trae la bodega: se filtra por el código de organización del WMS. Cajas y estibas no vienen en esta vista: se cuentan <strong>líneas</strong>.</p>
+
+                <div class="export-row" style="flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:10px;">
+                    <label class="pk-filtro">Desde <input type="date" id="pk-desde"></label>
+                    <label class="pk-filtro">Hasta <input type="date" id="pk-hasta"></label>
+                    <label class="pk-filtro">Organización <select id="pk-org"><option value="">Todas las organizaciones</option></select></label>
+                    <label class="pk-filtro">Tipo de tarea <select id="pk-tipo"><option value="">Todos los tipos</option></select></label>
+                    <button class="btn btn-primary" id="pk-actualizar"><i class="ti ti-refresh"></i> Actualizar</button>
+                    <button class="btn btn-success" id="pk-exportar"><i class="ti ti-download"></i> Exportar Excel</button>
+                </div>
+                <div class="form-hint" id="pk-estado" style="margin-bottom:14px;"></div>
+
+                <div class="stats-row">
+                    <div class="stat-card"><div class="stat-ico blue"><i class="ti ti-checklist"></i></div><div class="stat-body"><div class="stat-val" id="pk-s-tareas">—</div><div class="stat-lbl">Tareas completadas</div></div></div>
+                    <div class="stat-card"><div class="stat-ico green"><i class="ti ti-list-numbers"></i></div><div class="stat-body"><div class="stat-val" id="pk-s-lineas">—</div><div class="stat-lbl">Líneas movidas</div></div></div>
+                    <div class="stat-card"><div class="stat-ico teal"><i class="ti ti-users"></i></div><div class="stat-body"><div class="stat-val" id="pk-s-usuarios">—</div><div class="stat-lbl">Operarios</div></div></div>
+                    <div class="stat-card"><div class="stat-ico teal"><i class="ti ti-clock"></i></div><div class="stat-body"><div class="stat-val" id="pk-s-prom">—</div><div class="stat-lbl">Tiempo prom. por tarea</div></div></div>
+                    <div class="stat-card"><div class="stat-ico blue"><i class="ti ti-bolt"></i></div><div class="stat-body"><div class="stat-val" id="pk-s-lph">—</div><div class="stat-lbl">Líneas por hora</div></div></div>
+                    <div class="stat-card"><div class="stat-ico amber"><i class="ti ti-player-play"></i></div><div class="stat-body"><div class="stat-val" id="pk-s-abiertas">—</div><div class="stat-lbl">En curso / en espera</div></div></div>
+                </div>
+
+                <div class="section-header"><div class="section-title">Movimiento por día</div></div>
+                <div class="pk-grafica"><canvas id="pk-grafica"></canvas></div>
+
+                <div class="section-header"><div class="section-title">Productividad por operario</div></div>
+                <p class="form-hint">Ordenado por líneas. Tiempo trabajado = suma de lo que tardó cada tarea (de iniciada a terminada).</p>
+                <div class="table-wrap"><table><thead id="pk-usuarios-head"></thead><tbody id="pk-usuarios-body"></tbody></table></div>
+
+                <div class="section-header"><div class="section-title">Por tipo de tarea</div></div>
+                <div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Tareas</th><th>Líneas</th><th>Tiempo total</th><th>Prom. / tarea</th><th>Líneas / hora</th></tr></thead><tbody id="pk-tipos-body"></tbody></table></div>
+
+                <div class="section-header"><div class="section-title">Por organización</div></div>
+                <div class="table-wrap"><table><thead><tr><th>Organización</th><th>Tareas</th><th>Líneas</th><th>Tiempo total</th><th>Prom. / tarea</th><th>Líneas / hora</th></tr></thead><tbody id="pk-org-body"></tbody></table></div>
+
+                <div class="section-header"><div class="section-title">Por hora del día</div></div>
+                <div class="table-wrap"><table><thead><tr><th>Hora</th><th>Tareas</th><th>Líneas</th></tr></thead><tbody id="pk-horas-body"></tbody></table></div>
+
+                <div class="section-header"><div class="section-title">En curso y en espera ahora</div></div>
+                <div class="table-wrap"><table><thead><tr><th>Tarea</th><th>Tipo</th><th>Estado</th><th>Usuario</th><th>Organización</th><th>Líneas</th><th>Lleva</th></tr></thead><tbody id="pk-abiertas-body"></tbody></table></div>
             </div>
 
             <div id="view-exportar" class="view">
