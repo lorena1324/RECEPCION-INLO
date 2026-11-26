@@ -39,7 +39,7 @@ El apartado **Picking** del administrador lee las tareas del WMS de Iztech a tra
 Una sola vez, en *Edge Functions* del panel de Supabase:
 
 1. *Edge Functions* → *Secrets* → agregar `IZTECH_TOKEN` con el token de Iztech.
-2. *Edge Functions* → *Deploy a new function* → *Via Editor*, nombre **`picking`**, pegar el contenido de `functions/picking/index.ts` → *Deploy*. Dejar activado *Verify JWT*.
+2. *Edge Functions* → *Deploy a new function* → *Via Editor*, pegar el contenido de `functions/picking/index.ts` → *Deploy*. En *Settings* apagar *Verify JWT with legacy secret* (la función verifica sola que sea administrador). Hoy está desplegada con el slug **`dynamic-endpoint`** (el que puso el editor; no se puede cambiar): si se crea con otro, cambiar `FUNCION_PICKING` en `admin/picking.js`.
 
 (O con la CLI: `supabase secrets set IZTECH_TOKEN=...` y `supabase functions deploy picking`.)
 

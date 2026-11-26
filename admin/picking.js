@@ -19,6 +19,11 @@ import { supabase } from "../shared/core/supabase.js";
 import { resumirPicking, formatoMinutos } from "../shared/services/picking.js";
 import { conXLSX } from "../shared/utils/xlsx.js";
 
+// La dirección (slug) de la función en Supabase. Se creó desde el
+// editor del panel, que le puso este nombre, y el slug no se puede
+// cambiar después: el código es el de supabase/functions/picking.
+const FUNCION_PICKING = "dynamic-endpoint";
+
 let montado = false;
 let datos = null;          // la última respuesta de la función
 let pedidoDesde = "";      // con qué `desde` se pidió
@@ -74,7 +79,7 @@ async function consultar(forzar) {
     $("pk-actualizar").disabled = true;
 
     try {
-        const { data, error } = await supabase.functions.invoke("picking", { body: { desde } });
+        const { data, error } = await supabase.functions.invoke(FUNCION_PICKING, { body: { desde } });
         if (error) {
             let detalle = error.message;
             try { detalle = (await error.context.json()).error || detalle; } catch { /* sin cuerpo */ }
