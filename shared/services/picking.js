@@ -20,8 +20,13 @@
    Las fechas vienen sin zona horaria: son hora local de la bodega y
    así se tratan.
 
-   CAJAS Y ESTIBAS: esta vista no las trae (solo líneas). Se cuentan
-   líneas; las cajas/estibas salen de otra vista de Iztech.
+   CAJAS Y ESTIBAS: las tareas no las traen. Salen de las transacciones
+   del WMS (salidas y entradas), que la función ya manda resumidas en
+   `movimientos` (ver resumirMovimientos). Para el operario, las cajas
+   de cada pedido despachado se reparten entre las tareas de picking
+   de ese pedido según las líneas que hizo cada una (y aparte, igual,
+   entre las de auditoría): es un reparto, no un conteo por persona,
+   porque el WMS no dice quién movió cada caja.
    ========================================================= */
 
 // Una tarea de más de esto es un olvido de cerrarla, no trabajo:
@@ -69,7 +74,22 @@ function diaLocal(d) {
 }
 
 function nuevoGrupo(clave) {
-    return { clave, tareas: 0, completas: 0, lineas: 0, minutos: 0, conTiempo: 0, porTipo: {} };
+    return { clave, tareas: 0, completas: 0, lineas: 0, minutos: 0, conTiempo: 0, porTipo: {},
+             cajas: 0, estibas: 0, cajasAuditadas: 0, conPedido: 0, minutosPicking: 0 };
+}
+
+const normal = (t) => String(t || "").replace(/\s+/g, " ").trim().toUpperCase();
+
+/* El pedido de una tarea, con el mismo formato que DeliveryNumber de
+   las salidas: "WNW948 ANT CAMPIN 2026-11-25 PKGPISO-P1" → sin la
+   regla del final; "994682  -  Santo Domingo" → lo de antes del " - ". */
+export function pedidoDeTarea(f) {
+    let n = String(f.ctsk_task_name || "").split("  -  ")[0];
+    const regla = String(f.crul_name || "");
+    if (regla && regla.indexOf("{") === -1 && normal(n).endsWith(normal(regla))) {
+        n = normal(n).slice(0, -normal(regla).length);
+    }
+    return normal(n);
 }
 
 function sumarAGrupo(g, t) {
@@ -78,7 +98,12 @@ function sumarAGrupo(g, t) {
     if (!t.completa) return;
     g.completas++;
     g.lineas += t.lineas;
+    g.cajas += t.cajas;
+    g.estibas += t.estibas;
+    g.cajasAuditadas += t.cajasAuditadas;
+    if (t.conPedido) g.conPedido++;
     if (t.minutos != null) { g.minutos += t.minutos; g.conTiempo++; }
+    if (t.minutos != null && t.esPicking) g.minutosPicking += t.minutos;
 }
 
 function cerrarGrupo(g) {
@@ -86,7 +111,9 @@ function cerrarGrupo(g) {
         ...g,
         promedioMin: g.conTiempo ? g.minutos / g.conTiempo : null,
         lineasPorHora: g.minutos > 0 ? g.lineas / (g.minutos / 60) : null,
-        tareasPorHora: g.minutos > 0 ? g.conTiempo / (g.minutos / 60) : null
+        tareasPorHora: g.minutos > 0 ? g.conTiempo / (g.minutos / 60) : null,
+        // Solo contra el tiempo de picking: la auditoría no mueve esas cajas.
+        cajasPorHora: g.minutosPicking > 0 && g.cajas > 0 ? g.cajas / (g.minutosPicking / 60) : null
     };
 }
 
@@ -114,9 +141,85 @@ export function normalizarTareas(filas) {
             activada: fecha(f.ctsk_waiting_date),
             iniciada: fecha(f.ctsk_running_date),
             minutos: dur != null && dur <= MAX_MINUTOS_TAREA ? dur : null,
-            atipica: dur != null && dur > MAX_MINUTOS_TAREA
+            atipica: dur != null && dur > MAX_MINUTOS_TAREA,
+            pedido: pedidoDeTarea(f),
+            esPicking: /picking/i.test(f.ctst_name || "") && !/auditor/i.test(f.ctst_name || ""),
+            cajas: 0, estibas: 0, cajasAuditadas: 0, conPedido: false
         };
     });
+}
+
+/* Reparte las cajas y estibas de cada pedido entre sus tareas
+   completas, según las líneas (sin líneas, por partes iguales). */
+function repartirCajas(tareas, pedidos) {
+    if (!pedidos) return;
+    const porPedido = new Map();
+    for (const t of tareas) {
+        if (!t.completa || !t.pedido || !pedidos[t.pedido]) continue;
+        const tipo = /auditor/i.test(t.tipo) ? "auditoria" : /picking/i.test(t.tipo) ? "picking" : null;
+        if (!tipo) continue;
+        const k = t.pedido + "|" + tipo;
+        if (!porPedido.has(k)) porPedido.set(k, { tipo, pedido: pedidos[t.pedido], tareas: [] });
+        porPedido.get(k).tareas.push(t);
+    }
+    for (const { tipo, pedido, tareas: lista } of porPedido.values()) {
+        const lineas = lista.reduce((s, t) => s + t.lineas, 0);
+        for (const t of lista) {
+            const parte = lineas > 0 ? t.lineas / lineas : 1 / lista.length;
+            t.conPedido = true;
+            if (tipo === "picking") {
+                t.cajas = pedido.cajas * parte;
+                t.estibas = pedido.estibas * parte;
+            } else {
+                t.cajasAuditadas = pedido.cajas * parte;
+            }
+        }
+    }
+}
+
+/*
+    Cajas y estibas por bodega, tipo de documento y día (lo despachado y
+    lo recibido). `resumen` viene de la función ya agrupado.
+    Los ajustes de inventario no son movimiento físico: quedan en la
+    tabla pero no suman en los totales.
+*/
+export function resumirMovimientos(movimientos, filtros = {}) {
+
+    const filas = ((movimientos && movimientos.resumen) || []).filter(function (m) {
+        if (filtros.desde && m.dia < filtros.desde) return false;
+        if (filtros.hasta && m.dia > filtros.hasta) return false;
+        if (filtros.bodega && m.bodega !== filtros.bodega) return false;
+        return true;
+    });
+
+    const esAjuste = (m) => /ajuste/i.test(m.documento);
+    const vacio = () => ({ cajas: 0, estibas: 0, otras: {} });
+    const sumar = (g, m) => {
+        g.cajas += m.cajas; g.estibas += m.estibas;
+        for (const [u, c] of Object.entries(m.otras || {})) g.otras[u] = (g.otras[u] || 0) + c;
+    };
+
+    const total = { salida: vacio(), entrada: vacio() };
+    const porDia = new Map();
+    const porDoc = new Map();
+
+    for (const m of filas) {
+        const k = m.bodega + "|" + m.sentido + "|" + m.documento;
+        if (!porDoc.has(k)) porDoc.set(k, { bodega: m.bodega, sentido: m.sentido, documento: m.documento, ajuste: esAjuste(m), ...vacio() });
+        sumar(porDoc.get(k), m);
+        if (esAjuste(m)) continue;
+        sumar(total[m.sentido] || (total[m.sentido] = vacio()), m);
+        if (!porDia.has(m.dia)) porDia.set(m.dia, { dia: m.dia, salida: vacio(), entrada: vacio() });
+        sumar(porDia.get(m.dia)[m.sentido], m);
+    }
+
+    return {
+        total,
+        dias: [...porDia.values()].sort((a, b) => (a.dia < b.dia ? -1 : 1)),
+        documentos: [...porDoc.values()].sort((a, b) =>
+            (a.bodega < b.bodega ? -1 : a.bodega > b.bodega ? 1 : 0) || (a.sentido < b.sentido ? 1 : -1) || b.cajas - a.cajas),
+        bodegas: [...new Set(((movimientos && movimientos.resumen) || []).map((m) => m.bodega))].sort()
+    };
 }
 
 /*
@@ -125,9 +228,10 @@ export function normalizarTareas(filas) {
     filtros: { desde, hasta (YYYY-MM-DD, inclusive), organizacion, tipo }
     `ahora` se inyecta para las pruebas (cuánto lleva esperando una abierta).
 */
-export function resumirPicking(filas, filtros = {}, ahora = new Date()) {
+export function resumirPicking(filas, filtros = {}, ahora = new Date(), pedidos = null) {
 
     const todas = normalizarTareas(filas);
+    repartirCajas(todas, pedidos);
 
     const tareas = todas.filter(function (t) {
         // Las abiertas se ven siempre: son lo que está pasando ahora.

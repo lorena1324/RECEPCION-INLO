@@ -509,3 +509,27 @@
 .pk-en-curso { background:#e3f6ec; color:#17633f; }
 .pk-gira { display:inline-block; animation:pk-gira 1s linear infinite; }
 @keyframes pk-gira { to { transform:rotate(360deg); } }
+.pk-ajuste td { color: var(--text-3); }
+
+/* ── Informe mensual (admin/informeMensual.js) ── */
+.im-panel { margin-bottom: 22px; }
+.im-panel h3 i { vertical-align: -2px; }
+#im-informe:not(:empty) { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border, #e5e7eb); }
+.im-encabezado { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+.im-encabezado h2 { margin: 0; font-size: 20px; }
+.im-titulo { font-size: 15px; margin: 22px 0 8px; }
+.im-tarjetas { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 8px 0 6px; }
+.im-tarjeta { border: 1px solid var(--border, #e5e7eb); border-radius: 10px; padding: 10px 12px; background: var(--surface, #fff); }
+.im-valor { font-size: 20px; font-weight: 700; }
+.im-etiqueta { font-size: 12px; color: var(--text-3); }
+
+/* Imprimir solo el informe (Imprimir / PDF). */
+@media print {
+    body.im-imprimiendo * { visibility: hidden !important; }
+    body.im-imprimiendo #im-informe, body.im-imprimiendo #im-informe * { visibility: visible !important; }
+    body.im-imprimiendo #im-informe { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; border: 0; }
+    body.im-imprimiendo .table-wrap { overflow: visible !important; max-height: none !important; }
+    body.im-imprimiendo table { font-size: 10px; }
+    body.im-imprimiendo .im-titulo { break-after: avoid; }
+    body.im-imprimiendo tr { break-inside: avoid; }
+}

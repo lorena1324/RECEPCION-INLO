@@ -16,8 +16,9 @@
    ========================================================= */
 
 import { supabase } from "../shared/core/supabase.js";
-import { resumirPicking, formatoMinutos } from "../shared/services/picking.js";
+import { resumirPicking, resumirMovimientos, formatoMinutos } from "../shared/services/picking.js";
 import { conXLSX } from "../shared/utils/xlsx.js";
+import { montarInformeMensual } from "./informeMensual.js";
 
 // La dirección (slug) de la función en Supabase. Se creó desde el
 // editor del panel, que le puso este nombre, y el slug no se puede
@@ -29,6 +30,7 @@ let datos = null;          // la última respuesta de la función
 let pedidoDesde = "";      // con qué `desde` se pidió
 let grafica = null;
 let resumen = null;
+let movs = null;          // cajas y estibas (resumirMovimientos)
 
 const $ = (id) => document.getElementById(id);
 
@@ -50,7 +52,8 @@ function filtros() {
         desde: $("pk-desde").value,
         hasta: $("pk-hasta").value,
         organizacion: $("pk-org").value,
-        tipo: $("pk-tipo").value
+        tipo: $("pk-tipo").value,
+        bodega: $("pk-bodega").value
     };
 }
 
@@ -58,6 +61,7 @@ function filtros() {
 export function abrirPicking() {
     if (!montado) {
         montado = true;
+        montarInformeMensual();
         $("pk-desde").value = hoy(-6);
         $("pk-hasta").value = hoy(0);
         $("pk-actualizar").addEventListener("click", () => consultar(true));
@@ -65,7 +69,7 @@ export function abrirPicking() {
         // Desde más atrás de lo ya traído → hay que volver a pedir;
         // lo demás se recalcula con lo que ya está.
         $("pk-desde").addEventListener("change", () => (pedidoDesde && $("pk-desde").value < pedidoDesde ? consultar(false) : pintar()));
-        ["pk-hasta", "pk-org", "pk-tipo"].forEach((id) => $(id).addEventListener("change", pintar));
+        ["pk-hasta", "pk-org", "pk-tipo", "pk-bodega"].forEach((id) => $(id).addEventListener("change", pintar));
         consultar(false);
     }
 }
@@ -109,8 +113,12 @@ function pintar() {
 
     if (!datos) return;
 
-    resumen = resumirPicking(datos.filas, filtros());
+    const mov = datos.movimientos || null;
+    resumen = resumirPicking(datos.filas, filtros(), new Date(), mov && mov.pedidos);
+    movs = resumirMovimientos(mov, filtros());
     const r = resumen;
+    llenarSelect($("pk-bodega"), movs.bodegas, "Todas las bodegas");
+    pintarCajas(movs, !!mov);
 
     llenarSelect($("pk-org"), r.opciones.organizaciones, "Todas las organizaciones");
     llenarSelect($("pk-tipo"), r.opciones.tipos, "Todos los tipos");
@@ -132,13 +140,15 @@ function pintar() {
     const tipos = r.opciones.tipos;
     $("pk-usuarios-head").innerHTML = "<tr><th>#</th><th>Operario</th><th>Tareas</th>" +
         tipos.map((x) => "<th>" + escapar(x) + "</th>").join("") +
-        "<th>Líneas</th><th>Tiempo trabajado</th><th>Prom. / tarea</th><th>Líneas / hora</th><th>Tareas / hora</th></tr>";
+        "<th>Líneas</th><th>Cajas (picking)</th><th>Estibas (picking)</th><th>Cajas auditadas</th>" +
+        "<th>Tiempo trabajado</th><th>Prom. / tarea</th><th>Líneas / hora</th><th>Cajas / hora</th><th>Tareas / hora</th></tr>";
     $("pk-usuarios-body").innerHTML = r.usuarios.map((u, i) =>
         "<tr><td>" + (i + 1) + "</td><td><strong>" + escapar(u.clave) + "</strong></td><td>" + num(u.completas) + "</td>" +
         tipos.map((x) => "<td>" + num(u.porTipo[x] || 0) + "</td>").join("") +
-        "<td>" + num(u.lineas) + "</td><td>" + formatoMinutos(u.minutos) + "</td><td>" + formatoMinutos(u.promedioMin) +
-        "</td><td>" + num(u.lineasPorHora, 1) + "</td><td>" + num(u.tareasPorHora, 1) + "</td></tr>"
-    ).join("") || filaVacia(6 + tipos.length, "Sin tareas en el rango");
+        "<td>" + num(u.lineas) + "</td><td>" + num(u.cajas) + "</td><td>" + num(u.estibas, 1) + "</td><td>" + num(u.cajasAuditadas) +
+        "</td><td>" + formatoMinutos(u.minutos) + "</td><td>" + formatoMinutos(u.promedioMin) +
+        "</td><td>" + num(u.lineasPorHora, 1) + "</td><td>" + num(u.cajasPorHora, 1) + "</td><td>" + num(u.tareasPorHora, 1) + "</td></tr>"
+    ).join("") || filaVacia(10 + tipos.length, "Sin tareas en el rango");
 
     $("pk-tipos-body").innerHTML = r.tipos.map(filaGrupo).join("") || filaVacia(6);
     $("pk-org-body").innerHTML = r.organizaciones.map(filaGrupo).join("") || filaVacia(6);
@@ -154,6 +164,32 @@ function pintar() {
     ).join("") || filaVacia(7, "No hay tareas en curso ni en espera");
 
     pintarGrafica(r.dias);
+}
+
+/* Cajas y estibas: tarjetas, por día y por bodega/documento. */
+function pintarCajas(m, hay) {
+    const s = m.total.salida, e = m.total.entrada;
+    $("pk-c-cajas-sal").textContent = hay ? num(s.cajas) : "—";
+    $("pk-c-estibas-sal").textContent = hay ? num(s.estibas) : "—";
+    $("pk-c-cajas-ent").textContent = hay ? num(e.cajas) : "—";
+    $("pk-c-estibas-ent").textContent = hay ? num(e.estibas) : "—";
+
+    $("pk-cajas-dia-body").innerHTML = m.dias.map((d) =>
+        "<tr><td>" + escapar(d.dia) + "</td><td>" + num(d.salida.cajas) + "</td><td>" + num(d.salida.estibas) +
+        "</td><td>" + num(d.entrada.cajas) + "</td><td>" + num(d.entrada.estibas) + "</td></tr>"
+    ).join("") || filaVacia(5, hay ? "Sin movimientos en el rango" : "Vuelve a desplegar la función para ver cajas y estibas");
+
+    $("pk-cajas-doc-body").innerHTML = m.documentos.map((d) =>
+        "<tr" + (d.ajuste ? ' class="pk-ajuste"' : "") + "><td><strong>" + escapar(d.bodega) + "</strong></td><td>" +
+        (d.sentido === "salida" ? "Despachado" : "Recibido") + "</td><td>" + escapar(d.documento) +
+        (d.ajuste ? ' <span class="form-hint">(no suma en totales)</span>' : "") +
+        "</td><td>" + num(d.cajas) + "</td><td>" + num(d.estibas) + "</td><td>" + otras(d.otras) + "</td></tr>"
+    ).join("") || filaVacia(6);
+}
+
+function otras(o) {
+    const partes = Object.entries(o || {}).filter(([, c]) => c).map(([u, c]) => num(c) + " " + escapar(u));
+    return partes.join(" · ") || "—";
 }
 
 function filaGrupo(g) {
@@ -215,10 +251,24 @@ function exportar() {
         const fila = { Operario: u.clave, Tareas: u.completas };
         tipos.forEach((x) => { fila[x] = u.porTipo[x] || 0; });
         return Object.assign(fila, {
-            Lineas: u.lineas, "Minutos trabajados": h(u.minutos), "Min. prom. por tarea": h(u.promedioMin),
-            "Lineas por hora": h(u.lineasPorHora), "Tareas por hora": h(u.tareasPorHora)
+            Lineas: u.lineas, "Cajas picking": Math.round(u.cajas), "Estibas picking": h(u.estibas),
+            "Cajas auditadas": Math.round(u.cajasAuditadas),
+            "Minutos trabajados": h(u.minutos), "Min. prom. por tarea": h(u.promedioMin),
+            "Lineas por hora": h(u.lineasPorHora), "Cajas por hora": h(u.cajasPorHora), "Tareas por hora": h(u.tareasPorHora)
         });
     })), "Por operario");
+
+    if (movs) {
+        X.utils.book_append_sheet(libro, X.utils.json_to_sheet(movs.dias.map((d) => ({
+            Dia: d.dia, "Cajas despachadas": d.salida.cajas, "Estibas despachadas": d.salida.estibas,
+            "Cajas recibidas": d.entrada.cajas, "Estibas recibidas": d.entrada.estibas
+        }))), "Cajas por dia");
+        X.utils.book_append_sheet(libro, X.utils.json_to_sheet(movs.documentos.map((d) => ({
+            Bodega: d.bodega, Sentido: d.sentido === "salida" ? "Despachado" : "Recibido", Documento: d.documento,
+            Cajas: d.cajas, Estibas: d.estibas, Otras: Object.entries(d.otras).map(([u, c]) => c + " " + u).join(", "),
+            "Suma en totales": d.ajuste ? "No (ajuste)" : "Si"
+        }))), "Cajas por bodega");
+    }
 
     const grupo = (g, nombre) => ({ [nombre]: g.clave, Tareas: g.completas, Lineas: g.lineas,
         "Minutos": h(g.minutos), "Min. prom. por tarea": h(g.promedioMin), "Lineas por hora": h(g.lineasPorHora) });

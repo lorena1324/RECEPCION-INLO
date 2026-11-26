@@ -1248,13 +1248,29 @@
 
             <div id="view-picking" class="view">
 
-                <p class="form-hint">Tareas del WMS (Iztech): picking, auditoría y reposición. Tiempo y productividad por operario. La vista no trae la bodega: se filtra por el código de organización del WMS. Cajas y estibas no vienen en esta vista: se cuentan <strong>líneas</strong>.</p>
+                <p class="form-hint">Tareas del WMS (Iztech): picking, auditoría y reposición. Tiempo y productividad por operario. La vista no trae la bodega: se filtra por el código de organización del WMS. Las <strong>cajas y estibas</strong> salen de lo despachado y recibido en el WMS; por operario son las de los pedidos que alistó, repartidas según las líneas que hizo cada uno.</p>
+
+                <!-- Informe mensual: WMS del mes + planilla Control Muelles J3 (admin/informeMensual.js) -->
+                <div class="export-card im-panel">
+                    <h3><i class="ti ti-report-analytics"></i> Informe mensual</h3>
+                    <p class="form-hint" style="margin:6px 0 12px;">Elige el mes y, si quieres, adjunta la planilla <strong>Control Muelles</strong> de J3 (Excel). La planilla solo se lee para el informe: no se guarda.</p>
+                    <div class="export-row" style="flex-wrap:wrap;gap:10px;align-items:flex-end;">
+                        <label class="pk-filtro">Mes <input type="month" id="im-mes"></label>
+                        <label class="pk-filtro">Planilla Control Muelles (opcional) <input type="file" id="im-archivo" accept=".xlsx,.xls"></label>
+                        <button class="btn btn-primary" id="im-generar"><i class="ti ti-file-analytics"></i> Generar informe</button>
+                        <button class="btn btn-success" id="im-excel" disabled><i class="ti ti-download"></i> Excel</button>
+                        <button class="btn" id="im-imprimir" disabled><i class="ti ti-printer"></i> Imprimir / PDF</button>
+                    </div>
+                    <div class="form-hint" id="im-estado" style="margin-top:8px;"></div>
+                    <div id="im-informe"></div>
+                </div>
 
                 <div class="export-row" style="flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:10px;">
                     <label class="pk-filtro">Desde <input type="date" id="pk-desde"></label>
                     <label class="pk-filtro">Hasta <input type="date" id="pk-hasta"></label>
                     <label class="pk-filtro">Organización <select id="pk-org"><option value="">Todas las organizaciones</option></select></label>
                     <label class="pk-filtro">Tipo de tarea <select id="pk-tipo"><option value="">Todos los tipos</option></select></label>
+                    <label class="pk-filtro">Bodega (cajas) <select id="pk-bodega"><option value="">Todas las bodegas</option></select></label>
                     <button class="btn btn-primary" id="pk-actualizar"><i class="ti ti-refresh"></i> Actualizar</button>
                     <button class="btn btn-success" id="pk-exportar"><i class="ti ti-download"></i> Exportar Excel</button>
                 </div>
@@ -1268,6 +1284,20 @@
                     <div class="stat-card"><div class="stat-ico blue"><i class="ti ti-bolt"></i></div><div class="stat-body"><div class="stat-val" id="pk-s-lph">—</div><div class="stat-lbl">Líneas por hora</div></div></div>
                     <div class="stat-card"><div class="stat-ico amber"><i class="ti ti-player-play"></i></div><div class="stat-body"><div class="stat-val" id="pk-s-abiertas">—</div><div class="stat-lbl">En curso / en espera</div></div></div>
                 </div>
+
+                <div class="stats-row">
+                    <div class="stat-card"><div class="stat-ico blue"><i class="ti ti-box"></i></div><div class="stat-body"><div class="stat-val" id="pk-c-cajas-sal">—</div><div class="stat-lbl">Cajas despachadas</div></div></div>
+                    <div class="stat-card"><div class="stat-ico blue"><i class="ti ti-stack-2"></i></div><div class="stat-body"><div class="stat-val" id="pk-c-estibas-sal">—</div><div class="stat-lbl">Estibas despachadas</div></div></div>
+                    <div class="stat-card"><div class="stat-ico green"><i class="ti ti-box"></i></div><div class="stat-body"><div class="stat-val" id="pk-c-cajas-ent">—</div><div class="stat-lbl">Cajas recibidas</div></div></div>
+                    <div class="stat-card"><div class="stat-ico green"><i class="ti ti-stack-2"></i></div><div class="stat-body"><div class="stat-val" id="pk-c-estibas-ent">—</div><div class="stat-lbl">Estibas recibidas</div></div></div>
+                </div>
+
+                <div class="section-header"><div class="section-title">Cajas y estibas por día</div></div>
+                <p class="form-hint">Sin ajustes de inventario. Estibas = unidades de manejo distintas del WMS.</p>
+                <div class="table-wrap"><table><thead><tr><th>Día</th><th>Cajas despachadas</th><th>Estibas despachadas</th><th>Cajas recibidas</th><th>Estibas recibidas</th></tr></thead><tbody id="pk-cajas-dia-body"></tbody></table></div>
+
+                <div class="section-header"><div class="section-title">Cajas y estibas por bodega y documento</div></div>
+                <div class="table-wrap"><table><thead><tr><th>Bodega</th><th>Movimiento</th><th>Documento</th><th>Cajas</th><th>Estibas</th><th>Otras unidades</th></tr></thead><tbody id="pk-cajas-doc-body"></tbody></table></div>
 
                 <div class="section-header"><div class="section-title">Movimiento por día</div></div>
                 <div class="pk-grafica"><canvas id="pk-grafica"></canvas></div>
